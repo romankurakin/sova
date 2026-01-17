@@ -1,0 +1,11 @@
+# Generated
+refs.db
+*.md
+!README.md
+
+# User data
+/docs/
+
+# Python
+.venv/
+__pycache__/
