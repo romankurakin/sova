@@ -1,0 +1,71 @@
+---
+name: pdf-search
+description: Search indexed PDF documents. Use when looking up information in your reference library.
+allowed-tools: AskUserQuestion, Bash, Read
+---
+
+# PDF Search Skill (sova)
+
+Search your indexed PDF documents using semantic search.
+
+## When to Use
+
+- Looking up information in reference documents
+- Finding relevant sections across multiple PDFs
+- Verifying facts or quotes from source materials
+
+## Search
+
+```bash
+cd /path/to/sova
+
+# Semantic search (returns file:line-range with preview)
+uv run sova.py -s "your search query"
+uv run sova.py -s "query" -n 10  # More results
+
+# Text search (exact matches)
+rg -i "keyword" *.md
+```
+
+Returns `file.md:start-end` with preview. Use Read tool for full context (add ~50 lines buffer for surrounding context):
+
+```bash
+# Search returns: mybook.md:580-650 (0.68)
+# Read with context buffer
+```
+
+```
+Read /path/to/sova/mybook.md lines 530-700
+```
+
+## Setup
+
+If the database doesn't exist or is incomplete:
+
+```bash
+cd /path/to/sova
+
+# Create symlink to PDFs (if not exists)
+ln -s /path/to/docs docs
+
+# Check status
+uv run sova.py --list
+
+# Index all PDFs (embeddings only, faster)
+uv run sova.py --skip-topics
+
+# Or with topic extraction (slower)
+uv run sova.py
+```
+
+Requires Ollama running with:
+- `qwen3-embedding:8b` for embeddings
+- `gemma3:12b` for topic extraction (optional)
+
+## Adding Documents
+
+Drop PDFs in the symlinked directory and re-run indexing:
+
+```bash
+uv run sova.py new-doc-name
+```

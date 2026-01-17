@@ -1,0 +1,14 @@
+[project]
+name = "sova"
+version = "1.0.0"
+description = "Local document semantic search"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "pymupdf-layout",
+    "pymupdf4llm",
+    "rich>=14.2.0",
+    "sqliteai-vector",
+    "textual",
+]
+
+[tool.uv]
