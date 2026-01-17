@@ -13,7 +13,6 @@
 ## Quick Start
 
 ```bash
-ollama pull qwen3-embedding:8b        # Required for embeddings
 ln -s /path/to/your/docs docs         # Symlink your documents
 uv run sova.py                        # Index and search
 ```
@@ -37,17 +36,16 @@ uv run sova.py --reset             # Delete DB and .md files
 
 ## How It Works
 
-- PDF → Markdown extraction (pymupdf4llm)
-- Local vector embeddings (Ollama)
-- Optional LLM topic extraction
-- SQLite storage (sqlite-vec)
+Sova converts your PDFs to Markdown using pymupdf4llm, then generates vector
+embeddings locally through Ollama. Topics can be optionally extracted via LLM
+for richer metadata. Everything is stored in SQLite with sqlite-vec for fast
+similarity search.
 
 ## Requirements
 
-- [uv](https://docs.astral.sh/uv/) - Python package manager
-- [Ollama](https://ollama.ai) running locally
-  - `qwen3-embedding:8b` for embeddings
-  - `gemma3:12b` for topic extraction (optional)
+You'll need [uv](https://docs.astral.sh/uv/) as the Python package manager and
+[Ollama](https://ollama.ai) running locally. Models (`qwen3-embedding:8b` for
+embeddings, `gemma3:12b` for topics) are pulled automatically on first run.
 
 ## License
 
