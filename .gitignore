@@ -9,3 +9,7 @@ refs.db
 # Python
 .venv/
 __pycache__/
+.ruff-cache/
+
+# MacOS
+.DS_Store
