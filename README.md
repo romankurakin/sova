@@ -41,6 +41,12 @@ embeddings locally through Ollama. Topics can be optionally extracted via LLM
 for richer metadata. Everything is stored in SQLite with sqlite-vec for fast
 similarity search.
 
+On first run, sova generates a topic extraction prompt based on your document
+names. Use descriptive file names (e.g.,
+`operating_systems_three_easy_pieces.pdf` instead of `os.pdf`) for better topic
+extraction. Use `--reset-prompt` to regenerate the prompt after adding new
+documents.
+
 ## Requirements
 
 You'll need [uv](https://docs.astral.sh/uv/) as the Python package manager and

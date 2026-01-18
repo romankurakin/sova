@@ -6,7 +6,8 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "pymupdf-layout",
     "pymupdf4llm",
-    "rich>=14.2.0",
+    "rich",
+    "snowballstemmer",
     "sqliteai-vector",
     "textual",
 ]

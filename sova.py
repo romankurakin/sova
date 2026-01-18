@@ -7,6 +7,7 @@ Index:
     uv run sova.py --skip-topics           # Skip topic extraction
     uv run sova.py --list                  # Show index status
     uv run sova.py --reset                 # Delete index
+    uv run sova.py --reset-topics          # Clear topics, keep embeddings
 
 Search:
     uv run sova.py -s "query"              # Semantic search (shows preview)
@@ -18,16 +19,22 @@ Place documents in ./docs/ directory (or symlink).
 
 import argparse
 import json
+import hashlib
+import heapq
+import math
 import re
 import sqlite3
 import struct
 import subprocess
 import sys
 import time
+import unicodedata
+from array import array
 from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
+import snowballstemmer
 import sqlite_vector
 from rich.console import Console
 from rich.table import Table
@@ -51,7 +58,20 @@ SOVA_ASCII = """\
 EMBEDDING_MODEL = "qwen3-embedding:8b"
 EMBEDDING_DIM = 4096
 TOPIC_MODEL = "gemma3:12b"
+PROMPT_MODEL = "qwen3:30b"
 OLLAMA_URL = "http://localhost:11434"
+
+_topic_prompt_template: str | None = None
+
+TOPIC_PROMPT_SUFFIX = (
+    "Prefer precise, domain-specific technical terms (proper nouns, protocols, "
+    "algorithms, components). Avoid generic words and document metadata."
+)
+TOPIC_OUTPUT_INSTRUCTIONS = (
+    "Output a JSON array of 3-5 unique terms. No explanations."
+)
+TOPIC_MIN_LEN = 3
+TOPIC_MAX_LEN = 60
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 DOCS_DIR = SCRIPT_DIR / "docs"
@@ -120,6 +140,8 @@ def check_ollama() -> tuple[bool, str]:
                 missing.append(EMBEDDING_MODEL)
             if not any(TOPIC_MODEL in m for m in models):
                 missing.append(TOPIC_MODEL)
+            if not any(PROMPT_MODEL in m for m in models):
+                missing.append(PROMPT_MODEL)
             if missing:
                 for model in missing:
                     report("pull", model)
@@ -147,28 +169,188 @@ def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
         raise Exception(f"{e.code}: {body}") from e
 
 
-def extract_topics(text: str) -> list[str]:
-    prompt = f"""Extract 3-5 key technical topics from this text. Return ONLY a JSON array like ["topic1", "topic2"].
+def generate_topic_prompt(docs: list[dict]) -> tuple[str, str | None]:
+    """Ask LLM to generate optimal topic extraction prompt based on documents.
 
-Text:
-{text[:2000]}"""
+    docs: list of {"name": str, "size": int} dicts
+    """
+    def fmt(d):
+        size_mb = d["size"] / 1024 / 1024
+        if size_mb >= 1:
+            return f"{d['name']} ({size_mb:.0f}MB)"
+        return d["name"]
+
+    if len(docs) <= 20:
+        sample = docs
+    else:
+        step = len(docs) // 20
+        sample = docs[::step][:20]
+
+    docs_str = ", ".join(fmt(d) for d in sample)
+    meta_prompt = f"""I have a document search system indexing these documents: {docs_str}
+
+Generate a prompt for extracting 3-5 key topics from text chunks. Output comma-separated.
+
+Rules:
+- Extract searchable domain terms only
+- NO document metadata or boilerplate
+- NO generic section names
+- Lowercase, acronyms uppercase
+
+Format:
+PROMPT: <prompt>
+EXAMPLES: <examples>"""
+
     data = json.dumps(
-        {"model": TOPIC_MODEL, "prompt": prompt, "stream": False}
+        {"model": PROMPT_MODEL, "prompt": meta_prompt, "stream": False}
     ).encode()
     req = Request(
         f"{OLLAMA_URL}/api/generate",
         data=data,
         headers={"Content-Type": "application/json"},
     )
+    with urlopen(req, timeout=300) as resp:
+        output = json.loads(resp.read()).get("response", "").strip()
+        if not output or len(output) <= 20:
+            raise ValueError(f"empty response from {PROMPT_MODEL}")
+
+        prompt_match = re.search(
+            r"PROMPT:\s*(.+?)(?=EXAMPLES:|$)", output, re.DOTALL | re.IGNORECASE
+        )
+        examples_match = re.search(
+            r"EXAMPLES:\s*(.+)", output, re.DOTALL | re.IGNORECASE
+        )
+
+        if not prompt_match:
+            raise ValueError(f"no PROMPT: found in response: {output[:100]}")
+
+        prompt = prompt_match.group(1).strip()
+        if len(prompt) < 20:
+            raise ValueError(f"prompt too short: {prompt}")
+
+        examples = examples_match.group(1).strip() if examples_match else None
+        return prompt, examples
+
+
+def get_topic_prompt(conn: sqlite3.Connection) -> str:
+    """Get cached topic prompt or generate new one."""
+    global _topic_prompt_template
+    if _topic_prompt_template:
+        return _topic_prompt_template
+
     try:
-        with urlopen(req, timeout=120) as resp:
-            output = json.loads(resp.read()).get("response", "")
-            match = re.search(r"\[.*?\]", output, re.DOTALL)
-            if match:
-                topics = json.loads(match.group())
-                return [t.strip() for t in topics if isinstance(t, str) and len(t) > 1]
-    except Exception:
+        row = conn.execute(
+            "SELECT value FROM metadata WHERE key = 'topic_prompt'"
+        ).fetchone()
+        if row:
+            _topic_prompt_template = row[0]
+            console.print(
+                f"\n[bold]Topic prompt:[/bold]\n[cyan]{_topic_prompt_template}[/cyan]\n"
+            )
+            return _topic_prompt_template
+    except sqlite3.OperationalError:
         pass
+
+    docs = find_docs()
+    report("prompt", f"generating from {len(docs)} docs...")
+    _topic_prompt_template, examples = generate_topic_prompt(docs)
+    console.print(
+        f"\n[bold]Generated topic prompt:[/bold]\n[cyan]{_topic_prompt_template}[/cyan]"
+    )
+    if examples:
+        console.print(f"\n[bold]Example topics:[/bold]\n[dim]{examples}[/dim]\n")
+    else:
+        console.print()
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT)"
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES ('topic_prompt', ?)",
+        (_topic_prompt_template,),
+    )
+    conn.commit()
+
+    return _topic_prompt_template
+
+
+def _ascii_fold(text: str) -> str:
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
+def _clean_topic_label(label: str) -> str:
+    cleaned = _ascii_fold(label).strip().strip(",;:.")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = cleaned.lower()
+    return cleaned
+
+
+def _is_generic_topic(label: str, blocklist: set[str]) -> bool:
+    if label in blocklist:
+        return True
+    words = label.split()
+    if not words:
+        return True
+    return False
+
+
+def _parse_topic_output(output: str) -> list[str]:
+    output = output.strip()
+    json_match = re.search(r"\[[\s\S]*\]", output)
+    if json_match:
+        try:
+            data = json.loads(json_match.group(0))
+            if isinstance(data, list):
+                return [str(x) for x in data]
+        except json.JSONDecodeError:
+            pass
+    if "\n" in output and "," not in output:
+        return [line.strip("- ").strip() for line in output.splitlines() if line.strip()]
+    return [p.strip() for p in output.split(",")]
+
+
+def _is_valid_topic(label: str) -> bool:
+    if not (TOPIC_MIN_LEN <= len(label) <= TOPIC_MAX_LEN):
+        return False
+    if not re.search(r"[a-z]", label):
+        return False
+    return True
+
+
+def _dedupe_topics(labels: list[str]) -> list[str]:
+    by_norm: dict[str, list[str]] = {}
+    for label in labels:
+        norm = normalize_topic(label)
+        by_norm.setdefault(norm, []).append(label)
+    deduped = []
+    for variants in by_norm.values():
+        variants.sort(key=lambda v: (len(v.split()), len(v)), reverse=True)
+        deduped.append(variants[0])
+    return deduped
+
+
+def extract_topics(text: str, prompt: str, blocklist: set[str], retries: int = 3) -> list[str]:
+    full_prompt = f"{prompt}\n\n{TOPIC_PROMPT_SUFFIX}\n{TOPIC_OUTPUT_INSTRUCTIONS}"
+    data = json.dumps({"model": TOPIC_MODEL, "prompt": f"{full_prompt}\n\n{text[:2000]}", "stream": False}).encode()
+    req = Request(f"{OLLAMA_URL}/api/generate", data=data, headers={"Content-Type": "application/json"})
+    for attempt in range(retries):
+        try:
+            with urlopen(req, timeout=120) as resp:
+                output = json.loads(resp.read()).get("response", "")
+            topics = _parse_topic_output(output)
+            cleaned = []
+            for topic in topics:
+                label = _clean_topic_label(topic)
+                if not label or not _is_valid_topic(label):
+                    continue
+                if _is_generic_topic(label, blocklist):
+                    continue
+                cleaned.append(label)
+            return _dedupe_topics(cleaned)
+        except (URLError, TimeoutError):
+            if attempt == retries - 1:
+                raise
+            time.sleep(2 ** attempt)
     return []
 
 
@@ -202,13 +384,18 @@ def init_db() -> sqlite3.Connection:
             chunk_id INTEGER NOT NULL, topic_id INTEGER NOT NULL,
             PRIMARY KEY (chunk_id, topic_id)
         );
+        CREATE TABLE IF NOT EXISTS topic_cache (
+            hash TEXT PRIMARY KEY,
+            topics TEXT NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
+        CREATE INDEX IF NOT EXISTS idx_topics_normalized ON topics(normalized_label);
         PRAGMA foreign_keys = ON;
     """)
 
     try:
         conn.execute(
-            f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM}')"
+            f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
         )
         conn.commit()
     except sqlite3.OperationalError:
@@ -221,6 +408,15 @@ def init_db() -> sqlite3.Connection:
         pass
 
     return conn
+
+
+def quantize_vectors(conn: sqlite3.Connection):
+    """Quantize vectors for fast native search."""
+    try:
+        conn.execute("SELECT vector_quantize('chunks', 'embedding')")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
 
 def embedding_to_blob(emb: list[float]) -> bytes:
@@ -363,20 +559,29 @@ def find_section(sections: list[dict], line: int) -> int | None:
     return None
 
 
+_stemmer = snowballstemmer.stemmer('english')
+
+
 def normalize_topic(label: str) -> str:
-    n = re.sub(r"\s+", " ", label.lower().strip())
-    return n[:-1] if n.endswith("s") and len(n) > 3 else n
+    """Normalize topic for deduplication using Snowball stemmer."""
+    n = _ascii_fold(label)
+    n = re.sub(r"\s+", " ", n.lower().strip())
+    n = re.sub(r"[^a-z0-9\s-]", "", n)
+    words = n.split()
+    stemmed = _stemmer.stemWords(words)
+    return " ".join(stemmed)
+
+
+def topic_cache_key(prompt: str, text: str) -> str:
+    payload = f"{prompt}\n\n{text}"
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
 
 def find_docs() -> list[dict]:
-    pdfs = (
-        sorted(DOCS_DIR.glob("*.pdf"), key=lambda p: p.stat().st_size)
-        if DOCS_DIR.exists()
-        else []
-    )
+    pdfs = list(DOCS_DIR.glob("*.pdf")) if DOCS_DIR.exists() else []
     mds = sorted(
         [m for m in SCRIPT_DIR.glob("*.md") if m.name != "README.md"],
-        key=lambda p: p.stat().st_size,
+        key=lambda p: p.name.lower(),
     )
     pdf_names = {p.stem for p in pdfs}
 
@@ -396,7 +601,7 @@ def find_docs() -> list[dict]:
             docs.append(
                 {"name": md.stem, "pdf": None, "md": md, "size": md.stat().st_size}
             )
-    return docs
+    return sorted(docs, key=lambda d: (d["size"], d["name"].lower()))
 
 
 def process_doc(
@@ -524,6 +729,7 @@ def process_doc(
             WHERE c.doc_id = ? AND NOT EXISTS (
                 SELECT 1 FROM chunk_topics ct WHERE ct.chunk_id = c.id
             )
+            ORDER BY c.start_line ASC
         """,
             (doc_id,),
         ).fetchall()
@@ -541,29 +747,52 @@ def process_doc(
             try:
                 total = len(rows)
                 start = time.time()
-                topic_count = 0
+                topic_prompt = get_topic_prompt(conn)
+                blocklist = set()
 
                 with report_progress("topics") as progress:
                     task = progress.add_task("", total=total)
                     for chunk_id, text in rows:
-                        topics = extract_topics(text)
+                        cache_key = topic_cache_key(topic_prompt, text)
+                        cached = conn.execute(
+                            "SELECT topics FROM topic_cache WHERE hash = ?",
+                            (cache_key,),
+                        ).fetchone()
+                        if cached:
+                            try:
+                                topics = json.loads(cached[0])
+                            except json.JSONDecodeError:
+                                topics = []
+                        else:
+                            topics = extract_topics(text, topic_prompt, blocklist)
+                            conn.execute(
+                                "INSERT OR REPLACE INTO topic_cache (hash, topics) VALUES (?, ?)",
+                                (cache_key, json.dumps(topics)),
+                            )
                         for topic_label in topics:
                             normalized = normalize_topic(topic_label)
-                            conn.execute(
-                                "INSERT OR IGNORE INTO topics (label, normalized_label) VALUES (?, ?)",
-                                (topic_label, normalized),
-                            )
-                            tid = conn.execute(
-                                "SELECT id FROM topics WHERE label = ?", (topic_label,)
-                            ).fetchone()[0]
+                            row = conn.execute(
+                                "SELECT id FROM topics WHERE normalized_label = ?", (normalized,)
+                            ).fetchone()
+                            if row:
+                                tid = row[0]
+                            else:
+                                conn.execute(
+                                    "INSERT INTO topics (label, normalized_label) VALUES (?, ?)",
+                                    (topic_label.lower(), normalized),
+                                )
+                                tid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
                             conn.execute(
                                 "INSERT OR IGNORE INTO chunk_topics (chunk_id, topic_id) VALUES (?, ?)",
                                 (chunk_id, tid),
                             )
-                            topic_count += 1
                         conn.commit()
                         progress.update(task, advance=1)
 
+                topic_count = conn.execute(
+                    "SELECT COUNT(DISTINCT topic_id) FROM chunk_topics ct JOIN chunks c ON ct.chunk_id = c.id WHERE c.doc_id = ?",
+                    (doc_id,),
+                ).fetchone()[0]
                 report(
                     "topics",
                     f"{topic_count:>9,} topics {fmt_duration(time.time() - start)}",
@@ -591,6 +820,7 @@ def list_docs():
     table.add_column("Text", justify="right")
     table.add_column("Vectors", justify="right")
     table.add_column("Topics", justify="right")
+    table.add_column("Top", justify="left", style="dim")
 
     total_chunks, total_text, total_embed, total_topics = 0, 0, 0, 0
 
@@ -627,7 +857,34 @@ def list_docs():
         else:
             topics_col = "[dim]-[/dim]"
 
-        table.add_row(d["name"], pdf_col, chunks_col, text_col, embed_col, topics_col)
+        top_topics = "-"
+        if conn and topic_count:
+            rows = conn.execute(
+                """
+                SELECT t.label, COUNT(*) AS uses
+                FROM topics t
+                JOIN chunk_topics ct ON ct.topic_id = t.id
+                JOIN chunks c ON c.id = ct.chunk_id
+                JOIN documents d ON d.id = c.doc_id
+                WHERE d.name = ?
+                GROUP BY t.id
+                ORDER BY uses DESC, t.label ASC
+                LIMIT 3
+            """,
+                (d["name"],),
+            ).fetchall()
+            if rows:
+                top_topics = ", ".join(r[0] for r in rows)
+
+        table.add_row(
+            d["name"],
+            pdf_col,
+            chunks_col,
+            text_col,
+            embed_col,
+            topics_col,
+            top_topics,
+        )
 
     if total_chunks > 0:
         table.add_section()
@@ -638,6 +895,7 @@ def list_docs():
             f"[bold]{fmt_size(total_text)}[/bold]",
             f"[bold]{fmt_size(total_embed)}[/bold]",
             f"[bold]{total_topics}[/bold]",
+            "",
         )
 
     if conn:
@@ -650,19 +908,6 @@ def show_stats():
         console.print(
             f"\n[dim]Database:[/dim] {DB_PATH.name} ({fmt_size(DB_PATH.stat().st_size)})"
         )
-
-
-def blob_to_embedding(blob: bytes) -> list[float]:
-    return list(struct.unpack(f"{len(blob) // 4}f", blob))
-
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = sum(x * x for x in a) ** 0.5
-    norm_b = sum(x * x for x in b) ** 0.5
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
 
 
 def search_semantic(query: str, limit: int = 5):
@@ -678,38 +923,200 @@ def search_semantic(query: str, limit: int = 5):
     try:
         embeddings = get_embeddings_batch([query])
         query_emb = embeddings[0]
+        query_blob = embedding_to_blob(query_emb)
     except Exception as e:
         console.print(f"[red]error:[/red] {e}")
         conn.close()
         return
 
-    rows = conn.execute("""
-        SELECT c.id, d.name, c.start_line, c.end_line, c.text, c.embedding
-        FROM chunks c
-        JOIN documents d ON c.doc_id = d.id
-        WHERE c.embedding IS NOT NULL
-    """).fetchall()
+    try:
+        row = conn.execute("SELECT value FROM metadata WHERE key = 'topic_prompt'").fetchone()
+        topic_prompt = row[0] if row else None
+    except sqlite3.OperationalError:
+        topic_prompt = None
 
-    conn.close()
+    try:
+        conn.execute(
+            f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    query_topics = extract_topics(query, topic_prompt, set()) if topic_prompt else []
+    query_topics_normalized = {normalize_topic(t) for t in query_topics}
+    if query_topics:
+        console.print(f"[dim]query topics:[/dim] {', '.join(query_topics)}")
+
+    try:
+        conn.execute("SELECT vector_quantize_preload('chunks', 'embedding')")
+    except sqlite3.OperationalError:
+        pass
+
+    total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    base_candidates = max(limit * 4, 50)
+    adaptive = min(total_chunks, max(150, int(total_chunks * 0.05), base_candidates))
+    candidates = min(max(base_candidates, adaptive), 1500)
+
+    query_terms = {
+        t for t in re.findall(r"[a-z0-9]{3,}", query.lower()) if len(t) >= 3
+    }
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT c.id, d.name, c.section_id, c.start_line, c.end_line, c.text, v.distance
+            FROM chunks c
+            JOIN documents d ON c.doc_id = d.id
+            JOIN vector_quantize_scan('chunks', 'embedding', ?, ?) AS v
+            ON c.id = v.rowid
+        """,
+            (query_blob, candidates),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        rows = fallback_vector_scan(conn, query_emb, candidates)
 
     if not rows:
+        conn.close()
         console.print("[dim]no results[/dim]")
         return
 
+    chunk_ids = [r[0] for r in rows]
+    chunk_topics_map = {}
+    if query_topics_normalized and chunk_ids:
+        placeholders = ",".join("?" * len(chunk_ids))
+        topic_rows = conn.execute(
+            f"""
+            SELECT ct.chunk_id, t.normalized_label
+            FROM chunk_topics ct
+            JOIN topics t ON ct.topic_id = t.id
+            WHERE ct.chunk_id IN ({placeholders})
+        """,
+            chunk_ids,
+        ).fetchall()
+        for chunk_id, norm_label in topic_rows:
+            chunk_topics_map.setdefault(chunk_id, set()).add(norm_label)
+
+    conn.close()
+
     scored = []
-    for _, doc, start, end, text, emb_blob in rows:
-        emb = blob_to_embedding(emb_blob)
-        score = cosine_similarity(query_emb, emb)
-        scored.append((score, doc, start, end, text))
+    for chunk_id, doc, section_id, start, end, text, distance in rows:
+        embed_score = 1.0 - distance
+        topic_boost = 0.0
+        matched_topics = []
+        if query_topics_normalized and chunk_id in chunk_topics_map:
+            matched = query_topics_normalized & chunk_topics_map[chunk_id]
+            base_boost = min(len(matched) * 0.1, 0.3)
+            similarity_scale = max(0.0, min(1.0, embed_score))
+            topic_boost = base_boost * (0.5 + 0.5 * similarity_scale)
+            matched_topics = list(matched)
+
+        lexical_boost = 0.0
+        if query_terms:
+            text_terms = set(re.findall(r"[a-z0-9]{3,}", text.lower()))
+            overlap = len(query_terms & text_terms)
+            lexical_boost = min(overlap / max(len(query_terms), 1), 1.0) * 0.15
+
+        index_penalty = -0.12 if _is_index_like(text) else 0.0
+        final_score = embed_score + topic_boost + lexical_boost + index_penalty
+        scored.append(
+            (
+                final_score,
+                embed_score,
+                topic_boost + lexical_boost + index_penalty,
+                matched_topics,
+                doc,
+                section_id,
+                start,
+                end,
+                text,
+            )
+        )
 
     scored.sort(reverse=True, key=lambda x: x[0])
+    max_per_doc = 2
+    filtered = []
+    per_doc = {}
+    per_section = {}
+    for row in scored:
+        doc = row[4]
+        section_id = row[5]
+        if per_doc.get(doc, 0) >= max_per_doc:
+            continue
+        if section_id is not None and per_section.get(section_id, 0) >= 1:
+            continue
+        per_doc[doc] = per_doc.get(doc, 0) + 1
+        if section_id is not None:
+            per_section[section_id] = per_section.get(section_id, 0) + 1
+        filtered.append(row)
+        if len(filtered) >= limit:
+            break
+    if len(filtered) < limit:
+        filtered = scored[:limit]
 
-    for score, doc, start, end, text in scored[:limit]:
-        console.print(f"\n[bold]{doc}.md[/bold]:{start}-{end} [dim]({score:.2f})[/dim]")
+    for final, embed, boost, topics, doc, section_id, start, end, text in filtered:
+        boost_str = f"+{boost:.2f}" if boost > 0 else ""
+        topic_str = f" [cyan]{','.join(topics)}[/cyan]" if topics else ""
+        console.print(
+            f"\n[bold]{doc}.md[/bold]:{start}-{end} [dim]({embed:.2f}{boost_str})[/dim]{topic_str}"
+        )
         preview = text[:200].replace("\n", " ")
         if len(text) > 200:
             preview += "..."
         console.print(f"  [dim]{preview}[/dim]")
+
+
+def _is_index_like(text: str) -> bool:
+    head = text[:400].lower()
+    if any(k in head for k in ("table of contents", "contents", "index", "exercises")):
+        return True
+    numbers = re.findall(r"\b\d{1,4}\b", head)
+    if len(numbers) >= 12:
+        return True
+    return False
+
+
+def fallback_vector_scan(
+    conn: sqlite3.Connection, query_emb: list[float], candidates: int
+) -> list[tuple[int, str, int | None, int, int, str, float]]:
+    query_norm = math.sqrt(sum(v * v for v in query_emb))
+    if query_norm == 0:
+        return []
+
+    q_len = len(query_emb)
+    rows = conn.execute(
+        """
+        SELECT c.id, d.name, c.section_id, c.start_line, c.end_line, c.text, c.embedding
+        FROM chunks c
+        JOIN documents d ON c.doc_id = d.id
+        WHERE c.embedding IS NOT NULL
+    """
+    ).fetchall()
+
+    top: list[tuple[float, tuple[int, str, int, int, str, float]]] = []
+    for chunk_id, doc, section_id, start, end, text, emb_blob in rows:
+        emb = array("f")
+        emb.frombytes(emb_blob)
+        if len(emb) != q_len:
+            continue
+
+        dot = 0.0
+        norm = 0.0
+        for qv, ev in zip(query_emb, emb):
+            dot += qv * ev
+            norm += ev * ev
+        if norm == 0.0:
+            continue
+
+        sim = dot / (query_norm * math.sqrt(norm))
+        distance = 1.0 - sim
+        entry = (sim, (chunk_id, doc, section_id, start, end, text, distance))
+        if len(top) < candidates:
+            heapq.heappush(top, entry)
+        elif sim > top[0][0]:
+            heapq.heapreplace(top, entry)
+
+    top.sort(reverse=True, key=lambda x: x[0])
+    return [item[1] for item in top]
 
 
 def main():
@@ -729,6 +1136,12 @@ def main():
     )
     parser.add_argument(
         "--reset", action="store_true", help="Delete DB and extracted files"
+    )
+    parser.add_argument(
+        "--reset-topics", action="store_true", help="Clear topics and prompt (keeps embeddings)"
+    )
+    parser.add_argument(
+        "--show-prompt", action="store_true", help="Show current topic prompt"
     )
     args = parser.parse_args()
 
@@ -754,6 +1167,38 @@ def main():
         show_stats()
         return
 
+    if args.show_prompt:
+        if not DB_PATH.exists():
+            console.print("[dim]no database yet[/dim]")
+            return
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'topic_prompt'"
+            ).fetchone()
+            if row:
+                console.print(f"[bold]Topic prompt:[/bold]\n[cyan]{row[0]}[/cyan]")
+            else:
+                console.print("[dim]no prompt generated yet[/dim]")
+        except sqlite3.OperationalError:
+            console.print("[dim]no prompt generated yet[/dim]")
+        conn.close()
+        return
+
+    if args.reset_topics:
+        if not DB_PATH.exists():
+            console.print("[dim]no database yet[/dim]")
+            return
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("DELETE FROM chunk_topics")
+        conn.execute("DELETE FROM topics")
+        conn.execute("DELETE FROM topic_cache")
+        conn.execute("DELETE FROM metadata WHERE key IN ('topic_prompt')")
+        conn.commit()
+        conn.close()
+        console.print("topics cleared (embeddings preserved)")
+        return
+
     ok, msg = check_ollama()
     if not ok:
         console.print(f"[red]ollama:[/red] {msg}")
@@ -775,6 +1220,9 @@ def main():
             console.print(f"[red]error:[/red] no matching documents: {args.docs}")
             sys.exit(1)
 
+    if not args.skip_topics:
+        get_topic_prompt(conn)
+
     console.print(f"processing {len(docs)} documents")
 
     start_time = time.time()
@@ -785,6 +1233,10 @@ def main():
     except KeyboardInterrupt:
         interrupted = True
         console.print("\n[dim]interrupted[/dim]")
+
+    if not interrupted:
+        report("quantize", "building index...")
+        quantize_vectors(conn)
 
     conn.close()
     console.print()
