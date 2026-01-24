@@ -56,7 +56,7 @@ SOVA_ASCII = """\
   "   " """
 
 EMBEDDING_MODEL = "qwen3-embedding:8b"
-EMBEDDING_DIM = 4096
+EMBEDDING_DIM = 1024
 TOPIC_MODEL = "gemma3:12b"
 PROMPT_MODEL = "qwen3:30b"
 OLLAMA_URL = "http://localhost:11434"
@@ -83,7 +83,7 @@ BATCH_SIZE = 10
 
 def _label(name: str) -> str:
     padded = f"{name}:".ljust(8)
-    return f"  [dim]{padded}[/dim]"
+    return f"[dim]{padded}[/dim]"
 
 
 def report(name: str, msg: str):
@@ -1092,7 +1092,7 @@ def fallback_vector_scan(
     """
     ).fetchall()
 
-    top: list[tuple[float, tuple[int, str, int, int, str, float]]] = []
+    top: list[tuple[float, tuple[int, str, int | None, int, int, str, float]]] = []
     for chunk_id, doc, section_id, start, end, text, emb_blob in rows:
         emb = array("f")
         emb.frombytes(emb_blob)
@@ -1201,16 +1201,16 @@ def main():
 
     ok, msg = check_ollama()
     if not ok:
-        console.print(f"[red]ollama:[/red] {msg}")
+        report("ollama", f"[red]{msg}[/red]")
         sys.exit(1)
-    console.print(f"[dim]ollama:[/dim] {msg}")
+    report("ollama", msg)
 
     try:
         conn = init_db()
     except Exception as e:
-        console.print(f"[red]database:[/red] {e}")
+        report("database", f"[red]{e}[/red]")
         sys.exit(1)
-    console.print("[dim]database:[/dim] ready")
+    report("database", "ready")
 
     docs = find_docs()
 
