@@ -61,6 +61,7 @@ uv run sova.py
 Requires Ollama running with:
 - `qwen3-embedding:8b` for embeddings
 - `gemma3:12b` for topic extraction (optional)
+- `qwen3:30b` for extraction prompt generation (optional)
 
 ## Adding Documents
 
