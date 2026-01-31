@@ -19,9 +19,10 @@ Search your indexed PDF documents using semantic search.
 ```bash
 cd /path/to/sova
 
-# Semantic search (returns file:line-range with preview)
-uv run sova.py -s "your search query"
-uv run sova.py -s "query" -n 10  # More results
+# Semantic search with LLM query expansion (default)
+uv run sova -s "your search query"
+uv run sova -s "query" -n 10       # More results
+uv run sova -s "query" --no-expand # Disable expansion
 
 # Text search (exact matches)
 rg -i "keyword" data/*.md
@@ -49,24 +50,20 @@ cd /path/to/sova
 ln -s /path/to/docs docs
 
 # Check status
-uv run sova.py --list
+uv run sova --list
 
-# Index all PDFs (embeddings only, faster)
-uv run sova.py --skip-topics
-
-# Or with topic extraction (slower)
-uv run sova.py
+# Index all PDFs (models auto-pull on first run)
+uv run sova
 ```
 
-Requires Ollama running with:
+Requires Ollama running. Models are pulled automatically:
 - `qwen3-embedding:8b` for embeddings
-- `gemma3:12b` for topic extraction (optional)
-- `qwen3:30b` for extraction prompt generation (optional)
+- `gemma3:4b` for query expansion
 
 ## Adding Documents
 
 Drop PDFs in the symlinked directory and re-run indexing:
 
 ```bash
-uv run sova.py new-doc-name
+uv run sova new-doc-name
 ```
