@@ -1121,14 +1121,19 @@ def search_semantic(query: str, limit: int = 5):
         console.print(f"  [dim]{preview}[/dim]")
 
 
+def _text_density(text: str) -> float:
+    """Calculate letter density (letters / total chars)."""
+    if not text:
+        return 0.0
+    letters = sum(c.isalpha() for c in text)
+    return letters / len(text)
+
+
 def _is_index_like(text: str) -> bool:
-    head = text[:400].lower()
-    if any(k in head for k in ("table of contents", "contents", "index", "exercises")):
+    """Detect ToC/index pages using text density."""
+    if "table of contents" in text[:600].lower():
         return True
-    numbers = re.findall(r"\b\d{1,4}\b", head)
-    if len(numbers) >= 12:
-        return True
-    return False
+    return _text_density(text[:1000]) < 0.55
 
 
 def search_fts(conn: sqlite3.Connection, query: str, limit: int) -> list[tuple[int, float]]:
