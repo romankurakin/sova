@@ -36,47 +36,31 @@ uv run sova --reset                # Delete DB and extracted files
 
 ## How It Works
 
-Sova converts PDFs to Markdown via pymupdf4llm, then indexes using two methods:
+PDFs -> Markdown (pymupdf4llm) -> chunked and indexed two ways:
 
-**Embeddings** (`qwen3-embedding:8b`): Dense vector representations that capture
-semantic meaning. Chosen for strong multilingual support and 1024-dim vectors
-that balance quality and storage. Enables finding conceptually related content
-even when exact terms differ.
+- **Contextual Embeddings**: LLM detects document domain from section titles,
+  prepends context to each chunk before embedding (Anthropic's Contextual Retrieval)
+- **BM25 full-text**: Keyword search with Porter stemming for exact matches
 
-**BM25 full-text** (FTS5): Traditional keyword search with Porter stemming.
-Excels at exact matches and specific technical terms that embeddings might miss.
+**Hybrid search** fuses both via RRF. Query expansion generates synonyms to
+bridge vocabulary gaps. Text density heuristics down-rank ToC pages.
 
-**Hybrid search** combines both via Reciprocal Rank Fusion (RRF). This
-outperforms either method alone by leveraging BM25's precision for exact terms
-and embeddings' recall for semantic variations.
-
-**Query expansion** (enabled by default) uses `gemma3:4b` to generate synonyms,
-bridging vocabulary gaps when documents use different terminology than queries.
-Use `--no-expand` to disable.
-
-**Text density heuristics** detect and down-rank table-of-contents pages that
-would otherwise match many queries due to keyword density.
-
-Everything is stored in SQLite with sqlite-vec for fast similarity search.
+Models: `qwen3-embedding:8b` (embeddings), `gemma3:4b` (domain detection, query expansion)
 
 ## References
 
-- **RRF (Reciprocal Rank Fusion)**: Cormack, Clarke, Büttcher. [Reciprocal Rank
-  Fusion outperforms Condorcet and Individual Rank Learning Methods](https://dl.acm.org/doi/10.1145/1571941.1572114).
-  SIGIR 2009. Used to combine BM25 and vector search results (k=60).
+[1] G. V. Cormack, C. L. A. Clarke, and S. Büttcher, "[Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods](https://doi.org/10.1145/1571941.1572114)," in *Proc. SIGIR*, Boston, MA, USA, 2009, pp. 758–759.
 
-- **Text Density**: Vogels, Ganea, Eickhoff. [Web2Text: Deep Structured
-  Boilerplate Removal](https://arxiv.org/abs/1801.02607). ECIR 2018. Inspired
-  the text density heuristic for detecting index/ToC pages.
+[2] T. Vogels, O. E. Ganea, and C. Eickhoff, "[Web2Text: Deep Structured Boilerplate Removal](https://doi.org/10.1007/978-3-319-76941-7_13)," in *Proc. ECIR*, Grenoble, France, 2018, pp. 167–179.
 
-- **LLM Query Expansion**: Jagerman, Zhuang, et al. [Query Expansion by Prompting
-  Large Language Models](https://arxiv.org/abs/2305.03653). 2023. Foundation for
-  using LLMs to generate query synonyms and related terms.
+[3] R. Jagerman, H. Zhuang, Z. Qin, X. Wang, and M. Bendersky, "[Query Expansion by Prompting Large Language Models](https://doi.org/10.48550/arXiv.2305.03653)," in *Gen-IR@SIGIR*, 2023.
+
+[4] Anthropic, "[Introducing Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval)," Anthropic Blog, Sep. 2024.
 
 ## Requirements
 
-You'll need [uv](https://docs.astral.sh/uv/) as the Python package manager and
-[Ollama](https://ollama.ai) running locally. Models are pulled automatically on first run.
+- [uv](https://docs.astral.sh/uv/) — Python package manager
+- [Ollama](https://ollama.ai) — running locally (models pulled automatically)
 
 ## License
 

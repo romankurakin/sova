@@ -31,7 +31,12 @@ from sova.extract import (
     find_section,
     parse_sections,
 )
-from sova.ollama_client import check_ollama, expand_query, get_embeddings_batch
+from sova.ollama_client import (
+    check_ollama,
+    detect_domain,
+    expand_query,
+    get_embeddings_batch,
+)
 from sova.search import hybrid_search
 
 console = Console()
@@ -117,18 +122,29 @@ def process_doc(
     sections = parse_sections(lines)
     chunks = chunk_text(lines)
 
-    row = conn.execute("SELECT id FROM documents WHERE name = ?", (name,)).fetchone()
+    row = conn.execute(
+        "SELECT id, domain FROM documents WHERE name = ?", (name,)
+    ).fetchone()
     if row:
-        doc_id = row[0]
+        doc_id, domain = row[0], row[1]
         conn.execute(
             "UPDATE documents SET expected_chunks = ? WHERE id = ? AND expected_chunks IS NULL",
             (len(chunks), doc_id),
         )
         conn.commit()
     else:
+        doc_id, domain = None, None
+
+    # Detect domain if not set (new doc or missing domain)
+    if not domain:
+        section_titles = [s["title"] for s in sections]
+        domain = detect_domain(name, section_titles)
+        report("domain", domain)
+
+    if doc_id is None:
         cursor = conn.execute(
-            "INSERT INTO documents (name, path, line_count, expected_chunks) VALUES (?, ?, ?, ?)",
-            (name, str(md_path), len(lines), len(chunks)),
+            "INSERT INTO documents (name, path, line_count, expected_chunks, domain) VALUES (?, ?, ?, ?, ?)",
+            (name, str(md_path), len(lines), len(chunks), domain),
         )
         doc_id = cursor.lastrowid
         for s in sections:
@@ -136,6 +152,9 @@ def process_doc(
                 "INSERT INTO sections (doc_id, title, level, start_line, end_line) VALUES (?, ?, ?, ?, ?)",
                 (doc_id, s["title"], s["level"], s["start_line"], s["end_line"]),
             )
+        conn.commit()
+    elif domain:
+        conn.execute("UPDATE documents SET domain = ? WHERE id = ?", (domain, doc_id))
         conn.commit()
 
     section_rows = conn.execute(
@@ -164,8 +183,22 @@ def process_doc(
                 task = progress.add_task("", total=total)
                 for batch_start in range(0, len(pending), BATCH_SIZE):
                     batch = pending[batch_start : batch_start + BATCH_SIZE]
-                    texts = [chunks[i]["text"] for i, _ in batch]
-                    embeddings = get_embeddings_batch(texts)
+
+                    # Build contextual texts for embedding
+                    contextual_texts = []
+                    for i, chunk in batch:
+                        sec_idx = find_section(sections, chunk["start_line"])
+                        sec_title = (
+                            sections[sec_idx]["title"] if sec_idx is not None else None
+                        )
+                        # Contextual prefix: [domain] Section: title
+                        context = f"[{domain}]"
+                        if sec_title:
+                            context += f" Section: {sec_title}"
+                        context += "\n\n"
+                        contextual_texts.append(context + chunk["text"])
+
+                    embeddings = get_embeddings_batch(contextual_texts)
 
                     for (idx, chunk), emb in zip(batch, embeddings):
                         sec_idx = find_section(sections, chunk["start_line"])
