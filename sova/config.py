@@ -6,7 +6,7 @@ import sqlite_vector
 
 # Models
 EMBEDDING_MODEL = "qwen3-embedding:8b"
-QUERY_MODEL = "gemma3:4b"
+LLM_MODEL = "gemma3:4b"
 EMBEDDING_DIM = 1024
 
 # Paths
@@ -21,3 +21,4 @@ VECTOR_EXT = Path(sqlite_vector.__file__).parent / "binaries" / "vector.dylib"
 
 # Processing
 BATCH_SIZE = 10
+CHUNK_SIZE = 512

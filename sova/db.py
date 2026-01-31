@@ -77,6 +77,12 @@ def init_db() -> sqlite3.Connection:
     except sqlite3.OperationalError:
         pass
 
+    try:
+        conn.execute("ALTER TABLE documents ADD COLUMN domain TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     return conn
 
 

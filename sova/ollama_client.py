@@ -4,7 +4,35 @@ import re
 
 import ollama
 
-from sova.config import EMBEDDING_MODEL, QUERY_MODEL
+from sova.config import EMBEDDING_MODEL, LLM_MODEL
+
+
+def detect_domain(doc_name: str, section_titles: list[str]) -> str:
+    """Detect document domain using LLM from section titles."""
+    titles_text = "\n".join(section_titles)  # Use all sections
+
+    prompt = f"""What domain/field is this document about? Reply with 2-5 words only.
+
+Document: {doc_name}
+Sections:
+{titles_text}
+
+Domain:"""
+
+    try:
+        response = ollama.chat(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            options={"num_predict": 20},
+        )
+        domain = (response.message.content or "").strip()
+        # Clean up: first line only, limit length
+        domain = domain.split("\n")[0][:60]
+        if domain:
+            return domain
+    except ollama.ResponseError:
+        pass
+    return doc_name  # Fallback to document name
 
 
 def check_ollama() -> tuple[bool, str]:
@@ -13,8 +41,8 @@ def check_ollama() -> tuple[bool, str]:
         models = [m.model for m in ollama.list().models if m.model]
         if not any(EMBEDDING_MODEL in m for m in models):
             ollama.pull(EMBEDDING_MODEL)
-        if not any(QUERY_MODEL in m for m in models):
-            ollama.pull(QUERY_MODEL)
+        if not any(LLM_MODEL in m for m in models):
+            ollama.pull(LLM_MODEL)
         return True, "ready"
     except ollama.ResponseError as e:
         return False, e.error
@@ -34,7 +62,7 @@ def expand_query(query: str) -> list[str]:
 
     try:
         response = ollama.chat(
-            model=QUERY_MODEL,
+            model=LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
             options={"num_predict": 80},
         )

@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from sova.config import DATA_DIR, DOCS_DIR
+from sova.config import CHUNK_SIZE, DATA_DIR, DOCS_DIR
 
 
 def find_docs() -> list[dict]:
@@ -63,7 +63,7 @@ def parse_sections(lines: list[str]) -> list[dict]:
     return sections
 
 
-def chunk_text(lines: list[str], target_words: int = 500) -> list[dict]:
+def chunk_text(lines: list[str], target_words: int = CHUNK_SIZE) -> list[dict]:
     """Split text into chunks of approximately target_words."""
     chunks = []
     current_lines, current_words, chunk_start = [], 0, 1

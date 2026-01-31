@@ -1,6 +1,5 @@
 """Tests for extract module."""
 
-
 from sova.extract import chunk_text, find_section, parse_sections
 
 

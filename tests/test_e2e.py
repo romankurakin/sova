@@ -58,11 +58,35 @@ def temp_db():
 
         # Insert test chunks
         test_chunks = [
-            (1, 1, None, 1, 10, 50, "Memory management and virtual addressing in operating systems"),
-            (2, 1, None, 11, 20, 45, "Process scheduling algorithms including round robin"),
+            (
+                1,
+                1,
+                None,
+                1,
+                10,
+                50,
+                "Memory management and virtual addressing in operating systems",
+            ),
+            (
+                2,
+                1,
+                None,
+                11,
+                20,
+                45,
+                "Process scheduling algorithms including round robin",
+            ),
             (3, 1, None, 21, 30, 55, "File system implementation and disk management"),
             (4, 1, None, 31, 40, 40, "Network protocols TCP IP and socket programming"),
-            (5, 1, None, 41, 50, 35, "Table of contents 1.1 ... 5 1.2 ... 10 1.3 ... 15"),
+            (
+                5,
+                1,
+                None,
+                41,
+                50,
+                35,
+                "Table of contents 1.1 ... 5 1.2 ... 10 1.3 ... 15",
+            ),
         ]
 
         for chunk in test_chunks:
@@ -125,16 +149,14 @@ class TestIndexDetection:
         from sova.search import is_index_like
 
         conn, _ = temp_db
-        toc_text = conn.execute(
-            "SELECT text FROM chunks WHERE id = 5"
-        ).fetchone()[0]
+        toc_text = conn.execute("SELECT text FROM chunks WHERE id = 5").fetchone()[0]
         assert is_index_like(toc_text) is True
 
     def test_content_not_flagged(self, temp_db):
         from sova.search import is_index_like
 
         conn, _ = temp_db
-        content_text = conn.execute(
-            "SELECT text FROM chunks WHERE id = 1"
-        ).fetchone()[0]
+        content_text = conn.execute("SELECT text FROM chunks WHERE id = 1").fetchone()[
+            0
+        ]
         assert is_index_like(content_text) is False
