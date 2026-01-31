@@ -395,6 +395,34 @@ def init_db() -> sqlite3.Connection:
         PRAGMA foreign_keys = ON;
     """)
 
+    # FTS5 full-text search index
+    conn.executescript("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+            text,
+            content='chunks',
+            content_rowid='id',
+            tokenize='porter unicode61'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
+            INSERT INTO chunks_fts(rowid, text) VALUES (new.id, new.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES('delete', old.id, old.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES('delete', old.id, old.text);
+            INSERT INTO chunks_fts(rowid, text) VALUES (new.id, new.text);
+        END;
+    """)
+
+    # Populate FTS index if empty but chunks exist
+    fts_count = conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]
+    chunk_count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    if fts_count == 0 and chunk_count > 0:
+        conn.execute("INSERT INTO chunks_fts(rowid, text) SELECT id, text FROM chunks")
+        conn.commit()
+
     try:
         conn.execute(
             f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
@@ -960,33 +988,58 @@ def search_semantic(query: str, limit: int = 5):
     adaptive = min(total_chunks, max(150, int(total_chunks * 0.05), base_candidates))
     candidates = min(max(base_candidates, adaptive), 1500)
 
-    query_terms = {
-        t for t in re.findall(r"[a-z0-9]{3,}", query.lower()) if len(t) >= 3
-    }
-
+    # Vector search
     try:
-        rows = conn.execute(
+        vector_rows = conn.execute(
             """
-            SELECT c.id, d.name, c.section_id, c.start_line, c.end_line, c.text, v.distance
+            SELECT c.id, v.distance
             FROM chunks c
-            JOIN documents d ON c.doc_id = d.id
             JOIN vector_quantize_scan('chunks', 'embedding', ?, ?) AS v
             ON c.id = v.rowid
         """,
             (query_blob, candidates),
         ).fetchall()
+        vector_results = [(row[0], 1.0 - row[1]) for row in vector_rows]
     except sqlite3.OperationalError:
-        rows = fallback_vector_scan(conn, query_emb, candidates)
+        fallback = fallback_vector_scan(conn, query_emb, candidates)
+        vector_results = [(r[0], 1.0 - r[6]) for r in fallback]
 
-    if not rows:
+    # FTS5 BM25 search
+    fts_results = search_fts(conn, query, candidates)
+
+    # RRF fusion of vector and FTS results
+    if fts_results:
+        rrf_scores = rrf_fusion([vector_results, fts_results])
+        fused_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+        console.print(f"[dim]hybrid:[/dim] {len(vector_results)} vector + {len(fts_results)} fts")
+    else:
+        fused_ids = [r[0] for r in vector_results]
+        rrf_scores = {r[0]: r[1] for r in vector_results}
+
+    top_ids = fused_ids[:candidates]
+    if not top_ids:
         conn.close()
         console.print("[dim]no results[/dim]")
         return
 
-    chunk_ids = [r[0] for r in rows]
+    # Fetch chunk details for fused results
+    placeholders = ",".join("?" * len(top_ids))
+    rows = conn.execute(
+        f"""
+        SELECT c.id, d.name, c.section_id, c.start_line, c.end_line, c.text
+        FROM chunks c
+        JOIN documents d ON c.doc_id = d.id
+        WHERE c.id IN ({placeholders})
+    """,
+        top_ids,
+    ).fetchall()
+    chunk_data = {r[0]: r for r in rows}
+    vector_score_map = {r[0]: r[1] for r in vector_results}
+
+    # Fetch topics for results
+    chunk_ids = top_ids
     chunk_topics_map = {}
     if query_topics_normalized and chunk_ids:
-        placeholders = ",".join("?" * len(chunk_ids))
         topic_rows = conn.execute(
             f"""
             SELECT ct.chunk_id, t.normalized_label
@@ -1002,8 +1055,14 @@ def search_semantic(query: str, limit: int = 5):
     conn.close()
 
     scored = []
-    for chunk_id, doc, section_id, start, end, text, distance in rows:
-        embed_score = 1.0 - distance
+    for chunk_id in top_ids:
+        if chunk_id not in chunk_data:
+            continue
+        _, doc, section_id, start, end, text = chunk_data[chunk_id]
+
+        rrf_score = rrf_scores.get(chunk_id, 0.0)
+        embed_score = vector_score_map.get(chunk_id, 0.0)
+
         topic_boost = 0.0
         matched_topics = []
         if query_topics_normalized and chunk_id in chunk_topics_map:
@@ -1013,19 +1072,13 @@ def search_semantic(query: str, limit: int = 5):
             topic_boost = base_boost * (0.5 + 0.5 * similarity_scale)
             matched_topics = list(matched)
 
-        lexical_boost = 0.0
-        if query_terms:
-            text_terms = set(re.findall(r"[a-z0-9]{3,}", text.lower()))
-            overlap = len(query_terms & text_terms)
-            lexical_boost = min(overlap / max(len(query_terms), 1), 1.0) * 0.15
-
-        index_penalty = -0.12 if _is_index_like(text) else 0.0
-        final_score = embed_score + topic_boost + lexical_boost + index_penalty
+        index_penalty = -0.5 if _is_index_like(text) else 0.0
+        final_score = rrf_score * 30 + topic_boost + index_penalty
         scored.append(
             (
                 final_score,
                 embed_score,
-                topic_boost + lexical_boost + index_penalty,
+                topic_boost + index_penalty,
                 matched_topics,
                 doc,
                 section_id,
@@ -1076,6 +1129,42 @@ def _is_index_like(text: str) -> bool:
     if len(numbers) >= 12:
         return True
     return False
+
+
+def search_fts(conn: sqlite3.Connection, query: str, limit: int) -> list[tuple[int, float]]:
+    """Search using FTS5 BM25. Returns list of (chunk_id, bm25_score)."""
+    try:
+        fts_query = " ".join(
+            f'"{term}"' for term in re.findall(r"[a-zA-Z0-9_-]+", query) if len(term) >= 2
+        )
+        if not fts_query:
+            return []
+
+        rows = conn.execute(
+            """
+            SELECT rowid, bm25(chunks_fts) as score
+            FROM chunks_fts
+            WHERE chunks_fts MATCH ?
+            ORDER BY score
+            LIMIT ?
+            """,
+            (fts_query, limit),
+        ).fetchall()
+        return [(row[0], abs(row[1])) for row in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+def rrf_fusion(
+    ranked_lists: list[list[tuple[int, float]]],
+    k: int = 60,
+) -> dict[int, float]:
+    """Reciprocal Rank Fusion to combine multiple ranked lists."""
+    scores: dict[int, float] = {}
+    for ranked_list in ranked_lists:
+        for rank, (item_id, _) in enumerate(ranked_list, start=1):
+            scores[item_id] = scores.get(item_id, 0.0) + 1.0 / (k + rank)
+    return scores
 
 
 def fallback_vector_scan(
