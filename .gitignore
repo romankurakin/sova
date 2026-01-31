@@ -1,7 +1,5 @@
 # Generated
-refs.db
-*.md
-!README.md
+/data/
 
 # User data
 /docs

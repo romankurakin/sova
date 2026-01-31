@@ -24,7 +24,7 @@ uv run sova.py -s "your search query"
 uv run sova.py -s "query" -n 10  # More results
 
 # Text search (exact matches)
-rg -i "keyword" *.md
+rg -i "keyword" data/*.md
 ```
 
 Returns `file.md:start-end` with preview. Use Read tool for full context (add ~50 lines buffer for surrounding context):
@@ -35,7 +35,7 @@ Returns `file.md:start-end` with preview. Use Read tool for full context (add ~5
 ```
 
 ```
-Read /path/to/sova/mybook.md lines 530-700
+Read /path/to/sova/data/mybook.md lines 530-700
 ```
 
 ## Setup

@@ -11,7 +11,7 @@ Index:
 
 Search:
     uv run sova.py -s "query"              # Semantic search (shows preview)
-    rg -i "keyword" *.md                   # Text search (use rg)
+    rg -i "keyword" data/*.md              # Text search (use rg)
 
 Results show file:line-range. Use Read tool for full context.
 Place documents in ./docs/ directory (or symlink).
@@ -74,8 +74,9 @@ TOPIC_MIN_LEN = 3
 TOPIC_MAX_LEN = 60
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
+DATA_DIR = SCRIPT_DIR / "data"
 DOCS_DIR = SCRIPT_DIR / "docs"
-DB_PATH = SCRIPT_DIR / "refs.db"
+DB_PATH = DATA_DIR / "refs.db"
 assert sqlite_vector.__file__ is not None
 VECTOR_EXT = Path(sqlite_vector.__file__).parent / "binaries" / "vector.dylib"
 BATCH_SIZE = 10
@@ -355,6 +356,7 @@ def extract_topics(text: str, prompt: str, blocklist: set[str], retries: int = 3
 
 
 def init_db() -> sqlite3.Connection:
+    DATA_DIR.mkdir(exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.enable_load_extension(True)
     conn.load_extension(str(VECTOR_EXT))
@@ -580,14 +582,14 @@ def topic_cache_key(prompt: str, text: str) -> str:
 def find_docs() -> list[dict]:
     pdfs = list(DOCS_DIR.glob("*.pdf")) if DOCS_DIR.exists() else []
     mds = sorted(
-        [m for m in SCRIPT_DIR.glob("*.md") if m.name != "README.md"],
+        [m for m in DATA_DIR.glob("*.md")] if DATA_DIR.exists() else [],
         key=lambda p: p.name.lower(),
     )
     pdf_names = {p.stem for p in pdfs}
 
     docs = []
     for pdf in pdfs:
-        md = SCRIPT_DIR / f"{pdf.stem}.md"
+        md = DATA_DIR / f"{pdf.stem}.md"
         docs.append(
             {
                 "name": pdf.stem,
@@ -623,7 +625,8 @@ def process_doc(
 
             start = time.time()
             markdown = pymupdf4llm.to_markdown(str(pdf_path))
-            md_path = SCRIPT_DIR / f"{name}.md"
+            DATA_DIR.mkdir(exist_ok=True)
+            md_path = DATA_DIR / f"{name}.md"
             md_path.write_text(markdown, encoding="utf-8")
             lines = len(markdown.splitlines())
             report("extract", f"{lines:>9,} lines  {fmt_duration(time.time() - start)}")
@@ -1155,8 +1158,8 @@ def main():
         if DB_PATH.exists():
             DB_PATH.unlink()
             console.print(f"[dim]deleted:[/dim] {DB_PATH.name}")
-        for md in SCRIPT_DIR.glob("*.md"):
-            if md.name != "README.md":
+        if DATA_DIR.exists():
+            for md in DATA_DIR.glob("*.md"):
                 md.unlink()
                 console.print(f"[dim]deleted:[/dim] {md.name}")
         console.print("reset complete")
