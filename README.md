@@ -14,40 +14,64 @@
 
 ```bash
 ln -s /path/to/your/docs docs         # Symlink your documents
-uv run sova.py                        # Index and search
+uv run sova                           # Index all PDFs
 ```
 
 ## Search
 
 ```bash
-uv run sova.py -s "your query"        # Semantic search
-uv run sova.py -s "query" -n 10       # More results
+uv run sova -s "your query"           # Semantic search (with LLM expansion)
+uv run sova -s "query" -n 10          # More results
+uv run sova -s "query" --no-expand    # Disable query expansion
 ```
 
 ## Commands
 
 ```bash
-uv run sova.py                     # Index all PDFs
-uv run sova.py [doc...]            # Index specific docs
-uv run sova.py --list              # List docs and status
-uv run sova.py --skip-topics       # Skip topic extraction
-uv run sova.py --show-prompt       # Show current topic prompt
-uv run sova.py --reset-topics      # Clear topics + prompt
-uv run sova.py --reset             # Delete DB and .md files
+uv run sova                        # Index all PDFs
+uv run sova [doc...]               # Index specific docs
+uv run sova --list                 # List docs and status
+uv run sova --reset                # Delete DB and extracted files
 ```
 
 ## How It Works
 
-Sova converts your PDFs to Markdown using pymupdf4llm, then generates vector
-embeddings locally through Ollama. Topics can be optionally extracted via an LLM
-for richer metadata. Everything is stored in SQLite with sqlite-vec for fast
-similarity search.
+Sova converts PDFs to Markdown via pymupdf4llm, then indexes using two methods:
 
-On first run, sova generates a topic extraction prompt based on your document
-names. Use descriptive file names (e.g.,
-`operating_systems_three_easy_pieces.pdf` instead of `os.pdf`) for better topic
-extraction. Use `--reset-topics` to clear topics and regenerate the prompt after
-adding new documents.
+**Embeddings** (`qwen3-embedding:8b`): Dense vector representations that capture
+semantic meaning. Chosen for strong multilingual support and 1024-dim vectors
+that balance quality and storage. Enables finding conceptually related content
+even when exact terms differ.
+
+**BM25 full-text** (FTS5): Traditional keyword search with Porter stemming.
+Excels at exact matches and specific technical terms that embeddings might miss.
+
+**Hybrid search** combines both via Reciprocal Rank Fusion (RRF). This
+outperforms either method alone by leveraging BM25's precision for exact terms
+and embeddings' recall for semantic variations.
+
+**Query expansion** (enabled by default) uses `gemma3:4b` to generate synonyms,
+bridging vocabulary gaps when documents use different terminology than queries.
+Use `--no-expand` to disable.
+
+**Text density heuristics** detect and down-rank table-of-contents pages that
+would otherwise match many queries due to keyword density.
+
+Everything is stored in SQLite with sqlite-vec for fast similarity search.
+
+## References
+
+- **RRF (Reciprocal Rank Fusion)**: Cormack, Clarke, Büttcher. [Reciprocal Rank
+  Fusion outperforms Condorcet and Individual Rank Learning Methods](https://dl.acm.org/doi/10.1145/1571941.1572114).
+  SIGIR 2009. Used to combine BM25 and vector search results (k=60).
+
+- **Text Density**: Vogels, Ganea, Eickhoff. [Web2Text: Deep Structured
+  Boilerplate Removal](https://arxiv.org/abs/1801.02607). ECIR 2018. Inspired
+  the text density heuristic for detecting index/ToC pages.
+
+- **LLM Query Expansion**: Jagerman, Zhuang, et al. [Query Expansion by Prompting
+  Large Language Models](https://arxiv.org/abs/2305.03653). 2023. Foundation for
+  using LLMs to generate query synonyms and related terms.
 
 ## Requirements
 

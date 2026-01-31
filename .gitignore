@@ -7,7 +7,8 @@
 # Python
 .venv/
 __pycache__/
-.ruff-cache/
+*.egg-info/
+.ruff_cache/
 
 # MacOS
 .DS_Store
