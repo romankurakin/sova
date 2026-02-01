@@ -231,6 +231,45 @@ def process_doc(
             return
 
 
+def reindex_domains() -> None:
+    """Re-detect domains for all documents."""
+    if not DB_PATH.exists():
+        console.print("[red]error:[/red] no database, run indexing first")
+        return
+
+    conn = init_db()
+
+    docs = conn.execute(
+        "SELECT id, name, path FROM documents ORDER BY name"
+    ).fetchall()
+
+    if not docs:
+        console.print("[dim]no documents to reindex[/dim]")
+        conn.close()
+        return
+
+    console.print(f"reindexing domains for {len(docs)} documents\n")
+
+    for doc_id, name, md_path in docs:
+        md_file = Path(md_path)
+        if not md_file.exists():
+            report(name[:20], "[red]markdown not found[/red]")
+            continue
+
+        text = md_file.read_text(encoding="utf-8")
+        lines = text.split("\n")
+        sections = parse_sections(lines)
+        section_titles = [s["title"] for s in sections]
+
+        domain = detect_domain(name, section_titles)
+        conn.execute("UPDATE documents SET domain = ? WHERE id = ?", (domain, doc_id))
+        conn.commit()
+        report(name[:20], domain)
+
+    conn.close()
+    console.print("\n[dim]done[/dim]")
+
+
 def list_docs() -> None:
     """List all documents and their indexing status."""
     docs = find_docs()
@@ -359,6 +398,9 @@ def main() -> None:
     parser.add_argument(
         "--reset", action="store_true", help="Delete DB and extracted files"
     )
+    parser.add_argument(
+        "--reindex-domains", action="store_true", help="Re-detect domains for all documents"
+    )
     args = parser.parse_args()
 
     console.print(SOVA_ASCII, style="dim")
@@ -376,6 +418,15 @@ def main() -> None:
                 md.unlink()
                 console.print(f"[dim]deleted:[/dim] {md.name}")
         console.print("reset complete")
+        return
+
+    if args.reindex_domains:
+        ok, msg = check_ollama()
+        if not ok:
+            report("ollama", f"[red]{msg}[/red]")
+            sys.exit(1)
+        report("ollama", msg)
+        reindex_domains()
         return
 
     if args.list:

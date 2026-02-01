@@ -6,7 +6,7 @@ import re
 import sqlite3
 from array import array
 
-from sova.config import EMBEDDING_DIM
+from sova.config import EMBEDDING_DIM, MAX_PER_DOC, MAX_PER_SECTION, MIN_UNIQUE_DOCS
 from sova.db import embedding_to_blob
 
 
@@ -213,25 +213,46 @@ def hybrid_search(
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
 
-    # Diversify results
-    max_per_doc = 2
+    # Diversify results: two-phase approach
+    # Phase 1: Ensure minimum unique docs (diversity floor)
+    # Phase 2: Fill remaining slots with per-doc/section limits
     filtered = []
     per_doc: dict[str, int] = {}
     per_section: dict[int, int] = {}
+    unique_docs_seen: set[str] = set()
+
+    # Cap min_unique at actual doc count and limit
+    total_docs = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+    min_unique = min(MIN_UNIQUE_DOCS, total_docs, limit)
 
     for row in scored:
         doc = row["doc"]
         section_id = row["section_id"]
-        if per_doc.get(doc, 0) >= max_per_doc:
-            continue
-        if section_id is not None and per_section.get(section_id, 0) >= 1:
-            continue
-        per_doc[doc] = per_doc.get(doc, 0) + 1
-        if section_id is not None:
-            per_section[section_id] = per_section.get(section_id, 0) + 1
-        filtered.append(row)
-        if len(filtered) >= limit:
-            break
+        if len(unique_docs_seen) < min_unique and doc not in unique_docs_seen:
+            unique_docs_seen.add(doc)
+            per_doc[doc] = 1
+            if section_id is not None:
+                per_section[section_id] = 1
+            filtered.append(row)
+            if len(filtered) >= limit:
+                break
+
+    if len(filtered) < limit:
+        for row in scored:
+            if row in filtered:
+                continue
+            doc = row["doc"]
+            section_id = row["section_id"]
+            if per_doc.get(doc, 0) >= MAX_PER_DOC:
+                continue
+            if section_id is not None and per_section.get(section_id, 0) >= MAX_PER_SECTION:
+                continue
+            per_doc[doc] = per_doc.get(doc, 0) + 1
+            if section_id is not None:
+                per_section[section_id] = per_section.get(section_id, 0) + 1
+            filtered.append(row)
+            if len(filtered) >= limit:
+                break
 
     if len(filtered) < limit:
         filtered = scored[:limit]
