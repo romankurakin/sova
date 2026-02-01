@@ -3,34 +3,59 @@
 import re
 
 import ollama
+from pydantic import BaseModel
 
-from sova.config import EMBEDDING_MODEL, LLM_MODEL
+from sova.config import DOMAIN_MODEL, EMBEDDING_MODEL, LLM_MODEL
+
+
+class DomainResponse(BaseModel):
+    """Structured response for domain detection."""
+
+    domain: str
 
 
 def detect_domain(doc_name: str, section_titles: list[str]) -> str:
     """Detect document domain using LLM from section titles."""
-    titles_text = "\n".join(section_titles)  # Use all sections
+    # Limit sections to avoid overwhelming the model
+    titles_text = "\n".join(section_titles[:50])
 
-    prompt = f"""What domain/field is this document about? Reply with 2-5 words only.
+    prompt = f"""Classify document field. Keep specific names (ARM, RISC-V, React, PyTorch, etc).
+
+Examples:
+Document: arm-cortex-m-guide
+Field: ARM Cortex-M Programming
+
+Document: riscv-vector-extension
+Field: RISC-V Vector Extension
+
+Document: react-hooks-reference
+Field: React Hooks
+
+Document: pytorch-neural-networks
+Field: PyTorch Deep Learning
+
+Document: kubernetes-networking
+Field: Kubernetes Networking
+
+Document: rust-ownership-guide
+Field: Rust Memory Management
 
 Document: {doc_name}
-Sections:
-{titles_text}
-
-Domain:"""
+Headers: {titles_text}
+Field:"""
 
     try:
         response = ollama.chat(
-            model=LLM_MODEL,
+            model=DOMAIN_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            options={"num_predict": 20},
+            format=DomainResponse.model_json_schema(),
+            options={"num_predict": 30, "temperature": 0},
         )
-        domain = (response.message.content or "").strip()
-        # Clean up: first line only, limit length
-        domain = domain.split("\n")[0][:60]
+        result = DomainResponse.model_validate_json(response.message.content)
+        domain = result.domain.strip()[:60]
         if domain:
             return domain
-    except ollama.ResponseError:
+    except Exception:
         pass
     return doc_name  # Fallback to document name
 
@@ -43,6 +68,8 @@ def check_ollama() -> tuple[bool, str]:
             ollama.pull(EMBEDDING_MODEL)
         if not any(LLM_MODEL in m for m in models):
             ollama.pull(LLM_MODEL)
+        if not any(DOMAIN_MODEL in m for m in models):
+            ollama.pull(DOMAIN_MODEL)
         return True, "ready"
     except ollama.ResponseError as e:
         return False, e.error

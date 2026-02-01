@@ -1,5 +1,6 @@
 """Tests for ollama_client module."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 
@@ -9,7 +10,7 @@ class TestDetectDomain:
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = "Computer Architecture"
+            mock_response.message.content = json.dumps({"domain": "Computer Architecture"})
             mock_ollama.chat.return_value = mock_response
 
             result = detect_domain("riscv-privileged", ["Trap Handling", "Interrupts"])
@@ -35,53 +36,82 @@ class TestDetectDomain:
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = ""
+            mock_response.message.content = json.dumps({"domain": ""})
             mock_ollama.chat.return_value = mock_response
 
             result = detect_domain("my-document", ["Section 1"])
 
             assert result == "my-document"
 
-    def test_cleans_multiline_response(self):
+    def test_falls_back_to_doc_name_on_invalid_json(self):
         from sova.ollama_client import detect_domain
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = "Operating Systems\nThis is extra text"
+            mock_response.message.content = "not valid json"
             mock_ollama.chat.return_value = mock_response
 
-            result = detect_domain("os-book", ["Processes", "Memory"])
+            result = detect_domain("my-document", ["Section 1"])
 
-            assert result == "Operating Systems"
+            assert result == "my-document"
 
     def test_truncates_long_domain(self):
         from sova.ollama_client import detect_domain
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = "A" * 100  # Very long response
+            mock_response.message.content = json.dumps({"domain": "A" * 100})
             mock_ollama.chat.return_value = mock_response
 
             result = detect_domain("doc", ["Section"])
 
             assert len(result) <= 60
 
-    def test_uses_all_section_titles_in_prompt(self):
+    def test_uses_section_titles_in_prompt(self):
         from sova.ollama_client import detect_domain
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = "Test Domain"
+            mock_response.message.content = json.dumps({"domain": "Test Domain"})
             mock_ollama.chat.return_value = mock_response
 
             titles = ["Chapter 1", "Chapter 2", "Chapter 3"]
             detect_domain("doc", titles)
 
-            # Check that all titles are in the prompt
             call_args = mock_ollama.chat.call_args
-            prompt = call_args[1]["messages"][0]["content"]
+            user_message = call_args[1]["messages"][0]["content"]
             for title in titles:
-                assert title in prompt
+                assert title in user_message
+
+    def test_limits_section_titles_to_50(self):
+        from sova.ollama_client import detect_domain
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_response = MagicMock()
+            mock_response.message.content = json.dumps({"domain": "Test Domain"})
+            mock_ollama.chat.return_value = mock_response
+
+            titles = [f"Section {i}" for i in range(100)]
+            detect_domain("doc", titles)
+
+            call_args = mock_ollama.chat.call_args
+            user_message = call_args[1]["messages"][0]["content"]
+            assert "Section 49" in user_message
+            assert "Section 50" not in user_message
+
+    def test_uses_structured_output_format(self):
+        from sova.ollama_client import DomainResponse, detect_domain
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_response = MagicMock()
+            mock_response.message.content = json.dumps({"domain": "Test"})
+            mock_ollama.chat.return_value = mock_response
+
+            detect_domain("doc", ["Section"])
+
+            # Check format parameter is set to JSON schema
+            call_args = mock_ollama.chat.call_args
+            assert call_args[1]["format"] == DomainResponse.model_json_schema()
 
 
 class TestExpandQuery:

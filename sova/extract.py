@@ -1,9 +1,13 @@
 """PDF extraction and text processing."""
 
 import re
+import warnings
 from pathlib import Path
 
 from sova.config import CHUNK_SIZE, DATA_DIR, DOCS_DIR
+
+# Suppress pymupdf layout warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="pymupdf")
 
 
 def find_docs() -> list[dict]:
