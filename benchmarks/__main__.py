@@ -181,7 +181,7 @@ def cmd_run(name: str | None = None):
         "GIC interrupt priority",
     ]
 
-    report("latency", "measuring...")
+    report("latency", "measuring")
     latency_data = measure_latency(latency_queries)
     latency_times = latency_data["total_times"]
 
@@ -252,7 +252,7 @@ def cmd_run(name: str | None = None):
             fp_counts = [r.metrics.precision.get(kv, 0) for r in negative_results]
             neg_fp_rate[kv] = sum(fp_counts) / len(fp_counts) if fp_counts else 0
 
-    report("evaluated", f"in {fmt_duration(time.time() - start)}")
+    report("evaluated", f"in {fmt_duration(time.time() - start).strip()}")
     console.print()
 
     blank = "[dim]—[/dim]"
@@ -289,6 +289,24 @@ def cmd_run(name: str | None = None):
     console.print(table)
 
     by_cat = aggregate_by_category(results, k=k)
+
+    if by_cat:
+        console.print()
+        cat_table = Table(title="By Category", show_header=True, header_style="dim")
+        cat_table.add_column("Category")
+        cat_table.add_column("nDCG", justify="right")
+        cat_table.add_column("MRR", justify="right")
+        cat_table.add_column("Precision", justify="right")
+        cat_table.add_column("Recall", justify="right")
+        for cat, metrics in sorted(by_cat.items()):
+            cat_table.add_row(
+                cat,
+                f"{metrics['ndcg']:.3f}",
+                f"{metrics['mrr']:.3f}",
+                f"{metrics['precision']:.3f}",
+                f"{metrics['recall']:.3f}",
+            )
+        console.print(cat_table)
 
     output = {
         "name": name,
@@ -419,11 +437,21 @@ def cmd_show(run_name: str | None = None):
     by_cat = data.get("by_category", {})
     if by_cat:
         console.print()
-        console.print("[dim]By Category:[/dim]")
+        cat_table = Table(title="By Category", show_header=True, header_style="dim")
+        cat_table.add_column("Category")
+        cat_table.add_column("nDCG", justify="right")
+        cat_table.add_column("MRR", justify="right")
+        cat_table.add_column("Precision", justify="right")
+        cat_table.add_column("Recall", justify="right")
         for cat, metrics in sorted(by_cat.items()):
-            console.print(
-                f"  {cat:20} nDCG={metrics['ndcg']:.3f}  MRR={metrics['mrr']:.3f}"
+            cat_table.add_row(
+                cat,
+                f"{metrics.get('ndcg', 0):.3f}",
+                f"{metrics.get('mrr', 0):.3f}",
+                f"{metrics.get('precision', 0):.3f}",
+                f"{metrics.get('recall', 0):.3f}",
             )
+        console.print(cat_table)
 
 
 def main():
