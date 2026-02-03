@@ -190,12 +190,13 @@ def cmd_judge():
             checkpoint_path.write_text(json.dumps(ground_truth, indent=2))
 
         k = 10
+        done_before = len(completed)
         with report_progress("judging") as progress:
             task = progress.add_task("", total=len(remaining) * k)
             for qi, spec in enumerate(remaining):
                 progress.console.print(
                     f"[dim]{spec.id}[/dim] {spec.query[:50]}"
-                    f"[dim]({qi + 1 + len(completed)}/{len(QUERY_SET)})[/dim]"
+                    f" [dim]({qi + 1 + done_before}/{len(QUERY_SET)})[/dim]"
                 )
                 qj = judge_query(
                     spec, k=k, verbose=False, use_debiasing=True,
