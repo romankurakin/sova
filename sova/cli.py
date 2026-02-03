@@ -31,13 +31,13 @@ from sova.extract import (
     find_section,
     parse_sections,
 )
+from sova.cache import get_cache
 from sova.ollama_client import (
     check_ollama,
-    detect_domain,
-    expand_query,
     get_embeddings_batch,
+    get_query_embedding,
 )
-from sova.search import hybrid_search
+from sova.search import compute_candidates, fuse_and_rank, get_vector_candidates
 
 console = Console()
 
@@ -123,28 +123,22 @@ def process_doc(
     chunks = chunk_text(lines)
 
     row = conn.execute(
-        "SELECT id, domain FROM documents WHERE name = ?", (name,)
+        "SELECT id FROM documents WHERE name = ?", (name,)
     ).fetchone()
     if row:
-        doc_id, domain = row[0], row[1]
+        doc_id = row[0]
         conn.execute(
             "UPDATE documents SET expected_chunks = ? WHERE id = ? AND expected_chunks IS NULL",
             (len(chunks), doc_id),
         )
         conn.commit()
     else:
-        doc_id, domain = None, None
-
-    # Detect domain if not set (new doc or missing domain)
-    if not domain:
-        section_titles = [s["title"] for s in sections]
-        domain = detect_domain(name, section_titles)
-        report("domain", domain)
+        doc_id = None
 
     if doc_id is None:
         cursor = conn.execute(
-            "INSERT INTO documents (name, path, line_count, expected_chunks, domain) VALUES (?, ?, ?, ?, ?)",
-            (name, str(md_path), len(lines), len(chunks), domain),
+            "INSERT INTO documents (name, path, line_count, expected_chunks) VALUES (?, ?, ?, ?)",
+            (name, str(md_path), len(lines), len(chunks)),
         )
         doc_id = cursor.lastrowid
         for s in sections:
@@ -152,9 +146,6 @@ def process_doc(
                 "INSERT INTO sections (doc_id, title, level, start_line, end_line) VALUES (?, ?, ?, ?, ?)",
                 (doc_id, s["title"], s["level"], s["start_line"], s["end_line"]),
             )
-        conn.commit()
-    elif domain:
-        conn.execute("UPDATE documents SET domain = ? WHERE id = ?", (domain, doc_id))
         conn.commit()
 
     section_rows = conn.execute(
@@ -184,18 +175,19 @@ def process_doc(
                 for batch_start in range(0, len(pending), BATCH_SIZE):
                     batch = pending[batch_start : batch_start + BATCH_SIZE]
 
-                    # Build contextual texts for embedding
                     contextual_texts = []
                     for i, chunk in batch:
                         sec_idx = find_section(sections, chunk["start_line"])
                         sec_title = (
                             sections[sec_idx]["title"] if sec_idx is not None else None
                         )
-                        # Contextual prefix: [domain] Section: title
-                        context = f"[{domain}]"
+                        # Prepend doc name and section to each chunk before embedding
+                        # so the vector captures document context, not just raw text.
+                        # This improves retrieval when multiple docs cover similar topics.
+                        context = f"[{name}"
                         if sec_title:
-                            context += f" Section: {sec_title}"
-                        context += "\n\n"
+                            context += f" | {sec_title}"
+                        context += "]\n\n"
                         contextual_texts.append(context + chunk["text"])
 
                     embeddings = get_embeddings_batch(contextual_texts)
@@ -229,45 +221,6 @@ def process_doc(
             conn.rollback()
             report("error", f"[red]{e}[/red]")
             return
-
-
-def reindex_domains() -> None:
-    """Re-detect domains for all documents."""
-    if not DB_PATH.exists():
-        console.print("[red]error:[/red] no database, run indexing first")
-        return
-
-    conn = init_db()
-
-    docs = conn.execute(
-        "SELECT id, name, path FROM documents ORDER BY name"
-    ).fetchall()
-
-    if not docs:
-        console.print("[dim]no documents to reindex[/dim]")
-        conn.close()
-        return
-
-    console.print(f"reindexing domains for {len(docs)} documents\n")
-
-    for doc_id, name, md_path in docs:
-        md_file = Path(md_path)
-        if not md_file.exists():
-            report(name[:20], "[red]markdown not found[/red]")
-            continue
-
-        text = md_file.read_text(encoding="utf-8")
-        lines = text.split("\n")
-        sections = parse_sections(lines)
-        section_titles = [s["title"] for s in sections]
-
-        domain = detect_domain(name, section_titles)
-        conn.execute("UPDATE documents SET domain = ? WHERE id = ?", (domain, doc_id))
-        conn.commit()
-        report(name[:20], domain)
-
-    conn.close()
-    console.print("\n[dim]done[/dim]")
 
 
 def list_docs() -> None:
@@ -332,34 +285,42 @@ def show_stats() -> None:
         console.print(
             f"\n[dim]Database:[/dim] {DB_PATH.name} ({fmt_size(DB_PATH.stat().st_size)})"
         )
+        cache = get_cache()
+        conn = connect_readonly()
+        count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
+        conn.close()
+        console.print(f"[dim]Cache:[/dim] {count} entries (max {cache.max_size})")
 
 
-def search_semantic(query: str, limit: int = 5, expand: bool = False) -> None:
+def search_semantic(query: str, limit: int = 10) -> None:
     """Perform semantic search and display results."""
     if not DB_PATH.exists():
         console.print("[red]error:[/red] no database, run indexing first")
         return
 
     conn = connect_readonly()
-
-    # Query expansion
-    expanded_terms: list[str] = []
-    if expand:
-        expanded_terms = expand_query(query)
-        if expanded_terms:
-            console.print(f"[dim]expand:[/dim] {', '.join(expanded_terms)}")
+    cache = get_cache()
 
     try:
-        embeddings = get_embeddings_batch([query])
-        query_emb = embeddings[0]
+        query_emb = get_query_embedding(query)
     except Exception as e:
         console.print(f"[red]error:[/red] {e}")
         conn.close()
         return
 
-    results, n_vector, n_fts = hybrid_search(
-        conn, query_emb, query, expanded_terms, limit
-    )
+    # Compute min candidates before checking cache so we only accept cached
+    # results that searched at least as broadly as we need.
+    total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    min_candidates = compute_candidates(total_chunks, limit)
+    cached_vectors = cache.get(query_emb, min_candidates)
+    if cached_vectors:
+        console.print("[dim]cache:[/dim] hit")
+        results, n_vector, n_fts = fuse_and_rank(conn, cached_vectors, query, limit)
+    else:
+        vector_results = get_vector_candidates(conn, query_emb, limit)
+        cache.put(query_emb, vector_results)
+        results, n_vector, n_fts = fuse_and_rank(conn, vector_results, query, limit)
+
     conn.close()
 
     if n_fts:
@@ -390,23 +351,20 @@ def main() -> None:
     )
     parser.add_argument("-s", "--search", metavar="QUERY", help="Semantic search")
     parser.add_argument(
-        "-n", "--limit", type=int, default=5, help="Max results (default: 5)"
-    )
-    parser.add_argument(
-        "--no-expand", action="store_true", help="Disable LLM query expansion"
+        "-n", "--limit", type=int, default=10, help="Max results (default: 10)"
     )
     parser.add_argument(
         "--reset", action="store_true", help="Delete DB and extracted files"
     )
     parser.add_argument(
-        "--reindex-domains", action="store_true", help="Re-detect domains for all documents"
+        "--clear-cache", action="store_true", help="Clear semantic search cache"
     )
     args = parser.parse_args()
 
-    console.print(SOVA_ASCII, style="dim")
+    console.print(SOVA_ASCII)
 
     if args.search:
-        search_semantic(args.search, args.limit, expand=not args.no_expand)
+        search_semantic(args.search, args.limit)
         return
 
     if args.reset:
@@ -420,13 +378,10 @@ def main() -> None:
         console.print("reset complete")
         return
 
-    if args.reindex_domains:
-        ok, msg = check_ollama()
-        if not ok:
-            report("ollama", f"[red]{msg}[/red]")
-            sys.exit(1)
-        report("ollama", msg)
-        reindex_domains()
+    if args.clear_cache:
+        cache = get_cache()
+        cache.clear()
+        console.print("cache cleared")
         return
 
     if args.list:
@@ -464,8 +419,10 @@ def main() -> None:
             process_doc(doc["name"], doc["pdf"], doc["md"], conn)
     except KeyboardInterrupt:
         interrupted = True
-        console.print("\n[dim]interrupted[/dim]")
+        console.print()  # newline after progress bar
 
+    # Only quantize if all docs finished. Partial quantization would create
+    # an index missing the latest chunks, giving incomplete search results.
     if not interrupted:
         report("quantize", "building index...")
         quantize_vectors(conn)

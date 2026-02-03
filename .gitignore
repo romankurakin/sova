@@ -9,6 +9,10 @@
 __pycache__/
 *.egg-info/
 .ruff_cache/
+.pytest_cache
 
 # MacOS
 .DS_Store
+
+# Agents
+.claude

@@ -5,7 +5,10 @@ description = "Local document semantic search"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "msgpack>=1.1.2",
+    "numpy>=2.2.0",
     "ollama>=0.6.1",
+    "pydantic>=2.0",
     "pymupdf4llm>=0.2.9",
     "pymupdf-layout>=1.26.6",
     "rich>=14.3.1",

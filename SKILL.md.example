@@ -19,10 +19,10 @@ Search your indexed PDF documents using semantic search.
 ```bash
 cd /path/to/sova
 
-# Semantic search with LLM query expansion (default)
+# Semantic search
 uv run sova -s "your search query"
-uv run sova -s "query" -n 10       # More results
-uv run sova -s "query" --no-expand # Disable expansion
+uv run sova -s "query" -n 5        # Fewer results
+uv run sova -s "query" -n 20       # More results
 
 # Text search (exact matches)
 rg -i "keyword" data/*.md
@@ -56,9 +56,7 @@ uv run sova --list
 uv run sova
 ```
 
-Requires Ollama running. Models are pulled automatically:
-- `qwen3-embedding:8b` for embeddings
-- `gemma3:4b` for query expansion
+Requires Ollama running. Models are pulled automatically.
 
 ## Adding Documents
 

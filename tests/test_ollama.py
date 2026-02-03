@@ -1,169 +1,63 @@
 """Tests for ollama_client module."""
 
-import json
 from unittest.mock import MagicMock, patch
 
 
-class TestDetectDomain:
-    def test_returns_domain_from_llm(self):
-        from sova.ollama_client import detect_domain
+class TestGetQueryEmbedding:
+    def test_adds_instruction_prefix(self):
+        from sova.ollama_client import get_query_embedding
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = json.dumps({"domain": "Computer Architecture"})
-            mock_ollama.chat.return_value = mock_response
+            mock_response.embeddings = [[0.1, 0.2, 0.3]]
+            mock_ollama.embed.return_value = mock_response
 
-            result = detect_domain("riscv-privileged", ["Trap Handling", "Interrupts"])
+            get_query_embedding("test query")
 
-            assert result == "Computer Architecture"
-            mock_ollama.chat.assert_called_once()
+            call_args = mock_ollama.embed.call_args
+            prompt = call_args[1]["input"]
+            assert "Instruct:" in prompt
+            assert "Query: test query" in prompt
 
-    def test_falls_back_to_doc_name_on_error(self):
-        from sova.ollama_client import detect_domain
-
-        with patch("sova.ollama_client.ollama") as mock_ollama:
-            import ollama
-
-            mock_ollama.ResponseError = ollama.ResponseError
-            mock_ollama.chat.side_effect = ollama.ResponseError("error")
-
-            result = detect_domain("my-document", ["Section 1", "Section 2"])
-
-            assert result == "my-document"
-
-    def test_falls_back_to_doc_name_on_empty_response(self):
-        from sova.ollama_client import detect_domain
+    def test_returns_float_list(self):
+        from sova.ollama_client import get_query_embedding
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = json.dumps({"domain": ""})
-            mock_ollama.chat.return_value = mock_response
+            mock_response.embeddings = [[0.1, 0.2, 0.3]]
+            mock_ollama.embed.return_value = mock_response
 
-            result = detect_domain("my-document", ["Section 1"])
-
-            assert result == "my-document"
-
-    def test_falls_back_to_doc_name_on_invalid_json(self):
-        from sova.ollama_client import detect_domain
-
-        with patch("sova.ollama_client.ollama") as mock_ollama:
-            mock_response = MagicMock()
-            mock_response.message.content = "not valid json"
-            mock_ollama.chat.return_value = mock_response
-
-            result = detect_domain("my-document", ["Section 1"])
-
-            assert result == "my-document"
-
-    def test_truncates_long_domain(self):
-        from sova.ollama_client import detect_domain
-
-        with patch("sova.ollama_client.ollama") as mock_ollama:
-            mock_response = MagicMock()
-            mock_response.message.content = json.dumps({"domain": "A" * 100})
-            mock_ollama.chat.return_value = mock_response
-
-            result = detect_domain("doc", ["Section"])
-
-            assert len(result) <= 60
-
-    def test_uses_section_titles_in_prompt(self):
-        from sova.ollama_client import detect_domain
-
-        with patch("sova.ollama_client.ollama") as mock_ollama:
-            mock_response = MagicMock()
-            mock_response.message.content = json.dumps({"domain": "Test Domain"})
-            mock_ollama.chat.return_value = mock_response
-
-            titles = ["Chapter 1", "Chapter 2", "Chapter 3"]
-            detect_domain("doc", titles)
-
-            call_args = mock_ollama.chat.call_args
-            user_message = call_args[1]["messages"][0]["content"]
-            for title in titles:
-                assert title in user_message
-
-    def test_limits_section_titles_to_50(self):
-        from sova.ollama_client import detect_domain
-
-        with patch("sova.ollama_client.ollama") as mock_ollama:
-            mock_response = MagicMock()
-            mock_response.message.content = json.dumps({"domain": "Test Domain"})
-            mock_ollama.chat.return_value = mock_response
-
-            titles = [f"Section {i}" for i in range(100)]
-            detect_domain("doc", titles)
-
-            call_args = mock_ollama.chat.call_args
-            user_message = call_args[1]["messages"][0]["content"]
-            assert "Section 49" in user_message
-            assert "Section 50" not in user_message
-
-    def test_uses_structured_output_format(self):
-        from sova.ollama_client import DomainResponse, detect_domain
-
-        with patch("sova.ollama_client.ollama") as mock_ollama:
-            mock_response = MagicMock()
-            mock_response.message.content = json.dumps({"domain": "Test"})
-            mock_ollama.chat.return_value = mock_response
-
-            detect_domain("doc", ["Section"])
-
-            # Check format parameter is set to JSON schema
-            call_args = mock_ollama.chat.call_args
-            assert call_args[1]["format"] == DomainResponse.model_json_schema()
-
-
-class TestExpandQuery:
-    def test_returns_list_of_terms(self):
-        from sova.ollama_client import expand_query
-
-        with patch("sova.ollama_client.ollama") as mock_ollama:
-            mock_response = MagicMock()
-            mock_response.message.content = "term1\nterm2\nterm3"
-            mock_ollama.chat.return_value = mock_response
-
-            result = expand_query("test query")
+            result = get_query_embedding("test")
 
             assert isinstance(result, list)
-            assert len(result) == 3
-            assert "term1" in result
+            assert all(isinstance(v, float) for v in result)
 
-    def test_returns_empty_list_on_error(self):
-        from sova.ollama_client import expand_query
 
-        with patch("sova.ollama_client.ollama") as mock_ollama:
-            import ollama
-
-            mock_ollama.ResponseError = ollama.ResponseError
-            mock_ollama.chat.side_effect = ollama.ResponseError("error")
-
-            result = expand_query("test query")
-
-            assert result == []
-
-    def test_limits_to_five_terms(self):
-        from sova.ollama_client import expand_query
+class TestGetEmbeddingsBatch:
+    def test_returns_list_of_embeddings(self):
+        from sova.ollama_client import get_embeddings_batch
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = "\n".join([f"term{i}" for i in range(10)])
-            mock_ollama.chat.return_value = mock_response
+            mock_response.embeddings = [[0.1, 0.2], [0.3, 0.4]]
+            mock_ollama.embed.return_value = mock_response
 
-            result = expand_query("test query")
+            result = get_embeddings_batch(["text1", "text2"])
 
-            assert len(result) <= 5
+            assert len(result) == 2
+            assert all(isinstance(emb, list) for emb in result)
 
-    def test_filters_short_terms(self):
-        from sova.ollama_client import expand_query
+    def test_no_instruction_prefix(self):
+        from sova.ollama_client import get_embeddings_batch
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
             mock_response = MagicMock()
-            mock_response.message.content = "a\nab\nabc\nabcd"
-            mock_ollama.chat.return_value = mock_response
+            mock_response.embeddings = [[0.1, 0.2]]
+            mock_ollama.embed.return_value = mock_response
 
-            result = expand_query("test")
+            get_embeddings_batch(["test text"])
 
-            # Only terms with len >= 2 should be included
-            assert "a" not in result
-            assert "ab" in result
+            call_args = mock_ollama.embed.call_args
+            prompt = call_args[1]["input"]
+            # Document embeddings don't have instruction prefix
+            assert "Instruct:" not in str(prompt)
