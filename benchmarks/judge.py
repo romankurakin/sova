@@ -253,7 +253,7 @@ def judge_chunk(
             result = JudgmentResponse.model_validate_json(content)
             return (
                 max(0, min(3, result.score)),
-                result.reason.strip()[:200],
+                result.reason.strip(),
                 max(0.0, min(1.0, result.confidence)),
                 result.subtopics[:5] if result.subtopics else [],
             )
@@ -326,6 +326,7 @@ def judge_query(
     k: int = 50,
     verbose: bool = True,
     use_debiasing: bool = False,
+    on_chunk_done: callable = None,
 ) -> QueryJudgments:
     """Collect and judge all candidates for a query."""
     candidates = collect_candidates(spec.query, k=k)
@@ -350,6 +351,8 @@ def judge_query(
                 text_preview=hit["text"][:100].replace("\n", " "),
             )
         )
+        if on_chunk_done:
+            on_chunk_done()
 
     return QueryJudgments(
         query=spec, judgments=judgments, timestamp=time.strftime("%Y-%m-%dT%H:%M:%S")

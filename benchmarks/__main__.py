@@ -171,8 +171,6 @@ def cmd_judge():
     else:
         report("queries", str(len(QUERY_SET)))
     report("mode", "debiasing enabled")
-    if remaining:
-        report("current", remaining[0].id)
     console.print()
 
     start = time.time()
@@ -191,10 +189,18 @@ def cmd_judge():
             }
             checkpoint_path.write_text(json.dumps(ground_truth, indent=2))
 
+        k = 10
         with report_progress("judging") as progress:
-            task = progress.add_task("", total=len(remaining))
-            for spec in remaining:
-                qj = judge_query(spec, k=10, verbose=False, use_debiasing=True)
+            task = progress.add_task("", total=len(remaining) * k)
+            for qi, spec in enumerate(remaining):
+                progress.console.print(
+                    f"[dim]{spec.id}[/dim] {spec.query[:50]}"
+                    f"[dim]({qi + 1 + len(completed)}/{len(QUERY_SET)})[/dim]"
+                )
+                qj = judge_query(
+                    spec, k=k, verbose=False, use_debiasing=True,
+                    on_chunk_done=lambda: progress.update(task, advance=1),
+                )
 
                 extracted_subtopics = collect_query_subtopics(qj.judgments)
                 all_subtopics = sorted(set(qj.query.subtopics + extracted_subtopics))
