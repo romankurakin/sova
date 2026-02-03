@@ -25,6 +25,7 @@ class SovaBackend:
             raise FileNotFoundError("No database. Run sova indexing first.")
 
         from sova.db import connect_readonly
+
         self.conn = connect_readonly()
 
     def close(self):
@@ -32,9 +33,12 @@ class SovaBackend:
 
     def _embed_query(self, text: str) -> list[float]:
         from sova.ollama_client import get_query_embedding
+
         return get_query_embedding(text)
 
-    def search(self, query: str, limit: int = 10, embedding: list[float] | None = None) -> list[SearchResult]:
+    def search(
+        self, query: str, limit: int = 10, embedding: list[float] | None = None
+    ) -> list[SearchResult]:
         from sova.search import hybrid_search
 
         if embedding is None:
@@ -88,9 +92,14 @@ def measure_latency(queries: list[str]) -> dict:
         search_times.append((t2 - t1) * 1000)
         total_times.append((t2 - t0) * 1000)
 
-    return {"embed_times": embed_times, "search_times": search_times, "total_times": total_times}
+    return {
+        "embed_times": embed_times,
+        "search_times": search_times,
+        "total_times": total_times,
+    }
 
 
 def clear_cache():
     from sova.cache import get_cache
+
     get_cache().clear()

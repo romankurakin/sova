@@ -2,6 +2,7 @@
 
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import ollama
@@ -20,25 +21,24 @@ Document chunk:
 {chunk}
 ---
 
-Score definitions with examples:
+Rules:
+- Score ONLY what the chunk actually says. Do not assume or infer content.
+- If the query names a specific term, that term must appear in the chunk to score
+  above 0. A similar concept from a different domain does not count.
+- Definitions, mechanisms, and format descriptions about the query topic are score 2.
+  Score 1 is only for passing mentions without explanation.
 
-3 = HIGHLY RELEVANT - Directly answers or explains the query topic
-    Example: Query "ARM exception handling" → chunk explains exception vectors, fault types, handler setup
-
-2 = RELEVANT - Contains useful information about the query topic
-    Example: Query "ARM exception handling" → chunk about interrupt handling that mentions exceptions
-
-1 = MARGINALLY RELEVANT - Mentions query terms but doesn't explain them
-    Example: Query "ARM exception handling" → chunk lists "exceptions" in a feature list without details
-
-0 = NOT RELEVANT - No meaningful connection to query
-    Example: Query "ARM exception handling" → chunk about memory allocation or unrelated topic
+Scores:
+3 = Directly and thoroughly answers the query
+2 = Explains, defines, or gives useful detail about the query topic
+1 = Mentions a query term in passing without explaining it
+0 = No meaningful connection to the query
 
 Return JSON with:
-- score: 0-3 (use the full range, most chunks should be 0-2)
-- confidence: 0.0-1.0 (lower if uncertain)
-- subtopics: 1-3 technical concepts this chunk covers
-- reason: brief explanation"""
+- score: integer 0-3
+- confidence: float 0.0-1.0 (lower when uncertain)
+- subtopics: list of 1-3 technical concepts this chunk covers
+- reason: one sentence; note whether key query terms appear in the chunk"""
 
 
 class JudgmentResponse(BaseModel):
@@ -74,164 +74,96 @@ class QueryJudgments:
     timestamp: str = ""
 
 
-# 45 queries in 4 categories
+# 20 queries in 5 categories (4 each)
 QUERY_SET: list[QuerySpec] = [
-    # Factoid (15)
+    # Exact lookup (4) — specific terms, BM25 should handle well
     QuerySpec(
-        "f01", "ARM exception handling", "factoid", ["exception_vectors", "fault_types"]
+        "e01", "ELR_EL1 register", "exact_lookup", ["exception_link", "return_address"]
+    ),
+    QuerySpec("e02", "mcause CSR", "exact_lookup", ["trap_cause", "exception_code"]),
+    QuerySpec(
+        "e03", "GICD_ISENABLER", "exact_lookup", ["interrupt_enable", "distributor"]
     ),
     QuerySpec(
-        "f02",
-        "AArch64 register conventions",
-        "factoid",
-        ["caller_saved", "callee_saved"],
+        "e04", "sv39 page table", "exact_lookup", ["page_table_entry", "translation"]
     ),
-    QuerySpec(
-        "f03", "GIC interrupt priority", "factoid", ["priority_mask", "preemption"]
-    ),
-    QuerySpec(
-        "f04", "ARM memory barrier instructions", "factoid", ["dmb", "dsb", "isb"]
-    ),
-    QuerySpec(
-        "f05",
-        "procedure call standard stack frame",
-        "factoid",
-        ["frame_pointer", "alignment"],
-    ),
-    QuerySpec("f06", "RISC-V trap handling", "factoid", ["trap_vector", "mcause"]),
-    QuerySpec(
-        "f07", "RISC-V privilege levels", "factoid", ["machine_mode", "supervisor_mode"]
-    ),
-    QuerySpec("f08", "SBI console functions", "factoid", ["putchar", "getchar"]),
-    QuerySpec(
-        "f09", "PLIC interrupt pending", "factoid", ["pending_register", "claim"]
-    ),
-    QuerySpec("f10", "RISC-V CSR registers", "factoid", ["mstatus", "mepc"]),
-    QuerySpec(
-        "f11", "process scheduling algorithm", "factoid", ["round_robin", "priority"]
-    ),
-    QuerySpec(
-        "f12",
-        "virtual memory page table",
-        "factoid",
-        ["page_table_entry", "translation"],
-    ),
-    QuerySpec(
-        "f13",
-        "file system inode structure",
-        "factoid",
-        ["inode_fields", "direct_blocks"],
-    ),
-    QuerySpec(
-        "f14",
-        "context switch implementation",
-        "factoid",
-        ["save_state", "restore_state"],
-    ),
-    QuerySpec("f15", "deadlock prevention", "factoid", ["conditions", "avoidance"]),
-    # Conceptual (15)
+    # Conceptual (4) — needs semantic understanding across sections
     QuerySpec(
         "c01",
-        "interrupt controller configuration",
+        "how the OS reclaims memory from a terminated process",
         "conceptual",
-        ["gic", "plic", "setup"],
-    ),
-    QuerySpec("c02", "memory management unit", "conceptual", ["arm_mmu", "riscv_mmu"]),
-    QuerySpec("c03", "system call interface", "conceptual", ["syscall_entry", "trap"]),
-    QuerySpec("c04", "boot sequence initialization", "conceptual", ["startup", "init"]),
-    QuerySpec(
-        "c05", "timer interrupt handling", "conceptual", ["timer_irq", "scheduling"]
+        ["memory_free", "process_exit"],
     ),
     QuerySpec(
-        "c06",
-        "how to save registers on function call",
+        "c02",
+        "why kernel code runs in privileged mode",
         "conceptual",
-        ["callee_saved", "prologue"],
+        ["protection", "privilege"],
     ),
     QuerySpec(
-        "c07", "page fault handler", "conceptual", ["fault_handling", "demand_paging"]
-    ),
-    QuerySpec("c08", "spinlock implementation", "conceptual", ["atomic_ops", "lock"]),
-    QuerySpec("c09", "cache coherency protocol", "conceptual", ["mesi", "snoop"]),
-    QuerySpec(
-        "c10",
-        "privilege escalation mechanism",
+        "c03",
+        "interrupt handling from hardware signal to handler return",
         "conceptual",
-        ["mode_switch", "syscall"],
-    ),
-    QuerySpec("c11", "mutex vs semaphore", "conceptual", ["mutex", "semaphore"]),
-    QuerySpec(
-        "c12", "kernel stack layout", "conceptual", ["stack_frame", "trap_frame"]
-    ),
-    QuerySpec("c13", "TLB flush mechanism", "conceptual", ["tlb_invalidate", "asid"]),
-    QuerySpec("c14", "DMA configuration", "conceptual", ["dma_setup", "transfer"]),
-    QuerySpec("c15", "power management states", "conceptual", ["sleep", "idle"]),
-    # Cross-domain (10)
-    QuerySpec(
-        "x01", "atomic operations", "cross_domain", ["arm_ldxr_stxr", "riscv_amo"]
+        ["irq_flow", "context_save"],
     ),
     QuerySpec(
-        "x02", "floating point registers", "cross_domain", ["arm_simd", "riscv_f"]
+        "c04",
+        "how virtual addresses get translated to physical",
+        "conceptual",
+        ["mmu", "page_walk"],
+    ),
+    # Cross-doc (4) — should return results from multiple documents
+    QuerySpec(
+        "d01",
+        "how ARM and RISC-V differ in exception handling",
+        "cross_doc",
+        ["arm_exception", "riscv_trap"],
     ),
     QuerySpec(
-        "x03",
-        "instruction encoding format",
-        "cross_domain",
-        ["arm_encoding", "riscv_encoding"],
+        "d02",
+        "calling convention register usage",
+        "cross_doc",
+        ["arm_abi", "riscv_abi"],
     ),
     QuerySpec(
-        "x04", "privilege mode switching", "cross_domain", ["arm_el", "riscv_modes"]
+        "d03", "interrupt controller setup and priority", "cross_doc", ["gic", "plic"]
     ),
     QuerySpec(
-        "x05", "interrupt vector table", "cross_domain", ["gic_vectors", "plic_vectors"]
+        "d04",
+        "page table entry format and permission bits",
+        "cross_doc",
+        ["arm_pte", "riscv_pte"],
     ),
-    QuerySpec(
-        "x06", "callee saved registers", "cross_domain", ["arm_callee", "riscv_callee"]
-    ),
-    QuerySpec("x07", "exception return address", "cross_domain", ["elr", "mepc"]),
-    QuerySpec(
-        "x08", "nested interrupt handling", "cross_domain", ["nested_irq", "preemption"]
-    ),
-    QuerySpec(
-        "x09", "page table entry format", "cross_domain", ["arm_pte", "riscv_pte"]
-    ),
-    QuerySpec(
-        "x10",
-        "function prologue epilogue",
-        "cross_domain",
-        ["arm_prologue", "riscv_prologue"],
-    ),
-    # Natural language (5)
+    # Natural/vague (4) — real user phrasing, no exact keyword match
     QuerySpec(
         "n01",
-        "how does the CPU save state during interrupts",
-        "natural_language",
-        ["context_save", "registers"],
+        "my kernel crashes right after enabling the MMU",
+        "natural",
+        ["mmu_enable", "fault"],
     ),
     QuerySpec(
         "n02",
-        "what happens when a page is not in memory",
-        "natural_language",
-        ["page_fault", "demand_paging"],
+        "context switch is losing register values",
+        "natural",
+        ["save_restore", "callee_saved"],
     ),
     QuerySpec(
         "n03",
-        "difference between supervisor and user mode",
-        "natural_language",
-        ["privilege", "protection"],
+        "how do I set up interrupts from scratch",
+        "natural",
+        ["irq_setup", "vector_table"],
     ),
     QuerySpec(
         "n04",
-        "steps to handle a system call",
-        "natural_language",
-        ["syscall_flow", "trap"],
+        "what order should I initialize hardware on boot",
+        "natural",
+        ["boot_sequence", "init"],
     ),
-    QuerySpec(
-        "n05",
-        "why use memory barriers",
-        "natural_language",
-        ["ordering", "consistency"],
-    ),
+    # Negative (4) — should return nothing relevant, tests false positive rate
+    QuerySpec("x01", "Python asyncio event loop", "negative", []),
+    QuerySpec("x02", "React component lifecycle hooks", "negative", []),
+    QuerySpec("x03", "SQL JOIN optimization strategies", "negative", []),
+    QuerySpec("x04", "Kubernetes pod scheduling", "negative", []),
 ]
 
 
@@ -326,7 +258,7 @@ def judge_query(
     k: int = 50,
     verbose: bool = True,
     use_debiasing: bool = False,
-    on_chunk_done: callable = None,
+    on_chunk_done: Callable[[], None] | None = None,
 ) -> QueryJudgments:
     """Collect and judge all candidates for a query."""
     candidates = collect_candidates(spec.query, k=k)

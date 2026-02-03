@@ -3,6 +3,5 @@
 Modules:
 - evaluate: IR metrics (MRR, nDCG, Precision, Recall, diversity metrics)
 - judge: LLM-as-judge for ground truth creation
-- calibration: Calibrate LLM judge against human labels
-- run_benchmark: Ablation study runner
+- run_benchmark: Search runner
 """

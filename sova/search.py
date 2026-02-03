@@ -279,7 +279,10 @@ def fuse_and_rank(
             section_id = row["section_id"]
             if per_doc.get(doc, 0) >= MAX_PER_DOC:
                 continue
-            if section_id is not None and per_section.get(section_id, 0) >= MAX_PER_SECTION:
+            if (
+                section_id is not None
+                and per_section.get(section_id, 0) >= MAX_PER_SECTION
+            ):
                 continue
             per_doc[doc] = per_doc.get(doc, 0) + 1
             if section_id is not None:

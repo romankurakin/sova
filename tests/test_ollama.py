@@ -2,6 +2,65 @@
 
 from unittest.mock import MagicMock, patch
 
+import ollama as ollama_lib
+
+
+class TestCheckOllama:
+    def test_success_model_present(self):
+        from sova.ollama_client import check_ollama
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_model = MagicMock()
+            mock_model.model = "qwen3-embedding:4b"
+            mock_list = MagicMock()
+            mock_list.models = [mock_model]
+            mock_ollama.list.return_value = mock_list
+
+            ok, msg = check_ollama()
+
+            assert ok is True
+            assert msg == "ready"
+            mock_ollama.pull.assert_not_called()
+
+    def test_success_model_missing_pulls(self):
+        from sova.ollama_client import check_ollama
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_model = MagicMock()
+            mock_model.model = "some-other-model:latest"
+            mock_list = MagicMock()
+            mock_list.models = [mock_model]
+            mock_ollama.list.return_value = mock_list
+
+            ok, msg = check_ollama()
+
+            assert ok is True
+            mock_ollama.pull.assert_called_once()
+
+    def test_response_error(self):
+        from sova.ollama_client import check_ollama
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_ollama.ResponseError = ollama_lib.ResponseError
+            mock_ollama.list.side_effect = ollama_lib.ResponseError("model not found")
+
+            ok, msg = check_ollama()
+
+            assert ok is False
+            assert "model not found" in msg
+
+    def test_connection_error(self):
+        from sova.ollama_client import check_ollama
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_ollama.ResponseError = ollama_lib.ResponseError
+            mock_ollama.list.side_effect = ConnectionError("refused")
+
+            ok, msg = check_ollama()
+
+            assert ok is False
+            assert "not running" in msg
+
 
 class TestGetQueryEmbedding:
     def test_adds_instruction_prefix(self):

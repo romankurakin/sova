@@ -1,6 +1,10 @@
 """Tests for extract module."""
 
-from sova.extract import chunk_text, find_section, parse_sections
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+from sova.extract import chunk_text, find_docs, find_section, parse_sections
 
 
 class TestParseSections:
@@ -112,3 +116,87 @@ class TestFindSection:
         sections = [{"start_line": 10, "end_line": 20}]
         assert find_section(sections, 5) is None
         assert find_section(sections, 25) is None
+
+
+class TestFindDocs:
+    def test_empty_dirs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docs_dir = Path(tmpdir) / "docs"
+            data_dir = Path(tmpdir) / "data"
+            docs_dir.mkdir()
+            data_dir.mkdir()
+            with (
+                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.DATA_DIR", data_dir),
+            ):
+                docs = find_docs()
+                assert docs == []
+
+    def test_pdf_only(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docs_dir = Path(tmpdir) / "docs"
+            data_dir = Path(tmpdir) / "data"
+            docs_dir.mkdir()
+            data_dir.mkdir()
+            (docs_dir / "paper.pdf").write_bytes(b"%PDF-fake")
+            with (
+                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.DATA_DIR", data_dir),
+            ):
+                docs = find_docs()
+                assert len(docs) == 1
+                assert docs[0]["name"] == "paper"
+                assert docs[0]["pdf"] is not None
+                assert docs[0]["md"] is None
+
+    def test_md_only(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docs_dir = Path(tmpdir) / "docs"
+            data_dir = Path(tmpdir) / "data"
+            docs_dir.mkdir()
+            data_dir.mkdir()
+            (data_dir / "notes.md").write_text("# Notes")
+            with (
+                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.DATA_DIR", data_dir),
+            ):
+                docs = find_docs()
+                assert len(docs) == 1
+                assert docs[0]["name"] == "notes"
+                assert docs[0]["pdf"] is None
+                assert docs[0]["md"] is not None
+
+    def test_pdf_with_extracted_md(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docs_dir = Path(tmpdir) / "docs"
+            data_dir = Path(tmpdir) / "data"
+            docs_dir.mkdir()
+            data_dir.mkdir()
+            (docs_dir / "paper.pdf").write_bytes(b"%PDF-fake")
+            (data_dir / "paper.md").write_text("# Paper")
+            with (
+                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.DATA_DIR", data_dir),
+            ):
+                docs = find_docs()
+                # PDF and its extracted MD should merge into one entry
+                assert len(docs) == 1
+                assert docs[0]["name"] == "paper"
+                assert docs[0]["pdf"] is not None
+                assert docs[0]["md"] is not None
+
+    def test_sorted_by_size(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docs_dir = Path(tmpdir) / "docs"
+            data_dir = Path(tmpdir) / "data"
+            docs_dir.mkdir()
+            data_dir.mkdir()
+            (docs_dir / "small.pdf").write_bytes(b"x")
+            (docs_dir / "big.pdf").write_bytes(b"x" * 1000)
+            with (
+                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.DATA_DIR", data_dir),
+            ):
+                docs = find_docs()
+                assert len(docs) == 2
+                assert docs[0]["size"] <= docs[1]["size"]

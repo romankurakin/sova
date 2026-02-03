@@ -47,7 +47,7 @@ PDFs get converted to Markdown, split at header boundaries, and indexed two
 ways.
 
 **Contextual embeddings** prepend `[doc_name | section_title]` to each chunk before
-embedding. This helps vectors understand technical content in context [3].
+embedding. This helps vectors understand content in context [3].
 
 **BM25 full-text** catches exact terms that vectors miss. Porter stemming
 handles plurals and verb forms.
@@ -73,8 +73,10 @@ Model runs locally via Ollama: `qwen3-embedding:4b` for embeddings (2560 dims).
 
 ```bash
 uv run python -m benchmarks judge             # Generate ground truth
-uv run python -m benchmarks run new-feature   # Run benchmark
+uv run python -m benchmarks judge --no-debias # Faster, skip debiasing
+uv run python -m benchmarks run new-feature   # Run benchmark + latency
 uv run python -m benchmarks show              # View results
+uv run python -m benchmarks --help            # Full CLI help
 ```
 
 See `benchmarks/README.md` for details.

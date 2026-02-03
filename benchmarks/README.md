@@ -5,11 +5,12 @@ Measure search quality against LLM-judged ground truth.
 ## Usage
 
 ```bash
-uv run python -m sova                        # Index docs first
-uv run python -m benchmarks judge            # Generate ground truth
-uv run python -m benchmarks run my-test      # Run benchmark
-uv run python -m benchmarks show             # View results
-uv run python -m benchmarks latency          # Measure latency only
+uv run python -m sova                               # Index docs first
+uv run python -m benchmarks judge                   # Generate ground truth
+uv run python -m benchmarks judge --no-debias       # Faster, skip debiasing
+uv run python -m benchmarks run my-test             # Run benchmark
+uv run python -m benchmarks show                    # View results
+uv run python -m benchmarks --help                  # Full CLI help
 ```
 
 ## Methodology
@@ -20,11 +21,24 @@ uv run python -m benchmarks latency          # Measure latency only
 
 Compare runs: refactor sova → run benchmark → compare to previous run.
 
+## Query Categories
+
+20 queries across 5 categories testing different retrieval capabilities:
+
+| Category | Tests | Example |
+|----------|-------|---------|
+| **Exact lookup** | BM25, specific terms | "ELR_EL1 register" |
+| **Conceptual** | Semantic understanding | "how the OS reclaims memory from a terminated process" |
+| **Cross-doc** | Multi-document retrieval | "how ARM and RISC-V differ in exception handling" |
+| **Natural** | Vague/real user phrasing | "my kernel crashes right after enabling the MMU" |
+| **Negative** | False positive rate | "Python asyncio event loop" (should return nothing) |
+
 ## Metrics
 
 | Metric | Question | How it works | Target |
 |--------|----------|--------------|--------|
 | **Latency P50** | Typical speed? | Median query time. User is waiting. | < 400ms |
+| **Latency P95** | Worst case? | 95th percentile - slowest 5% | < 800ms |
 | **nDCG** | Best at top? | Rewards highly-relevant results ranked higher | > 0.7 |
 | **MRR** | First good result? | 1 / rank of first relevant result | > 0.7 |
 | **Precision** | How much junk? | (relevant in top-k) / k | > 0.6 |
@@ -34,8 +48,7 @@ Compare runs: refactor sova → run benchmark → compare to previous run.
 | **Doc-Cov** | Multiple sources? | Unique documents in top-k. Shows breadth. | Higher |
 | **S-Recall** | Diverse topics? | Results cover different aspects | Higher |
 | **α-nDCG** | Novel results? | nDCG with redundancy penalty | Higher |
-| **Latency Avg** | Average speed? | Mean of (embedding + search) time | < 500ms |
-| **Latency P95** | Worst case? | 95th percentile - slowest 5% | < 800ms |
+| **FP Rate** | False positives? | Precision on negative queries (should be 0) | 0.0 |
 
 ## Relevance Scale
 

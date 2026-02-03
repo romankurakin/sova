@@ -6,17 +6,18 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "msgpack>=1.1.2",
-    "numpy>=2.2.0",
+    "numpy>=2.4.2",
     "ollama>=0.6.1",
-    "pydantic>=2.0",
+    "pydantic>=2.12.5",
     "pymupdf4llm>=0.2.9",
     "pymupdf-layout>=1.26.6",
-    "rich>=14.3.1",
+    "rich>=14.3.2",
     "sqliteai-vector>=0.9.70",
 ]
 
 [project.scripts]
 sova = "sova.cli:main"
+check = "sova.check:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -31,6 +32,7 @@ package = true
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
     "ruff>=0.14.14",
     "ty>=0.0.14",
 ]

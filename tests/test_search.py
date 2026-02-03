@@ -2,7 +2,13 @@
 
 import pytest
 
-from sova.search import is_index_like, rrf_fusion, text_density
+from sova.search import (
+    compute_candidates,
+    is_index_like,
+    rrf_fusion,
+    search_fts,
+    text_density,
+)
 
 
 class TestTextDensity:
@@ -93,3 +99,70 @@ class TestRRFFusion:
         # Item 2 and 3 appear in both lists
         assert scores[2] > scores[1]  # 2 appears in both, 1 only in first
         assert scores[2] > scores[4]  # 2 appears in both, 4 only in second
+
+
+class TestComputeCandidates:
+    def test_small_corpus(self):
+        # With few chunks, should return at least base_candidates
+        result = compute_candidates(10, 5)
+        assert result >= 20  # limit * 4
+
+    def test_large_corpus(self):
+        result = compute_candidates(100_000, 10)
+        # Should cap at 1500
+        assert result <= 1500
+
+    def test_scales_with_limit(self):
+        small = compute_candidates(1000, 5)
+        large = compute_candidates(1000, 50)
+        assert large >= small
+
+    def test_minimum_floor(self):
+        result = compute_candidates(50, 5)
+        assert result >= 50  # at least limit * 4 = 20, but also at least min(50, 150)
+
+    def test_zero_chunks(self):
+        result = compute_candidates(0, 10)
+        assert result >= 40  # at least limit * 4
+
+
+class TestSearchFtsSingleChar:
+    """Test that single-char tokens are filtered out."""
+
+    @staticmethod
+    def _make_fts_db():
+        import sqlite3
+
+        conn = sqlite3.connect(":memory:")
+        conn.executescript("""
+            CREATE TABLE chunks (
+                id INTEGER PRIMARY KEY, text TEXT NOT NULL
+            );
+            CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                text, content='chunks', content_rowid='id',
+                tokenize='porter unicode61'
+            );
+            INSERT INTO chunks (id, text) VALUES (1, 'hello world example');
+            INSERT INTO chunks_fts (rowid, text) VALUES (1, 'hello world example');
+        """)
+        conn.commit()
+        return conn
+
+    def test_single_char_query_returns_empty(self):
+        conn = self._make_fts_db()
+        # All single-char tokens get dropped
+        results = search_fts(conn, "a b c", 5)
+        assert results == []
+        conn.close()
+
+    def test_mixed_query_ignores_short_tokens(self):
+        conn = self._make_fts_db()
+        results = search_fts(conn, "a hello b", 5)
+        assert len(results) > 0
+        conn.close()
+
+    def test_empty_query(self):
+        conn = self._make_fts_db()
+        results = search_fts(conn, "", 5)
+        assert results == []
+        conn.close()

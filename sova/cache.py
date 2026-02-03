@@ -77,7 +77,9 @@ class SemanticCache:
 
         return None
 
-    def put(self, query_emb: list[float], vector_results: list[tuple[int, float]]) -> None:
+    def put(
+        self, query_emb: list[float], vector_results: list[tuple[int, float]]
+    ) -> None:
         """Cache vector results for query embedding."""
 
         with get_connection() as conn:

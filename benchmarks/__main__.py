@@ -3,142 +3,17 @@
 import sys
 import time
 
-from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
+from rich.console import Group
+from rich.live import Live
+from rich.progress import BarColumn, Progress, TimeElapsedColumn
 from rich.table import Table
+from rich.text import Text
 
 from sova.config import DATA_DIR
-
-console = Console()
-
-
-def _label(name: str) -> str:
-    padded = f"{name}:".ljust(8)
-    return f"[dim]{padded}[/dim]"
+from sova.ui import console, fmt_duration, report, report_progress
 
 
-def report(name: str, msg: str) -> None:
-    console.print(f"{_label(name)} {msg}")
-
-
-def report_progress(name: str) -> Progress:
-    return Progress(
-        TextColumn(_label(name)),
-        BarColumn(bar_width=30),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        console=console,
-        transient=True,
-    )
-
-
-def fmt_duration(seconds: float) -> str:
-    if seconds < 60:
-        return f"{seconds:>6.1f}s"
-    elif seconds < 3600:
-        return f"{seconds / 60:>6.1f}m"
-    return f"{seconds / 3600:>6.1f}h"
-
-
-def cmd_calibrate():
-    """Calibrate LLM judge against human labels."""
-    from .calibration import (
-        generate_calibration_pairs,
-        validate_calibration,
-        MIN_KAPPA,
-    )
-    from sova.config import DB_PATH
-    import json
-
-    pairs_path = DATA_DIR / "calibration_pairs.json"
-
-    if not pairs_path.exists():
-        if not DB_PATH.exists():
-            console.print("[red]error:[/red] no database, run sova indexing first")
-            sys.exit(1)
-        report("step", "1/3 generating calibration pairs")
-        generate_calibration_pairs(n=50, output_path=pairs_path, verbose=False)
-        report("pairs", f"50 saved to [bold]{pairs_path.name}[/bold]")
-        console.print()
-        console.print("[yellow]action required[/yellow]")
-        console.print(f"  1. open [bold]{pairs_path}[/bold]")
-        console.print("  2. fill in 'human_score' (0-3) for each pair")
-        console.print("  3. run [bold]calibrate[/bold] again")
-        return
-
-    data = json.loads(pairs_path.read_text())
-    has_human = sum(1 for p in data["pairs"] if p.get("human_score") is not None)
-    has_llm = sum(1 for p in data["pairs"] if p.get("llm_score") is not None)
-    total = len(data["pairs"])
-
-    report("pairs", f"{total} loaded")
-    report("human", f"{has_human}/{total} labeled")
-    report("llm", f"{has_llm}/{total} judged")
-
-    if has_human == 0:
-        console.print()
-        console.print("[yellow]no human labels found[/yellow]")
-        console.print(f"edit [bold]{pairs_path}[/bold] and fill in 'human_score'")
-        return
-
-    if has_llm < has_human:
-        report("step", "2/3 running LLM judgments")
-        start = time.time()
-
-        with report_progress("judging") as progress:
-            task = progress.add_task("", total=total - has_llm)
-
-            from .judge import judge_chunk, JUDGE_MODEL
-
-            for pair in data["pairs"]:
-                if pair.get("llm_score") is not None:
-                    continue
-                score, reason, conf, subs = judge_chunk(pair["query"], pair["text"])
-                pair["llm_score"] = score
-                pair["llm_reason"] = reason
-                progress.update(task, advance=1)
-
-        data["llm_model"] = JUDGE_MODEL
-        pairs_path.write_text(json.dumps(data, indent=2))
-        report(
-            "judging", f"{total - has_llm} done in {fmt_duration(time.time() - start)}"
-        )
-
-    report("step", "3/3 validating agreement")
-    result = validate_calibration(pairs_path, verbose=False)
-
-    console.print()
-    table = Table(show_header=False, box=None)
-    table.add_column("Metric", style="dim")
-    table.add_column("Value", justify="right")
-    table.add_column("Target", style="dim")
-
-    kappa_style = "green" if result.kappa >= MIN_KAPPA else "red"
-    table.add_row(
-        "Cohen's kappa",
-        f"[{kappa_style}]{result.kappa:.3f}[/{kappa_style}]",
-        f">= {MIN_KAPPA}",
-    )
-    table.add_row("Agreement", f"{result.agreement_rate:.1%}", "")
-    table.add_row("Bias", f"{result.bias:+.3f}", "")
-    table.add_row("Pairs", str(result.n_pairs), "")
-    console.print(table)
-
-    if result.kappa >= MIN_KAPPA:
-        console.print("\n[green]pass[/green] LLM judge is calibrated")
-    else:
-        console.print(
-            "\n[red]fail[/red] agreement too low, consider more labels or different model"
-        )
-
-
-def cmd_judge():
+def cmd_judge(use_debiasing: bool = True):
     """Generate ground truth judgments."""
     from .judge import QUERY_SET, judge_query, JUDGE_MODEL, collect_query_subtopics
     from .search_interface import close_backend
@@ -166,42 +41,38 @@ def cmd_judge():
     remaining = [spec for spec in QUERY_SET if spec.id not in completed]
 
     report("model", JUDGE_MODEL)
-    if completed:
-        report("queries", f"{len(remaining)} remaining ({len(completed)}/{len(QUERY_SET)} done)")
-    else:
-        report("queries", str(len(QUERY_SET)))
-    report("mode", "debiasing enabled")
+    report("mode", "debiasing enabled" if use_debiasing else "debiasing disabled")
     console.print()
 
     start = time.time()
     if not remaining:
         report("status", "all queries already judged")
     else:
+        k = 10
 
         def save_checkpoint():
             ground_truth = {
                 "version": "1.0",
                 "created": time.strftime("%Y-%m-%d"),
                 "judge_model": JUDGE_MODEL,
-                "candidates_per_query": 10,
-                "use_debiasing": True,
+                "candidates_per_query": k,
+                "use_debiasing": use_debiasing,
                 "queries": list(completed.values()),
             }
             checkpoint_path.write_text(json.dumps(ground_truth, indent=2))
 
-        k = 10
-        done_before = len(completed)
-        with report_progress("judging") as progress:
-            task = progress.add_task("", total=len(remaining) * k)
-            for qi, spec in enumerate(remaining):
-                progress.console.print(
-                    f"[dim]{spec.id}[/dim] {spec.query[:50]}"
-                    f" [dim]({qi + 1 + done_before}/{len(QUERY_SET)})[/dim]"
-                )
-                qj = judge_query(
-                    spec, k=k, verbose=False, use_debiasing=True,
-                    on_chunk_done=lambda: progress.update(task, advance=1),
-                )
+        total = len(QUERY_SET)
+        done = len(completed)
+
+        progress = Progress(BarColumn(bar_width=30), TimeElapsedColumn())
+        task = progress.add_task("", total=total, completed=done)
+
+        def _display():
+            return Group(Text(f"queries: {done}/{total}"), progress)
+
+        with Live(_display(), console=console, transient=True) as live:
+            for spec in remaining:
+                qj = judge_query(spec, k=k, verbose=False, use_debiasing=use_debiasing)
 
                 extracted_subtopics = collect_query_subtopics(qj.judgments)
                 all_subtopics = sorted(set(qj.query.subtopics + extracted_subtopics))
@@ -225,10 +96,14 @@ def cmd_judge():
                 }
                 completed[spec.id] = query_data
                 save_checkpoint()
-                progress.update(task, advance=1)
+                done += 1
+                progress.update(task, completed=done)
+                live.update(_display())
 
         close_backend()
-        report("judged", f"{len(remaining)} queries in {fmt_duration(time.time() - start)}")
+        report(
+            "judged", f"{len(remaining)} queries in {fmt_duration(time.time() - start)}"
+        )
 
     # Build final output in query order
     queries_list = [completed[spec.id] for spec in QUERY_SET if spec.id in completed]
@@ -236,8 +111,8 @@ def cmd_judge():
         "version": "1.0",
         "created": time.strftime("%Y-%m-%d"),
         "judge_model": JUDGE_MODEL,
-        "candidates_per_query": 10,
-        "use_debiasing": True,
+        "candidates_per_query": k if remaining else 10,
+        "use_debiasing": use_debiasing,
         "queries": queries_list,
     }
 
@@ -281,7 +156,9 @@ def cmd_run(name: str | None = None):
 
     if not name:
         console.print("[red]error:[/red] name required")
-        console.print("[dim]usage:[/dim] [bold]run <name>[/bold]  (e.g., 'phase1-baseline')")
+        console.print(
+            "[dim]usage:[/dim] [bold]run <name>[/bold]  (e.g., 'phase1-baseline')"
+        )
         sys.exit(1)
 
     gt_path = DATA_DIR / "ground_truth.json"
@@ -294,16 +171,26 @@ def cmd_run(name: str | None = None):
 
     ground_truth = json.loads(gt_path.read_text())
     report("queries", str(len(ground_truth["queries"])))
+
     clear_cache()
-    latency_queries = ["ARM exception handling", "memory barrier", "page table"]
+    latency_queries = [
+        "ARM exception handling",
+        "RISC-V trap handling",
+        "memory protection unit",
+        "process scheduling algorithm",
+        "GIC interrupt priority",
+    ]
 
     report("latency", "measuring...")
     latency_data = measure_latency(latency_queries)
     latency_times = latency_data["total_times"]
 
-    latency_avg = statistics.mean(latency_times)
+    def _p95(arr):
+        s = sorted(arr)
+        return s[int(len(s) * 0.95)] if len(s) >= 20 else s[-1]
+
     latency_p50 = statistics.median(latency_times)
-    report("latency", f"avg={latency_avg:.0f}ms  p50={latency_p50:.0f}ms")
+    latency_p95 = _p95(latency_times)
     console.print()
     from .evaluate import (
         compute_metrics,
@@ -351,29 +238,65 @@ def cmd_run(name: str | None = None):
             progress.update(task, advance=1)
 
     close_backend()
-    agg = aggregate_metrics(results)
+
+    # Separate negative queries from main metrics
+    positive_results = [r for r in results if r.category != "negative"]
+    negative_results = [r for r in results if r.category == "negative"]
+
+    agg = aggregate_metrics(positive_results) if positive_results else {}
+
+    # Compute false positive rate for negative queries
+    neg_fp_rate = {}
+    if negative_results:
+        for kv in k_values:
+            fp_counts = [r.metrics.precision.get(kv, 0) for r in negative_results]
+            neg_fp_rate[kv] = sum(fp_counts) / len(fp_counts) if fp_counts else 0
+
     report("evaluated", f"in {fmt_duration(time.time() - start)}")
     console.print()
+
+    blank = "[dim]—[/dim]"
     table = Table(title="Results", show_header=True, header_style="dim")
     table.add_column("Metric")
     for kv in k_values:
         table.add_column(f"@{kv}", justify="right")
 
-    for metric in ["ndcg", "mrr", "precision", "subtopic_recall", "doc_coverage"]:
-        label = {"subtopic_recall": "S-Recall", "doc_coverage": "Doc-Cov"}.get(
-            metric, metric.upper()
-        )
-        row = [label] + [f"{agg[metric].get(kv, 0):.3f}" for kv in k_values]
+    # Latency — single values in @10 column
+    table.add_row("Latency P50", *[blank] * (len(k_values) - 1), f"{latency_p50:.0f}ms")
+    table.add_row("Latency P95", *[blank] * (len(k_values) - 1), f"{latency_p95:.0f}ms")
+    table.add_section()
+
+    # IR metrics at all k cutoffs
+    for metric, label in [
+        ("ndcg", "nDCG"),
+        ("mrr", "MRR"),
+        ("precision", "Precision"),
+        ("map", "MAP"),
+        ("recall", "Recall"),
+        ("hit_rate", "Hit Rate"),
+        ("doc_coverage", "Doc-Cov"),
+        ("subtopic_recall", "S-Recall"),
+        ("alpha_ndcg", "α-nDCG"),
+    ]:
+        row = [label] + [f"{agg.get(metric, {}).get(kv, 0):.3f}" for kv in k_values]
         table.add_row(*row)
+
+    # FP rate at bottom
+    if neg_fp_rate:
+        table.add_section()
+        table.add_row("FP Rate", *[f"{neg_fp_rate.get(kv, 0):.3f}" for kv in k_values])
+
     console.print(table)
+
     by_cat = aggregate_by_category(results, k=k)
 
     output = {
         "name": name,
         "k": k,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "latency_ms": {"avg": round(latency_avg, 1), "p50": round(latency_p50, 1)},
+        "latency_ms": {"p50": round(latency_p50, 1), "p95": round(latency_p95, 1)},
         "metrics": agg,
+        "negative_fp_rate": neg_fp_rate,
         "by_category": by_cat,
     }
 
@@ -382,41 +305,9 @@ def cmd_run(name: str | None = None):
 
     json_path = results_dir / f"{name}.json"
     json_path.write_text(json.dumps(output, indent=2))
-    md_header = "| Metric | " + " | ".join(f"@{kv}" for kv in k_values) + " |"
-    md_sep = "|--------|" + "|".join("------" for _ in k_values) + "|"
-    md_lines = [
-        f"# Benchmark: {name}",
-        "",
-        f"**Date:** {output['created']}",
-        f"**Latency:** {latency_avg:.0f}ms avg, {latency_p50:.0f}ms p50",
-        "",
-        "## Results",
-        "",
-        md_header,
-        md_sep,
-    ]
-    for metric in ["ndcg", "mrr", "precision", "subtopic_recall", "doc_coverage"]:
-        label = {"subtopic_recall": "S-Recall", "doc_coverage": "Doc-Cov"}.get(
-            metric, metric.upper()
-        )
-        vals = " | ".join(f"{agg[metric].get(kv, 0):.3f}" for kv in k_values)
-        md_lines.append(f"| {label} | {vals} |")
-    md_lines += [
-        "",
-        "## By Category",
-        "",
-        "| Category | nDCG@10 | MRR@10 |",
-        "|----------|---------|--------|",
-    ]
-    for cat, m in sorted(by_cat.items()):
-        md_lines.append(f"| {cat} | {m['ndcg']:.3f} | {m['mrr']:.3f} |")
-
-    md_path = results_dir / f"{name}.md"
-    md_path.write_text("\n".join(md_lines))
 
     console.print()
     report("saved", f"[bold]{json_path.name}[/bold]")
-    report("report", f"[bold]{md_path.name}[/bold]")
 
 
 def cmd_show(run_name: str | None = None):
@@ -452,7 +343,7 @@ def cmd_show(run_name: str | None = None):
             m = data.get("metrics", {})
             ndcg = m.get("ndcg", {})
             ndcg_val = ndcg.get(str(k), ndcg.get(k, 0))
-            lat = data.get("latency_ms", {}).get("avg", 0)
+            lat = data.get("latency_ms", {}).get("p50", 0)
             table.add_row(
                 data.get("name", run_path.stem),
                 data.get("created", "")[:10],
@@ -476,28 +367,54 @@ def cmd_show(run_name: str | None = None):
 
     report("run", f"[bold]{data.get('name', run_name)}[/bold]")
     report("date", data.get("created", "unknown"))
-    lat = data.get("latency_ms", {})
-    if lat:
-        report(
-            "latency", f"{lat.get('avg', 0):.0f}ms avg, {lat.get('p50', 0):.0f}ms p50"
-        )
     console.print()
     from .evaluate import STANDARD_K
+
+    def get_val(d, k):
+        return d.get(str(k), d.get(k, 0))
+
+    blank = "[dim]—[/dim]"
+    lat = data.get("latency_ms", {})
+    neg_fp = data.get("negative_fp_rate", {})
 
     table = Table(title="Results", show_header=True, header_style="dim")
     table.add_column("Metric")
     for kv in STANDARD_K:
         table.add_column(f"@{kv}", justify="right")
 
-    def get_val(d, k):
-        return d.get(str(k), d.get(k, 0))
-
-    for metric in ["ndcg", "mrr", "precision", "subtopic_recall", "doc_coverage"]:
-        label = {"subtopic_recall": "S-Recall", "doc_coverage": "Doc-Cov"}.get(
-            metric, metric.upper()
+    # Latency
+    if lat:
+        table.add_row(
+            "Latency P50",
+            *[blank] * (len(STANDARD_K) - 1),
+            f"{lat.get('p50', 0):.0f}ms",
         )
+        p95 = lat.get("p95")
+        if p95 is not None:
+            table.add_row(
+                "Latency P95", *[blank] * (len(STANDARD_K) - 1), f"{p95:.0f}ms"
+            )
+        table.add_section()
+
+    # IR metrics
+    for metric, label in [
+        ("ndcg", "nDCG"),
+        ("mrr", "MRR"),
+        ("precision", "Precision"),
+        ("map", "MAP"),
+        ("recall", "Recall"),
+        ("hit_rate", "Hit Rate"),
+        ("doc_coverage", "Doc-Cov"),
+        ("subtopic_recall", "S-Recall"),
+    ]:
         row = [label] + [f"{get_val(m.get(metric, {}), kv):.3f}" for kv in STANDARD_K]
         table.add_row(*row)
+
+    # FP rate
+    if neg_fp:
+        table.add_section()
+        table.add_row("FP Rate", *[f"{get_val(neg_fp, kv):.3f}" for kv in STANDARD_K])
+
     console.print(table)
     by_cat = data.get("by_category", {})
     if by_cat:
@@ -509,135 +426,40 @@ def cmd_show(run_name: str | None = None):
             )
 
 
-def cmd_latency():
-    """Measure query latency."""
-    from .search_interface import get_backend, clear_cache, close_backend
-    import statistics
-
-    try:
-        backend = get_backend()
-    except FileNotFoundError:
-        console.print("[red]error:[/red] no database, run sova indexing first")
-        sys.exit(1)
-
-    queries = [
-        "ARM exception handling",
-        "RISC-V trap handling",
-        "memory protection unit",
-        "process scheduling algorithm",
-        "GIC interrupt priority",
-    ]
-
-    clear_cache()
-
-    embed_times = []
-    search_times = []
-    total_times = []
-
-    console.print()
-    report("queries", str(len(queries)))
-    report("cache", "disabled (cold)")
-    console.print()
-
-    for q in queries:
-        t0 = time.perf_counter()
-        emb = backend._embed_query(q)
-        t1 = time.perf_counter()
-        embed_ms = (t1 - t0) * 1000
-        backend.search(q, limit=10, embedding=emb)
-        t2 = time.perf_counter()
-        search_ms = (t2 - t1) * 1000
-
-        total_ms = (t2 - t0) * 1000
-        embed_times.append(embed_ms)
-        search_times.append(search_ms)
-        total_times.append(total_ms)
-
-        console.print(f"  {q[:35]:35} [dim]{total_ms:6.0f}ms[/dim]")
-
-    close_backend()
-
-    console.print()
-    table = Table(show_header=True, header_style="dim", title="Latency (ms)")
-    table.add_column("Stage")
-    table.add_column("Avg", justify="right")
-    table.add_column("P50", justify="right")
-    table.add_column("P95", justify="right")
-
-    def p50(arr):
-        return statistics.median(arr)
-
-    def p95(arr):
-        s = sorted(arr)
-        return s[int(len(s) * 0.95)] if len(s) >= 2 else s[-1]
-
-    table.add_row(
-        "Embed",
-        f"{statistics.mean(embed_times):.0f}",
-        f"{p50(embed_times):.0f}",
-        f"{p95(embed_times):.0f}",
-    )
-    table.add_row(
-        "Search",
-        f"{statistics.mean(search_times):.0f}",
-        f"{p50(search_times):.0f}",
-        f"{p95(search_times):.0f}",
-    )
-    table.add_row(
-        "[bold]Total[/bold]",
-        f"[bold]{statistics.mean(total_times):.0f}[/bold]",
-        f"[bold]{p50(total_times):.0f}[/bold]",
-        f"[bold]{p95(total_times):.0f}[/bold]",
-    )
-
-    console.print(table)
-
-    target = 500
-    avg = statistics.mean(total_times)
-    if avg <= target:
-        console.print(f"\n[green]target met[/green] {avg:.0f}ms <= {target}ms")
-    else:
-        console.print(f"\n[yellow]above target[/yellow] {avg:.0f}ms > {target}ms")
-
-
 def main():
-    if len(sys.argv) < 2:
-        console.print()
-        console.print("[dim]usage:[/dim]")
-        console.print(
-            "  python -m benchmarks [bold]calibrate[/bold]       validate LLM judge"
-        )
-        console.print(
-            "  python -m benchmarks [bold]judge[/bold]           generate ground truth"
-        )
-        console.print(
-            "  python -m benchmarks [bold]run[/bold] <name>      run benchmark"
-        )
-        console.print(
-            "  python -m benchmarks [bold]show[/bold] \\[name]    display results"
-        )
-        console.print(
-            "  python -m benchmarks [bold]latency[/bold]         measure query latency"
-        )
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="python -m benchmarks",
+        description="Sova benchmark suite",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    p_judge = sub.add_parser("judge", help="Generate ground truth judgments")
+    p_judge.add_argument(
+        "--no-debias", action="store_true", help="Skip debiasing (faster)"
+    )
+
+    p_run = sub.add_parser("run", help="Run benchmark against ground truth")
+    p_run.add_argument("name", help="Benchmark run name (e.g. 'baseline-v2')")
+
+    p_show = sub.add_parser("show", help="Display benchmark results")
+    p_show.add_argument(
+        "name", nargs="?", default=None, help="Run name (omit to list all)"
+    )
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
         sys.exit(0)
 
-    cmd = sys.argv[1]
-    arg = sys.argv[2] if len(sys.argv) > 2 else None
-
-    if cmd == "calibrate":
-        cmd_calibrate()
-    elif cmd == "judge":
-        cmd_judge()
-    elif cmd == "run":
-        cmd_run(name=arg)
-    elif cmd == "show":
-        cmd_show(run_name=arg)
-    elif cmd == "latency":
-        cmd_latency()
-    else:
-        console.print(f"[red]error:[/red] unknown command '{cmd}'")
-        console.print("use: calibrate, judge, run, show, or latency")
-        sys.exit(1)
+    if args.command == "judge":
+        cmd_judge(use_debiasing=not args.no_debias)
+    elif args.command == "run":
+        cmd_run(name=args.name)
+    elif args.command == "show":
+        cmd_show(run_name=args.name)
 
 
 if __name__ == "__main__":

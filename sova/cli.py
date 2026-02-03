@@ -6,16 +6,9 @@ import sys
 import time
 from pathlib import Path
 
-from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
 from rich.table import Table
 
+from sova.cache import get_cache
 from sova.config import BATCH_SIZE, DATA_DIR, DB_PATH
 from sova.db import (
     connect_readonly,
@@ -31,15 +24,13 @@ from sova.extract import (
     find_section,
     parse_sections,
 )
-from sova.cache import get_cache
 from sova.ollama_client import (
     check_ollama,
     get_embeddings_batch,
     get_query_embedding,
 )
 from sova.search import compute_candidates, fuse_and_rank, get_vector_candidates
-
-console = Console()
+from sova.ui import console, fmt_duration, report, report_progress
 
 SOVA_ASCII = """\
    ___
@@ -47,26 +38,6 @@ SOVA_ASCII = """\
  (  V  )
 /|  |  |\\
   "   " """
-
-
-def _label(name: str) -> str:
-    padded = f"{name}:".ljust(8)
-    return f"[dim]{padded}[/dim]"
-
-
-def report(name: str, msg: str) -> None:
-    console.print(f"{_label(name)} {msg}")
-
-
-def report_progress(name: str) -> Progress:
-    return Progress(
-        TextColumn(_label(name)),
-        BarColumn(bar_width=30),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        console=console,
-        transient=True,
-    )
 
 
 def fmt_size(size_bytes: int, dim_zero: bool = False) -> str:
@@ -77,14 +48,6 @@ def fmt_size(size_bytes: int, dim_zero: bool = False) -> str:
     if size_bytes >= 1024:
         return f"{size_bytes / 1024:.1f} KB"
     return f"{size_bytes} B"
-
-
-def fmt_duration(seconds: float) -> str:
-    if seconds < 60:
-        return f"{seconds:>6.1f}s"
-    elif seconds < 3600:
-        return f"{seconds / 60:>6.1f}m"
-    return f"{seconds / 3600:>6.1f}h"
 
 
 def process_doc(
@@ -122,9 +85,7 @@ def process_doc(
     sections = parse_sections(lines)
     chunks = chunk_text(lines)
 
-    row = conn.execute(
-        "SELECT id FROM documents WHERE name = ?", (name,)
-    ).fetchone()
+    row = conn.execute("SELECT id FROM documents WHERE name = ?", (name,)).fetchone()
     if row:
         doc_id = row[0]
         conn.execute(
@@ -424,6 +385,7 @@ def main() -> None:
     # Only quantize if all docs finished. Partial quantization would create
     # an index missing the latest chunks, giving incomplete search results.
     if not interrupted:
+        console.print()
         report("quantize", "building index...")
         quantize_vectors(conn)
 
