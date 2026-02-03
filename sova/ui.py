@@ -14,7 +14,7 @@ console = Console()
 
 def _label(name: str) -> str:
     padded = f"{name}:".ljust(8)
-    return f"[dim]{padded}[/dim]"
+    return f"{padded}"
 
 
 def report(name: str, msg: str) -> None:

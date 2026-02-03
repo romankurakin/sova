@@ -1,55 +1,34 @@
 """Search functionality: vector search, FTS, and hybrid fusion."""
 
-import heapq
-import math
 import re
-import sqlite3
-from array import array
 
-from sova.config import EMBEDDING_DIM
-from sova.db import embedding_to_blob
+import numpy as np
+
 from sova.diversity import score_decay_diversify
 
 
 def search_vector(
-    conn: sqlite3.Connection, query_blob: bytes, candidates: int
+    conn, query_emb: list[float], candidates: int
 ) -> list[tuple[int, float]]:
     """Vector similarity search. Returns list of (chunk_id, similarity_score)."""
     try:
-        conn.execute(
-            f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
-        )
-    except sqlite3.OperationalError:
-        pass
-
-    # Preload quantized vectors into memory for faster search. Not all DBs
-    # have quantized data yet (first run, interrupted indexing), so we ignore
-    # the error and fall through to brute-force if needed.
-    try:
-        conn.execute("SELECT vector_quantize_preload('chunks', 'embedding')")
-    except sqlite3.OperationalError:
-        pass
-
-    try:
+        query_blob = np.array(query_emb, dtype=np.float32).tobytes()
         rows = conn.execute(
             """
-            SELECT c.id, v.distance
-            FROM chunks c
-            JOIN vector_quantize_scan('chunks', 'embedding', ?, ?) AS v
-            ON c.id = v.rowid
+            SELECT c.id, vector_distance_cos(c.embedding, ?)
+            FROM vector_top_k('chunks_vec_idx', ?, ?) AS vt
+            JOIN chunks c ON c.rowid = vt.id
         """,
-            (query_blob, candidates),
+            (query_blob, query_blob, candidates),
         ).fetchall()
-        # sqlite-vector returns cosine distance (0 = identical), convert to
-        # similarity (1 = identical) for consistent scoring downstream.
+        # vector_distance_cos returns cosine distance (0 = identical),
+        # convert to similarity (1 = identical) for consistent scoring.
         return [(row[0], 1.0 - row[1]) for row in rows]
-    except sqlite3.OperationalError:
+    except Exception:
         return []
 
 
-def search_fts(
-    conn: sqlite3.Connection, query: str, limit: int
-) -> list[tuple[int, float]]:
+def search_fts(conn, query: str, limit: int) -> list[tuple[int, float]]:
     """FTS5 BM25 search. Returns list of (chunk_id, bm25_score)."""
     try:
         # Quote each term for exact matching in FTS5 syntax. Single-char
@@ -74,7 +53,7 @@ def search_fts(
             (fts_query, limit),
         ).fetchall()
         return [(row[0], abs(row[1])) for row in rows]
-    except sqlite3.OperationalError:
+    except Exception:
         return []
 
 
@@ -93,52 +72,14 @@ def rrf_fusion(
     return scores
 
 
-def fallback_vector_scan(
-    conn: sqlite3.Connection, query_emb: list[float], candidates: int
-) -> list[tuple[int, float]]:
-    """Fallback brute-force vector search when quantized index unavailable."""
-    query_norm = math.sqrt(sum(v * v for v in query_emb))
-    if query_norm == 0:
-        return []
-
-    q_len = len(query_emb)
-    rows = conn.execute(
-        """
-        SELECT c.id, c.embedding
-        FROM chunks c
-        WHERE c.embedding IS NOT NULL
-    """
-    ).fetchall()
-
-    # Use a min-heap to track top-K without sorting all results. O(n log k)
-    # vs O(n log n) for sorted(), which matters when scanning thousands of chunks.
-    top: list[tuple[float, int]] = []
-    for chunk_id, emb_blob in rows:
-        emb = array("f")
-        emb.frombytes(emb_blob)
-        if len(emb) != q_len:
-            continue
-
-        dot = sum(qv * ev for qv, ev in zip(query_emb, emb))
-        norm = math.sqrt(sum(ev * ev for ev in emb))
-        if norm == 0.0:
-            continue
-
-        sim = dot / (query_norm * norm)
-        if len(top) < candidates:
-            heapq.heappush(top, (sim, chunk_id))
-        elif sim > top[0][0]:
-            heapq.heapreplace(top, (sim, chunk_id))
-
-    return [(chunk_id, sim) for sim, chunk_id in sorted(top, reverse=True)]
+_ALPHA = re.compile(r"[^\W\d_]")
 
 
 def text_density(text: str) -> float:
-    """Calculate letter density (letters / total chars)."""
+    """Calculate letter density (letters / total chars). Unicode-aware."""
     if not text:
         return 0.0
-    letters = sum(c.isalpha() for c in text)
-    return letters / len(text)
+    return len(_ALPHA.findall(text)) / len(text)
 
 
 def is_index_like(text: str) -> bool:
@@ -163,7 +104,7 @@ def compute_candidates(total_chunks: int, limit: int) -> int:
 
 
 def get_vector_candidates(
-    conn: sqlite3.Connection,
+    conn,
     query_emb: list[float],
     limit: int,
 ) -> list[tuple[int, float]]:
@@ -171,17 +112,11 @@ def get_vector_candidates(
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     candidates = compute_candidates(total_chunks, limit)
 
-    query_blob = embedding_to_blob(query_emb)
-
-    vector_results = search_vector(conn, query_blob, candidates)
-    if not vector_results:
-        vector_results = fallback_vector_scan(conn, query_emb, candidates)
-
-    return vector_results
+    return search_vector(conn, query_emb, candidates)
 
 
 def fuse_and_rank(
-    conn: sqlite3.Connection,
+    conn,
     vector_results: list[tuple[int, float]],
     query_text: str,
     limit: int,
@@ -192,6 +127,9 @@ def fuse_and_rank(
 
     candidates = len(vector_results)
 
+    fts_terms = [
+        term for term in re.findall(r"[a-zA-Z0-9_-]+", query_text) if len(term) >= 2
+    ]
     fts_results = search_fts(conn, query_text, candidates)
 
     if fts_results:
@@ -206,55 +144,75 @@ def fuse_and_rank(
         return [], 0, 0
 
     placeholders = ",".join("?" * len(top_ids))
-    rows = conn.execute(
-        f"""
-        SELECT c.id, d.name, c.section_id, c.start_line, c.end_line, c.text
-        FROM chunks c
-        JOIN documents d ON c.doc_id = d.id
-        WHERE c.id IN ({placeholders})
-    """,
-        top_ids,
-    ).fetchall()
-    chunk_data = {r[0]: r for r in rows}
     vector_score_map = {r[0]: r[1] for r in vector_results}
+    fts_id_set = {r[0] for r in fts_results}
+
+    # Fetch only doc name and is_index for ranking and diversification,
+    # deferring the heavier text column to after we know the final top-k.
+    meta = {
+        r[0]: (r[1], r[2])
+        for r in conn.execute(
+            f"SELECT c.id, d.name, c.is_index FROM chunks c"
+            f" JOIN documents d ON c.doc_id = d.id"
+            f" WHERE c.id IN ({placeholders})",
+            tuple(top_ids),
+        ).fetchall()
+    }
 
     scored = []
     for chunk_id in top_ids:
-        if chunk_id not in chunk_data:
+        if chunk_id not in meta:
             continue
-        _, doc, section_id, start, end, text = chunk_data[chunk_id]
-
+        doc, is_idx = meta[chunk_id]
         rrf_score = rrf_scores.get(chunk_id, 0.0)
         embed_score = vector_score_map.get(chunk_id, 0.0)
-        # ToC/index chunks match many queries due to broad keyword coverage
-        # but carry little actual content. Penalize them so real content wins.
-        index_penalty = -0.5 if is_index_like(text) else 0.0
-        # Scale RRF scores (typically ~0.01-0.03) into a range where the
-        # index penalty (-0.5) has meaningful but not overwhelming effect.
-        final_score = rrf_score * 30 + index_penalty
-
-        scored.append(
-            {
-                "chunk_id": chunk_id,
-                "doc": doc,
-                "section_id": section_id,
-                "start": start,
-                "end": end,
-                "text": text,
-                "final_score": final_score,
-                "embed_score": embed_score,
-            }
-        )
+        index_penalty = -0.5 if is_idx else 0.0
+        scored.append({
+            "chunk_id": chunk_id,
+            "doc": doc,
+            "final_score": rrf_score * 30 + index_penalty,
+            "embed_score": embed_score,
+            "rrf_score": rrf_score,
+            "fts_hit": chunk_id in fts_id_set,
+            "is_idx": is_idx,
+            "fts_terms": fts_terms,
+        })
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
-
     filtered = score_decay_diversify(scored, limit=limit, decay=0.8)
+
+    if filtered:
+        hi, lo = filtered[0]["diversity_score"], filtered[-1]["diversity_score"]
+        span = hi - lo
+        for r in filtered:
+            r["display_score"] = (r["diversity_score"] - lo) / span if span else 1.0
+
+    # Now that we know the final top-k, fetch the text and line ranges
+    # only for results we will actually display.
+    final_ids = [r["chunk_id"] for r in filtered]
+    if final_ids:
+        ph = ",".join("?" * len(final_ids))
+        text_data = {
+            r[0]: r
+            for r in conn.execute(
+                f"SELECT id, section_id, start_line, end_line, text"
+                f" FROM chunks WHERE id IN ({ph})",
+                tuple(final_ids),
+            ).fetchall()
+        }
+        for r in filtered:
+            row = text_data.get(r["chunk_id"])
+            if row:
+                r["section_id"] = row[1]
+                r["start"] = row[2]
+                r["end"] = row[3]
+                r["text"] = row[4]
 
     return filtered, len(vector_results), len(fts_results)
 
 
 def hybrid_search(
-    conn: sqlite3.Connection,
+    conn,
     query_emb: list[float],
     query_text: str,
     limit: int,

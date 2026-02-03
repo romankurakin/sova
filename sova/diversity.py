@@ -31,4 +31,8 @@ def score_decay_diversify(
     # Re-sort by adjusted score and pick top-k
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    return [item[2] for item in scored[:limit]]
+    out = []
+    for adjusted, _, r in scored[:limit]:
+        r["diversity_score"] = adjusted
+        out.append(r)
+    return out

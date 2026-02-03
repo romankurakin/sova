@@ -1,5 +1,6 @@
 """PDF extraction and text processing."""
 
+import bisect
 import re
 import warnings
 from pathlib import Path
@@ -116,8 +117,15 @@ def chunk_text(lines: list[str], target_words: int = CHUNK_SIZE) -> list[dict]:
 
 
 def find_section(sections: list[dict], line: int) -> int | None:
-    """Find which section a line belongs to."""
-    for i, s in enumerate(sections):
-        if s["start_line"] <= line <= (s["end_line"] or float("inf")):
-            return i
+    """Find which section a line belongs to. O(log n) via bisect."""
+    if not sections:
+        return None
+    # Sections are sorted by start_line. Find the rightmost section
+    # whose start_line <= line, then check if line <= end_line.
+    idx = bisect.bisect_right([s["start_line"] for s in sections], line) - 1
+    if idx < 0:
+        return None
+    s = sections[idx]
+    if line <= (s["end_line"] or float("inf")):
+        return idx
     return None

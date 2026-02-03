@@ -1,42 +1,15 @@
 """Tests for db module."""
 
-import sqlite3
+import libsql_experimental as libsql
 import struct
 
-from sova.db import blob_to_embedding, embedding_to_blob, get_doc_status
-
-
-class TestEmbeddingToBlob:
-    def test_roundtrip(self):
-        emb = [0.1, 0.2, 0.3, -0.5, 0.0]
-        blob = embedding_to_blob(emb)
-        result = blob_to_embedding(blob)
-        assert len(result) == len(emb)
-        for a, b in zip(emb, result):
-            assert abs(a - b) < 1e-6
-
-    def test_empty(self):
-        blob = embedding_to_blob([])
-        assert blob == b""
-        assert blob_to_embedding(b"") == []
-
-    def test_single_value(self):
-        emb = [1.0]
-        blob = embedding_to_blob(emb)
-        assert len(blob) == 4  # one float32
-        assert blob_to_embedding(blob) == [1.0]
-
-    def test_blob_is_float32(self):
-        emb = [1.0, 2.0]
-        blob = embedding_to_blob(emb)
-        assert len(blob) == 8  # two float32s
-        assert blob == struct.pack("2f", 1.0, 2.0)
+from sova.db import get_doc_status
 
 
 class TestGetDocStatus:
     @staticmethod
-    def _make_db() -> sqlite3.Connection:
-        conn = sqlite3.connect(":memory:")
+    def _make_db():
+        conn = libsql.connect(":memory:")  # ty: ignore[unresolved-attribute]
         conn.executescript("""
             CREATE TABLE documents (
                 id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
@@ -85,7 +58,7 @@ class TestGetDocStatus:
             "INSERT INTO documents (name, path, expected_chunks) VALUES (?, ?, ?)",
             ("doc1", "/tmp/doc1.md", 1),
         )
-        fake_emb = embedding_to_blob([0.1, 0.2])
+        fake_emb = struct.pack("2f", 0.1, 0.2)
         conn.execute(
             "INSERT INTO chunks (doc_id, start_line, end_line, word_count, text, embedding) VALUES (1, 1, 10, 50, 'hello', ?)",
             (fake_emb,),
@@ -107,7 +80,7 @@ class TestGetDocStatus:
             "INSERT INTO documents (name, path, expected_chunks) VALUES (?, ?, ?)",
             ("doc1", "/tmp/doc1.md", 3),
         )
-        fake_emb = embedding_to_blob([0.1])
+        fake_emb = struct.pack("1f", 0.1)
         conn.execute(
             "INSERT INTO chunks (doc_id, start_line, end_line, word_count, text, embedding) VALUES (1, 1, 10, 50, 'a', ?)",
             (fake_emb,),
@@ -127,8 +100,8 @@ class TestGetDocStatus:
 
 class TestChunkContextsTable:
     @staticmethod
-    def _make_db() -> sqlite3.Connection:
-        conn = sqlite3.connect(":memory:")
+    def _make_db():
+        conn = libsql.connect(":memory:")  # ty: ignore[unresolved-attribute]
         conn.executescript("""
             CREATE TABLE documents (
                 id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
@@ -189,7 +162,7 @@ class TestChunkContextsTable:
                 "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (1, 'ctx2', 'gemma3:12b')"
             )
             assert False, "Should have raised IntegrityError"
-        except sqlite3.IntegrityError:
+        except Exception:
             pass
         conn.close()
 

@@ -1,6 +1,6 @@
 """End-to-end tests for search functionality."""
 
-import sqlite3
+import libsql_experimental as libsql
 import tempfile
 from pathlib import Path
 
@@ -12,7 +12,7 @@ def temp_db():
     """Create a temporary database with test data."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.db"
-        conn = sqlite3.connect(db_path)
+        conn = libsql.connect(str(db_path))  # ty: ignore[unresolved-attribute]
 
         conn.executescript("""
             CREATE TABLE documents (
@@ -38,7 +38,8 @@ def temp_db():
                 end_line INTEGER NOT NULL,
                 word_count INTEGER NOT NULL,
                 text TEXT NOT NULL,
-                embedding BLOB
+                embedding F32_BLOB(2560),
+                is_index INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX idx_chunks_doc ON chunks(doc_id);
 

@@ -1,7 +1,6 @@
 """Command-line interface and Rich UI."""
 
 import argparse
-import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -12,10 +11,8 @@ from sova.cache import get_cache
 from sova.config import BATCH_SIZE, CONTEXT_MODEL, DATA_DIR, DB_PATH
 from sova.db import (
     connect_readonly,
-    embedding_to_blob,
     get_doc_status,
     init_db,
-    quantize_vectors,
 )
 from sova.extract import (
     chunk_text,
@@ -30,8 +27,42 @@ from sova.ollama_client import (
     get_embeddings_batch,
     get_query_embedding,
 )
-from sova.search import compute_candidates, fuse_and_rank, get_vector_candidates
+from sova.search import (
+    compute_candidates,
+    fuse_and_rank,
+    get_vector_candidates,
+    is_index_like,
+)
 from sova.ui import console, fmt_duration, report, report_progress
+
+
+def _snippet(text: str, terms: list[str], width: int = 200) -> str:
+    """Extract a preview snippet, centering on the first FTS term match."""
+    flat = " ".join(text.split())
+    if len(flat) <= width:
+        return flat
+    flat_lower = flat.lower()
+    best_pos = -1
+    for term in terms:
+        pos = flat_lower.find(term.lower())
+        if pos != -1:
+            best_pos = pos
+            break
+    if best_pos == -1:
+        return flat[:width] + "..."
+    # Center the window around the match.
+    start = max(0, best_pos - width // 2)
+    end = start + width
+    if end > len(flat):
+        end = len(flat)
+        start = max(0, end - width)
+    snippet = flat[start:end]
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(flat):
+        snippet = snippet + "..."
+    return snippet
+
 
 SOVA_ASCII = """\
    ___
@@ -43,7 +74,7 @@ SOVA_ASCII = """\
 
 def fmt_size(size_bytes: int, dim_zero: bool = False) -> str:
     if size_bytes == 0:
-        return "[dim]-[/dim]" if dim_zero else "-"
+        return "-" if dim_zero else "-"
     if size_bytes >= 1024 * 1024:
         return f"{size_bytes / 1024 / 1024:.1f} MB"
     if size_bytes >= 1024:
@@ -55,10 +86,10 @@ def process_doc(
     name: str,
     pdf_path: Path | None,
     md_path: Path | None,
-    conn: sqlite3.Connection,
+    conn,
 ) -> None:
     """Process a single document: extract, chunk, generate context, and embed."""
-    console.print(f"\n[bold]{name}[/bold]")
+    console.print(f"\n{name}")
 
     extracted_now = False
     if not md_path or not md_path.exists():
@@ -122,15 +153,13 @@ def process_doc(
             "SELECT start_line FROM chunks WHERE doc_id = ?", (doc_id,)
         ).fetchall()
     )
-    for i, chunk in enumerate(chunks):
+    new_chunks = []
+    for chunk in chunks:
         if chunk["start_line"] not in existing_starts:
             sec_idx = find_section(sections, chunk["start_line"])
-            sec_line = (
-                sections[sec_idx]["start_line"] if sec_idx is not None else None
-            )
+            sec_line = sections[sec_idx]["start_line"] if sec_idx is not None else None
             sec_id = section_ids.get(sec_line)
-            conn.execute(
-                "INSERT INTO chunks (doc_id, section_id, start_line, end_line, word_count, text) VALUES (?, ?, ?, ?, ?, ?)",
+            new_chunks.append(
                 (
                     doc_id,
                     sec_id,
@@ -138,8 +167,14 @@ def process_doc(
                     chunk["end_line"],
                     chunk["word_count"],
                     chunk["text"],
-                ),
+                    1 if is_index_like(chunk["text"]) else 0,
+                )
             )
+    if new_chunks:
+        conn.executemany(
+            "INSERT INTO chunks (doc_id, section_id, start_line, end_line, word_count, text, is_index) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            new_chunks,
+        )
     conn.commit()
 
     # Build a map from start_line to chunk_id for this document.
@@ -148,16 +183,20 @@ def process_doc(
     ).fetchall()
     chunk_id_by_start = {r[1]: r[0] for r in chunk_rows}
 
-    # --- Pass 1: Generate context for chunks missing chunk_contexts rows ---
+    # Generate context for chunks without chunk_contexts rows.
+    existing_contexts = set(
+        r[0]
+        for r in conn.execute(
+            "SELECT chunk_id FROM chunk_contexts WHERE chunk_id IN (SELECT id FROM chunks WHERE doc_id = ?)",
+            (doc_id,),
+        ).fetchall()
+    )
     chunks_needing_context = []
     for i, chunk in enumerate(chunks):
         chunk_id = chunk_id_by_start.get(chunk["start_line"])
         if chunk_id is None:
             continue
-        has_context = conn.execute(
-            "SELECT 1 FROM chunk_contexts WHERE chunk_id = ?", (chunk_id,)
-        ).fetchone()
-        if not has_context:
+        if chunk_id not in existing_contexts:
             chunks_needing_context.append((i, chunk, chunk_id))
 
     if chunks_needing_context:
@@ -207,25 +246,27 @@ def process_doc(
         count = len(chunks)
         report("context", f"{count:>9,} chunks")
 
-    # --- Pass 2: Embed chunks with embedding IS NULL, prepending context ---
-    # Load all contexts for this doc's chunks.
-    context_map: dict[int, str] = {}
-    for chunk_id in chunk_id_by_start.values():
-        row = conn.execute(
-            "SELECT context FROM chunk_contexts WHERE chunk_id = ?", (chunk_id,)
-        ).fetchone()
-        if row:
-            context_map[chunk_id] = row[0]
+    # Embed chunks with embedding IS NULL, prepending context.
+    context_map: dict[int, str] = {
+        r[0]: r[1]
+        for r in conn.execute(
+            "SELECT cc.chunk_id, cc.context FROM chunk_contexts cc JOIN chunks c ON cc.chunk_id = c.id WHERE c.doc_id = ?",
+            (doc_id,),
+        ).fetchall()
+    }
 
+    # Find chunks missing embeddings in one query.
+    embedded_ids = set(
+        r[0]
+        for r in conn.execute(
+            "SELECT id FROM chunks WHERE doc_id = ? AND embedding IS NOT NULL",
+            (doc_id,),
+        ).fetchall()
+    )
     pending_embed = []
     for i, chunk in enumerate(chunks):
         chunk_id = chunk_id_by_start.get(chunk["start_line"])
-        if chunk_id is None:
-            continue
-        has_embedding = conn.execute(
-            "SELECT 1 FROM chunks WHERE id = ? AND embedding IS NOT NULL", (chunk_id,)
-        ).fetchone()
-        if not has_embedding:
+        if chunk_id is not None and chunk_id not in embedded_ids:
             pending_embed.append((i, chunk, chunk_id))
 
     if not pending_embed:
@@ -258,12 +299,12 @@ def process_doc(
 
                         contextual_texts.append(prefix + chunk["text"])
 
-                    embeddings = get_embeddings_batch(contextual_texts)
+                    emb_blobs = get_embeddings_batch(contextual_texts)
 
-                    for (idx, chunk, chunk_id), emb in zip(batch, embeddings):
+                    for (idx, chunk, chunk_id), blob in zip(batch, emb_blobs):
                         conn.execute(
                             "UPDATE chunks SET embedding = ? WHERE id = ?",
-                            (embedding_to_blob(emb), chunk_id),
+                            (blob, chunk_id),
                         )
                     conn.commit()
                     progress.update(task, advance=len(batch))
@@ -314,14 +355,14 @@ def list_docs() -> None:
             else:
                 chunks_col = str(chunks)
         else:
-            chunks_col = "[dim]-[/dim]"
+            chunks_col = "-"
         if ctx_count:
             if chunks and ctx_count < chunks:
                 ctx_col = f"[yellow]{ctx_count}/{chunks}[/yellow]"
             else:
                 ctx_col = str(ctx_count)
         else:
-            ctx_col = "[dim]-[/dim]"
+            ctx_col = "-"
         text_col = fmt_size(text_size, dim_zero=True)
         embed_col = fmt_size(embed_size, dim_zero=True)
 
@@ -330,12 +371,12 @@ def list_docs() -> None:
     if total_chunks > 0:
         table.add_section()
         table.add_row(
-            "[bold]Total[/bold]",
+            "Total",
             "",
-            f"[bold]{total_chunks}[/bold]",
-            f"[bold]{total_ctx}[/bold]",
-            f"[bold]{fmt_size(total_text)}[/bold]",
-            f"[bold]{fmt_size(total_embed)}[/bold]",
+            f"{total_chunks}",
+            f"{total_ctx}",
+            f"{fmt_size(total_text)}",
+            f"{fmt_size(total_embed)}",
         )
 
     if conn:
@@ -347,16 +388,16 @@ def show_stats() -> None:
     """Show database statistics."""
     if DB_PATH.exists():
         console.print(
-            f"\n[dim]Database:[/dim] {DB_PATH.name} ({fmt_size(DB_PATH.stat().st_size)})"
+            f"\nDatabase: {DB_PATH.name} ({fmt_size(DB_PATH.stat().st_size)})"
         )
         cache = get_cache()
         conn = connect_readonly()
         count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
         conn.close()
-        console.print(f"[dim]Cache:[/dim] {count} entries (max {cache.max_size})")
+        console.print(f"Cache: {count} entries (max {cache.max_size})")
 
 
-def search_semantic(query: str, limit: int = 10) -> None:
+def search_semantic(query: str, limit: int = 10, verbose: bool = False) -> None:
     """Perform semantic search and display results."""
     if not DB_PATH.exists():
         console.print("[red]error:[/red] no database, run indexing first")
@@ -376,32 +417,45 @@ def search_semantic(query: str, limit: int = 10) -> None:
     # results that searched at least as broadly as we need.
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     min_candidates = compute_candidates(total_chunks, limit)
-    cached_vectors = cache.get(query_emb, min_candidates)
+    cached_vectors = cache.get(conn, query_emb, min_candidates)
     if cached_vectors:
-        console.print("[dim]cache:[/dim] hit")
+        console.print("cache: hit")
         results, n_vector, n_fts = fuse_and_rank(conn, cached_vectors, query, limit)
     else:
         vector_results = get_vector_candidates(conn, query_emb, limit)
-        cache.put(query_emb, vector_results)
+        cache.put(conn, query_emb, vector_results)
         results, n_vector, n_fts = fuse_and_rank(conn, vector_results, query, limit)
 
     conn.close()
 
-    if n_fts:
-        console.print(f"[dim]hybrid:[/dim] {n_vector} vector + {n_fts} fts")
+    if verbose and n_fts:
+        console.print(f"[dim]hybrid: {n_vector} vector + {n_fts} fts[/dim]")
 
     if not results:
         console.print("[dim]no results[/dim]")
         return
 
-    for r in results:
-        console.print(
-            f"\n[bold]{r['doc']}.md[/bold]:{r['start']}-{r['end']} [dim]({r['embed_score']:.2f})[/dim]"
-        )
-        preview = r["text"][:200].replace("\n", " ")
-        if len(r["text"]) > 200:
-            preview += "..."
-        console.print(f"  [dim]{preview}[/dim]")
+    console.print()
+    for i, r in enumerate(results, 1):
+        location = f"{r['doc']}.md:{r['start']}-{r['end']}"
+        if verbose:
+            console.print(f"[bold]{location}[/bold]  [dim]{r['display_score']:.2f}[/dim]")
+        else:
+            console.print(f"[bold]{location}[/bold]")
+        if verbose:
+            tags = []
+            if r.get("fts_hit"):
+                tags.append("fts")
+            if r.get("is_idx"):
+                tags.append("idx")
+            tag_str = "  ".join(tags)
+            console.print(
+                f"  [dim]vec[/dim] {r['embed_score']:.2f}"
+                f". [dim]rrf[/dim] {r['rrf_score']:.4f}"
+                f"  {tag_str}"
+            )
+        console.print(f"  [dim]{_snippet(r['text'], r.get('fts_terms', []))}[/dim]")
+        console.print()
 
 
 def main() -> None:
@@ -428,22 +482,25 @@ def main() -> None:
         action="store_true",
         help="Delete generated contexts; next run regenerates them",
     )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Show pipeline scores"
+    )
     args = parser.parse_args()
 
     console.print(SOVA_ASCII)
 
     if args.search:
-        search_semantic(args.search, args.limit)
+        search_semantic(args.search, args.limit, verbose=args.verbose)
         return
 
     if args.reset:
         if DB_PATH.exists():
             DB_PATH.unlink()
-            console.print(f"[dim]deleted:[/dim] {DB_PATH.name}")
+            console.print(f"deleted: {DB_PATH.name}")
         if DATA_DIR.exists():
             for md in DATA_DIR.glob("*.md"):
                 md.unlink()
-                console.print(f"[dim]deleted:[/dim] {md.name}")
+                console.print(f"deleted: {md.name}")
         console.print("reset complete")
         return
 
@@ -455,7 +512,7 @@ def main() -> None:
 
     if args.reset_context:
         if not DB_PATH.exists():
-            console.print("[dim]no database[/dim]")
+            console.print("no database")
             return
         conn = init_db()
         deleted = conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
@@ -502,21 +559,15 @@ def main() -> None:
         interrupted = True
         console.print()  # newline after progress bar
 
-    # Only quantize if all docs finished. Partial quantization would create
-    # an index missing the latest chunks, giving incomplete search results.
-    if not interrupted:
-        console.print()
-        report("quantize", "building index...")
-        quantize_vectors(conn)
+    # Invalidate cached search results since new chunks were indexed.
+    get_cache().clear(conn)
 
     conn.close()
     console.print()
     if interrupted:
-        console.print(
-            f"[dim]interrupted after {fmt_duration(time.time() - start_time)}[/dim]"
-        )
+        console.print(f"interrupted after {fmt_duration(time.time() - start_time)}")
     else:
-        console.print(f"[dim]done in {fmt_duration(time.time() - start_time)}[/dim]")
+        console.print(f"done in {fmt_duration(time.time() - start_time)}")
     show_stats()
 
 
@@ -524,5 +575,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        console.print("\n[dim]interrupted[/dim]")
+        console.print("\ninterrupted")
         sys.exit(130)

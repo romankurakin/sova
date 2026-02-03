@@ -8,7 +8,7 @@ class TestFmtSize:
         assert fmt_size(0) == "-"
 
     def test_zero_bytes_dim(self):
-        assert fmt_size(0, dim_zero=True) == "[dim]-[/dim]"
+        assert fmt_size(0, dim_zero=True) == "-"
 
     def test_bytes(self):
         assert fmt_size(500) == "500 B"

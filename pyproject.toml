@@ -12,7 +12,7 @@ dependencies = [
     "pymupdf4llm>=0.2.9",
     "pymupdf-layout>=1.26.6",
     "rich>=14.3.2",
-    "sqliteai-vector>=0.9.70",
+    "libsql-experimental>=0.0.5",
 ]
 
 [project.scripts]

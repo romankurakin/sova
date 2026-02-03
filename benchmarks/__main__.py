@@ -2,6 +2,7 @@
 
 import sys
 import time
+from pathlib import Path
 
 from rich.console import Group
 from rich.live import Live
@@ -11,6 +12,8 @@ from rich.text import Text
 
 from sova.config import DATA_DIR
 from sova.ui import console, fmt_duration, report, report_progress
+
+_BENCH_DIR = Path(__file__).parent
 
 
 def cmd_judge(use_debiasing: bool = True):
@@ -25,7 +28,7 @@ def cmd_judge(use_debiasing: bool = True):
         sys.exit(1)
 
     checkpoint_path = DATA_DIR / "ground_truth_partial.json"
-    output_path = DATA_DIR / "ground_truth.json"
+    output_path = _BENCH_DIR / "ground_truth.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Load existing progress
@@ -128,7 +131,7 @@ def cmd_judge(use_debiasing: bool = True):
         checkpoint_path.unlink()
 
     report("judged", f"{total_judgments} chunks in {fmt_duration(time.time() - start)}")
-    report("saved", f"[bold]{output_path.name}[/bold]")
+    report("saved", f"{output_path.name}")
     console.print()
     table = Table(title="Score Distribution", show_header=True, header_style="dim")
     table.add_column("Score")
@@ -156,18 +159,16 @@ def cmd_run(name: str | None = None):
 
     if not name:
         console.print("[red]error:[/red] name required")
-        console.print(
-            "[dim]usage:[/dim] [bold]run <name>[/bold]  (e.g., 'phase1-baseline')"
-        )
+        console.print("usage: run <name>  (e.g., 'phase1-baseline')")
         sys.exit(1)
 
-    gt_path = DATA_DIR / "ground_truth.json"
+    gt_path = _BENCH_DIR / "ground_truth.json"
     if not gt_path.exists():
         console.print("[red]error:[/red] no ground truth")
-        console.print("run [bold]judge[/bold] first")
+        console.print("run judge first")
         sys.exit(1)
 
-    report("name", f"[bold]{name}[/bold]")
+    report("name", f"{name}")
 
     ground_truth = json.loads(gt_path.read_text())
     report("queries", str(len(ground_truth["queries"])))
@@ -255,7 +256,7 @@ def cmd_run(name: str | None = None):
     report("evaluated", f"in {fmt_duration(time.time() - start).strip()}")
     console.print()
 
-    blank = "[dim]—[/dim]"
+    blank = "—"
     table = Table(title="Results", show_header=True, header_style="dim")
     table.add_column("Metric")
     for kv in k_values:
@@ -325,7 +326,7 @@ def cmd_run(name: str | None = None):
     json_path.write_text(json.dumps(output, indent=2))
 
     console.print()
-    report("saved", f"[bold]{json_path.name}[/bold]")
+    report("saved", f"{json_path.name}")
 
 
 def cmd_show(run_name: str | None = None):
@@ -345,8 +346,8 @@ def cmd_show(run_name: str | None = None):
             else []
         )
         if not runs:
-            console.print("[dim]no benchmark runs found[/dim]")
-            console.print("run [bold]run <name>[/bold] first")
+            console.print("no benchmark runs found")
+            console.print("run run <name> first")
             return
 
         table = Table(title="Benchmark Runs", show_header=True, header_style="dim")
@@ -371,19 +372,19 @@ def cmd_show(run_name: str | None = None):
 
         console.print(table)
         console.print()
-        console.print("[dim]use[/dim] show <name> [dim]to view details[/dim]")
+        console.print("use show <name> to view details")
         return
     results_path = results_dir / f"{run_name}.json"
     if not results_path.exists():
         console.print(f"[red]error:[/red] run '{run_name}' not found")
-        console.print("use [bold]show[/bold] to list available runs")
+        console.print("use show to list available runs")
         sys.exit(1)
 
     data = json.loads(results_path.read_text())
     k = data["k"]
     m = data.get("metrics", {})
 
-    report("run", f"[bold]{data.get('name', run_name)}[/bold]")
+    report("run", f"{data.get('name', run_name)}")
     report("date", data.get("created", "unknown"))
     console.print()
     from .evaluate import STANDARD_K
@@ -391,7 +392,7 @@ def cmd_show(run_name: str | None = None):
     def get_val(d, k):
         return d.get(str(k), d.get(k, 0))
 
-    blank = "[dim]—[/dim]"
+    blank = "—"
     lat = data.get("latency_ms", {})
     neg_fp = data.get("negative_fp_rate", {})
 
@@ -424,6 +425,7 @@ def cmd_show(run_name: str | None = None):
         ("hit_rate", "Hit Rate"),
         ("doc_coverage", "Doc-Cov"),
         ("subtopic_recall", "S-Recall"),
+        ("alpha_ndcg", "α-nDCG"),
     ]:
         row = [label] + [f"{get_val(m.get(metric, {}), kv):.3f}" for kv in STANDARD_K]
         table.add_row(*row)
@@ -494,5 +496,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        console.print("\n[dim]interrupted[/dim]")
+        console.print("\ninterrupted")
         sys.exit(130)

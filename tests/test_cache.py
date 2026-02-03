@@ -1,9 +1,8 @@
 """Tests for cache module."""
 
-import sqlite3
 import time
-from unittest.mock import patch
 
+import libsql_experimental as libsql  # noqa: F401
 import numpy as np
 import pytest
 
@@ -48,9 +47,9 @@ class TestCosineSimBatch:
         assert sims[0] == pytest.approx(1.0, abs=1e-6)
 
 
-def _make_cache_db() -> sqlite3.Connection:
+def _make_cache_db():
     """Create an in-memory DB with the query_cache table."""
-    conn = sqlite3.connect(":memory:")
+    conn = libsql.connect(":memory:")  # ty: ignore[unresolved-attribute]
     conn.execute("""
         CREATE TABLE query_cache (
             id INTEGER PRIMARY KEY,
@@ -70,57 +69,55 @@ def _make_cache_db() -> sqlite3.Connection:
 def cache_db():
     """Provide a cache instance backed by an in-memory DB."""
     conn = _make_cache_db()
-    with patch("sova.cache.get_connection") as mock_gc:
-        mock_gc.return_value.__enter__ = lambda s: conn
-        mock_gc.return_value.__exit__ = lambda s, *a: None
-        cache = SemanticCache(threshold=0.92, max_size=3, ttl=3600)
-        yield cache, conn
+    cache = SemanticCache(threshold=0.92, max_size=3, ttl=3600)
+    yield cache, conn
     conn.close()
 
 
 class TestSemanticCache:
     def test_miss_on_empty_cache(self, cache_db):
-        cache, _ = cache_db
-        result = cache.get([1.0, 0.0, 0.0])
+        cache, conn = cache_db
+        result = cache.get(conn, [1.0, 0.0, 0.0])
         assert result is None
 
     def test_put_then_get_identical(self, cache_db):
-        cache, _ = cache_db
+        cache, conn = cache_db
         emb = [1.0, 0.0, 0.0]
         expected = [(1, 0.9), (2, 0.8)]
-        cache.put(emb, expected)
-        result = cache.get(emb)
+        cache.put(conn, emb, expected)
+        result = cache.get(conn, emb)
         # msgpack deserializes tuples as lists
         assert [list(t) for t in expected] == result
 
     def test_miss_on_dissimilar_query(self, cache_db):
-        cache, _ = cache_db
-        cache.put([1.0, 0.0, 0.0], [(1, 0.9)])
+        cache, conn = cache_db
+        cache.put(conn, [1.0, 0.0, 0.0], [(1, 0.9)])
         # Orthogonal vector — well below 0.92 threshold
-        result = cache.get([0.0, 1.0, 0.0])
+        result = cache.get(conn, [0.0, 1.0, 0.0])
         assert result is None
 
     def test_hit_on_similar_query(self, cache_db):
-        cache, _ = cache_db
-        cache.put([1.0, 0.0, 0.0], [(1, 0.9)])
+        cache, conn = cache_db
+        cache.put(conn, [1.0, 0.0, 0.0], [(1, 0.9)])
         # Very close vector — should exceed 0.92 threshold
-        result = cache.get([0.99, 0.01, 0.0])
+        result = cache.get(conn, [0.99, 0.01, 0.0])
         assert result is not None
 
     def test_clear(self, cache_db):
-        cache, _ = cache_db
-        cache.put([1.0, 0.0], [(1, 0.9)])
-        cache.clear()
-        result = cache.get([1.0, 0.0])
+        cache, conn = cache_db
+        cache.put(conn, [1.0, 0.0], [(1, 0.9)])
+        conn.execute("DELETE FROM query_cache")
+        conn.commit()
+        result = cache.get(conn, [1.0, 0.0])
         assert result is None
 
     def test_lru_eviction(self, cache_db):
         cache, conn = cache_db
         # max_size=3, insert 4 entries
-        cache.put([1.0, 0.0], [(1, 0.9)])
-        cache.put([0.0, 1.0], [(2, 0.8)])
-        cache.put([0.5, 0.5], [(3, 0.7)])
-        cache.put([0.7, 0.7], [(4, 0.6)])
+        cache.put(conn, [1.0, 0.0], [(1, 0.9)])
+        cache.put(conn, [0.0, 1.0], [(2, 0.8)])
+        cache.put(conn, [0.5, 0.5], [(3, 0.7)])
+        cache.put(conn, [0.7, 0.7], [(4, 0.6)])
 
         count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
         assert count <= 3
@@ -128,20 +125,20 @@ class TestSemanticCache:
     def test_ttl_expiry(self, cache_db):
         cache, conn = cache_db
         emb = [1.0, 0.0, 0.0]
-        cache.put(emb, [(1, 0.9)])
+        cache.put(conn, emb, [(1, 0.9)])
         # Backdate the entry beyond TTL
         conn.execute("UPDATE query_cache SET created_at = ?", (time.time() - 7200,))
         conn.commit()
 
-        result = cache.get(emb)
+        result = cache.get(conn, emb)
         assert result is None
 
     def test_min_candidates_filter(self, cache_db):
-        cache, _ = cache_db
+        cache, conn = cache_db
         emb = [1.0, 0.0, 0.0]
-        cache.put(emb, [(1, 0.9), (2, 0.8)])  # 2 candidates
+        cache.put(conn, emb, [(1, 0.9), (2, 0.8)])  # 2 candidates
 
         # Requesting at least 2 — should hit
-        assert cache.get(emb, min_candidates=2) is not None
+        assert cache.get(conn, emb, min_candidates=2) is not None
         # Requesting at least 5 — should miss
-        assert cache.get(emb, min_candidates=5) is None
+        assert cache.get(conn, emb, min_candidates=5) is None

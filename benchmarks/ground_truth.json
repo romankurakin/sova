@@ -1,0 +1,2897 @@
+{
+  "version": "1.0",
+  "created": "2026-02-03",
+  "judge_model": "gemma3:27b",
+  "candidates_per_query": 10,
+  "use_debiasing": true,
+  "queries": [
+    {
+      "id": "e01",
+      "query": "ELR_EL1 register",
+      "category": "exact_lookup",
+      "subtopics": [
+        "AArch64",
+        "ARM Architecture",
+        "Exception Handling",
+        "Exception Level Registers",
+        "Exception Levels",
+        "Memory Access Control",
+        "Register Aliasing",
+        "Register Configuration",
+        "Register Redirection",
+        "Registers",
+        "System Registers",
+        "exception_link",
+        "return_address"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 6359,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "ARM Architecture",
+            "Exception Handling",
+            "Register Configuration"
+          ],
+          "reason": "This chunk directly addresses the query 'ELR_EL1 register' by providing its purpose, configuration, attributes, field descriptions, and access information. It's a comprehensive explanation of the register."
+        },
+        {
+          "chunk_id": 6360,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "System Registers",
+            "ARM Architecture",
+            "Exception Level Registers"
+          ],
+          "reason": "The document chunk directly mentions and explains the ELR_EL1 register, including access considerations and its use in the MRS instruction. It directly answers the query."
+        },
+        {
+          "chunk_id": 28722,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 1.0,
+          "subtopics": [
+            "ARM Architecture",
+            "Exception Handling",
+            "Registers"
+          ],
+          "reason": "The document chunk directly lists and describes the 'ELR_EL1' register, perfectly answering the query."
+        },
+        {
+          "chunk_id": 6362,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.75,
+          "subtopics": [
+            "ELR Registers",
+            "AArch64 Architecture",
+            "Exception Handling",
+            "System Registers"
+          ],
+          "reason": "The chunk discusses ELR_EL2, but not ELR_EL1 as the query asks. It provides details about the ELR_EL2 register's purpose, configuration, and attributes. While related to ELR registers generally, it doesn't directly address the query."
+        },
+        {
+          "chunk_id": 28712,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 1.0,
+          "subtopics": [
+            "AArch64",
+            "System Registers",
+            "Exception Levels"
+          ],
+          "reason": "The document chunk directly lists 'ELR_EL1' in a table that disambiguates AArch64 System registers by Exception level, perfectly answering the query."
+        },
+        {
+          "chunk_id": 17037,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Exception Levels",
+            "System Registers",
+            "Register Aliasing"
+          ],
+          "reason": "The document chunk directly lists `ELR_EL1` in a table of special-purpose registers and their equivalents at EL2. It also references system register aliasing which is relevant to understanding how registers are accessed at different exception levels."
+        },
+        {
+          "chunk_id": 6343,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 1.0,
+          "subtopics": [
+            "ARM Architecture",
+            "Exception Handling",
+            "Registers"
+          ],
+          "reason": "The document chunk directly defines the ELR_EL1 register and its purpose, perfectly answering the query."
+        },
+        {
+          "chunk_id": 16127,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 1.0,
+          "subtopics": [
+            "Exception Handling",
+            "ARM Architecture",
+            "System Registers"
+          ],
+          "reason": "The document chunk directly defines and identifies ELR_EL1 as the Exception Link Register for exceptions taken to Exception Level 1. It directly answers the query."
+        },
+        {
+          "chunk_id": 17043,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 1.0,
+          "subtopics": [
+            "Exception Levels",
+            "Register Redirection",
+            "ARM Architecture"
+          ],
+          "reason": "The document chunk directly states that accesses to ELR_EL2 are redirected to ELR_EL1 under specific conditions, directly answering the query."
+        },
+        {
+          "chunk_id": 17039,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "confidence": 1.0,
+          "subtopics": [
+            "Exception Levels",
+            "Memory Access Control",
+            "ARM Architecture"
+          ],
+          "reason": "The document chunk directly mentions and explains the behavior related to the ELR_EL1 register, specifically detailing when accesses to it are trapped to EL2."
+        }
+      ]
+    },
+    {
+      "id": "e02",
+      "query": "mcause CSR",
+      "category": "exact_lookup",
+      "subtopics": [
+        "ARM Architecture",
+        "Arm Architecture",
+        "CSR",
+        "CSR Registers",
+        "CSR Synchronization",
+        "CSRs",
+        "Exception Handling",
+        "Interrupts",
+        "Nested Acceleration",
+        "RISC-V Architecture",
+        "RISC-V H-extension",
+        "Registers",
+        "SBI (Standard Base Interface)",
+        "exception_code",
+        "trap_cause"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 387,
+          "doc": "riscv-privileged",
+          "score": 1,
+          "confidence": 0.8,
+          "subtopics": [
+            "RISC-V Architecture",
+            "CSRs",
+            "Registers",
+            "CSR"
+          ],
+          "reason": "Lists CSR table (fflags, frm, fcsr) but does not mention mcause."
+        },
+        {
+          "chunk_id": 2273,
+          "doc": "riscv-unprivileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "CSRs",
+            "Side Effects",
+            "RISC-V Architecture"
+          ],
+          "reason": "The document chunk discusses side effects and indirect effects of CSR writes, which are related to the concept of \"mcause\" (machine cause) as mcause is a CSR that indicates the cause of an exception or interrupt. However, it doesn't directly *explain* mcause or how it functions, only that writes to CSRs can have effects that aren't considered side effects. It mentions traps triggered by CSR values, which is where mcause comes into play, but doesn't detail mcause itself."
+        },
+        {
+          "chunk_id": 19062,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 0.8,
+          "subtopics": [
+            "CSR Registers",
+            "Arm Architecture",
+            "Exception Handling",
+            "CSRs",
+            "ARM Architecture"
+          ],
+          "reason": "Not relevant: TRCSSCSR is an ARM trace register, unrelated to RISC-V mcause CSR."
+        },
+        {
+          "chunk_id": 378,
+          "doc": "riscv-privileged",
+          "score": 1,
+          "confidence": 0.8,
+          "subtopics": [
+            "CSRs",
+            "Interrupts",
+            "RISC-V Architecture",
+            "CSR"
+          ],
+          "reason": "Mentions related CSRs (mstatus, mtvec, mip) but not mcause specifically."
+        },
+        {
+          "chunk_id": 2272,
+          "doc": "riscv-unprivileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Register Access",
+            "CSR Instructions",
+            "RISC-V Architecture"
+          ],
+          "reason": "The document chunk discusses CSR instructions, which is related to the query \"mcause CSR\". However, it doesn't explain what \"mcause\" is or how it relates to CSRs. It only details *how* CSRs are read/written by instructions, not *what* they are or what \"mcause\" specifically does."
+        },
+        {
+          "chunk_id": 312,
+          "doc": "riscv-sbi",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "CSR Synchronization",
+            "Nested Acceleration",
+            "RISC-V H-extension"
+          ],
+          "reason": "The document chunk directly addresses the query \"mcause CSR\". It details a feature for synchronizing CSRs, explaining how a supervisor (L1 hypervisor) and SBI implementation (L0 hypervisor) interact to write and read CSRs, including specific steps and a dirty bitmap mechanism. The term 'CSR' is central to the document's content."
+        },
+        {
+          "chunk_id": 22146,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.8,
+          "subtopics": [
+            "Instruction Set Architecture",
+            "ARM Assembly",
+            "Registers"
+          ],
+          "reason": "The query \"mcause CSR\" refers to the Machine Cause (mcause) and Control and Status Register (CSR) in RISC-V architecture. This document chunk discusses the MRS instruction in ARM architecture, which moves special registers to general-purpose registers. While it mentions registers, it's specific to ARM and doesn't relate to RISC-V's mcause or CSRs. It only mentions the terms 'register' which is a very broad concept."
+        },
+        {
+          "chunk_id": 319,
+          "doc": "riscv-sbi",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "CSR Synchronization",
+            "RISC-V H-extension",
+            "SBI (Standard Base Interface)"
+          ],
+          "reason": "The document chunk directly addresses the query 'mcause CSR' by describing a function `structsbiretsbi_nacl_sync_csr` that synchronizes RISC-V H-extension CSRs. It details how the `csr_num` parameter is used to specify which CSRs to synchronize, and includes error codes related to CSR synchronization."
+        },
+        {
+          "chunk_id": 2119,
+          "doc": "macintosh_HIG_1992",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Computer Science Conferences",
+            "Human-Computer Interaction",
+            "Collaborative Computing"
+          ],
+          "reason": "The document chunk discusses a computer science conference (CSCW) and the Human Factors Society. It does not contain any information related to 'mcause' or 'CSR' (likely related to processor status registers or machine cause registers in a hardware context)."
+        },
+        {
+          "chunk_id": 5171,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "SGI",
+            "Inter-Processor Communication",
+            "Processor Architecture"
+          ],
+          "reason": "The document chunk discusses SGI acknowledgements and related signaling within a processor architecture. It does not mention \"mcause\" or \"CSR\" (Control and Status Register)."
+        }
+      ]
+    },
+    {
+      "id": "e03",
+      "query": "GICD_ISENABLER",
+      "category": "exact_lookup",
+      "subtopics": [
+        "Arm Architecture",
+        "GIC",
+        "GIC (Generic Interrupt Controller)",
+        "ISA Naming",
+        "ISA Naming Conventions",
+        "Instruction Set Extensions",
+        "Interrupt Control",
+        "Interrupt Controller",
+        "Interrupts",
+        "Memory-mapped Registers",
+        "Opcode Maps",
+        "PLIC",
+        "RISC-V ISA",
+        "Register Configuration",
+        "Registers",
+        "SPI Forwarding",
+        "System Registers",
+        "distributor",
+        "interrupt_enable"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 4764,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "confidence": 1.0,
+          "subtopics": [
+            "Interrupt Controller",
+            "Register Configuration",
+            "SPI Forwarding"
+          ],
+          "reason": "The document chunk directly defines and explains the GICD_ISENABLER register, its purpose, configurations, and attributes. It perfectly addresses the query."
+        },
+        {
+          "chunk_id": 18514,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.75,
+          "subtopics": [
+            "Interrupt Controller Architecture",
+            "GIC Architecture",
+            "Interrupt Controller",
+            "GIC Registers",
+            "System Registers"
+          ],
+          "reason": "The chunk mentions 'GICD_' as part of a list of register groups, but doesn't explain what 'GICD_ISENABLER' is or its function. It's a marginal mention of the query term within a broader context of GIC registers."
+        },
+        {
+          "chunk_id": 334,
+          "doc": "riscv-sbi",
+          "score": 0,
+          "confidence": 0.7,
+          "subtopics": [
+            "SBI (Supervisor Binary Interface)",
+            "Interrupt Handling",
+            "Event Handling",
+            "Interrupts",
+            "Software Events"
+          ],
+          "reason": "Not relevant: SBI software event enable, unrelated to GIC GICD_ISENABLER."
+        },
+        {
+          "chunk_id": 4763,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Interrupt Control",
+            "GIC (Generic Interrupt Controller)",
+            "Memory-mapped Registers"
+          ],
+          "reason": "The document chunk directly defines and explains GICD_ISENABLER, including its function, access method, and related registers. It provides details about its purpose in enabling interrupts."
+        },
+        {
+          "chunk_id": 26387,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.75,
+          "subtopics": [
+            "GIC",
+            "Arm Architecture",
+            "Interrupt Controller",
+            "System Registers"
+          ],
+          "reason": "Mentions GIC interface support but does not discuss GICD_ISENABLER register specifically."
+        },
+        {
+          "chunk_id": 399,
+          "doc": "riscv-privileged",
+          "score": 0,
+          "confidence": 0.75,
+          "subtopics": [
+            "RISC-V Extensions",
+            "RISC-V",
+            "Instruction Alignment",
+            "MISA Register",
+            "CSRs"
+          ],
+          "reason": "Not relevant: about misa register, unrelated to GICD_ISENABLER."
+        },
+        {
+          "chunk_id": 230,
+          "doc": "riscv-plic",
+          "score": 0,
+          "confidence": 0.75,
+          "subtopics": [
+            "Interrupts",
+            "PLIC",
+            "Registers"
+          ],
+          "reason": "Not relevant: PLIC interrupt enables, not GIC GICD_ISENABLER."
+        },
+        {
+          "chunk_id": 3099,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [],
+          "reason": "Not relevant: GICD_ISENABLER does not appear in this document."
+        },
+        {
+          "chunk_id": 350,
+          "doc": "riscv-sbi",
+          "score": 0,
+          "confidence": 0.6499999999999999,
+          "subtopics": [
+            "Hardware Enablement",
+            "Interrupt Handling",
+            "Bitmask Operations",
+            "Error Handling",
+            "Debug Triggers"
+          ],
+          "reason": "Not relevant: debug triggers, unrelated to GICD_ISENABLER."
+        },
+        {
+          "chunk_id": 3112,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [],
+          "reason": "Not relevant: GICD_ISENABLER does not appear in this document."
+        }
+      ]
+    },
+    {
+      "id": "e04",
+      "query": "sv39 page table",
+      "category": "exact_lookup",
+      "subtopics": [
+        "Address Space",
+        "Address Translation",
+        "Memory Management Unit (MMU)",
+        "Memory Mapping",
+        "Page Directory",
+        "Page Tables",
+        "Virtual Memory",
+        "address translation",
+        "page tables",
+        "page_table_entry",
+        "translation",
+        "virtual memory"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 557,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Address Translation",
+            "Page Tables",
+            "Virtual Memory"
+          ],
+          "reason": "The chunk directly mentions \"Sv39 page table\" and explains how the virtual address space is translated into a physical page number (PPN) using a three-level page table. It details the VPN and page offset sizes. While it doesn't *fully* explain the page table structure, it provides relevant information."
+        },
+        {
+          "chunk_id": 3528,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1,
+          "confidence": 0.75,
+          "subtopics": [
+            "hashing",
+            "page tables",
+            "Page Tables",
+            "inverted page tables",
+            "Inverted Page Tables"
+          ],
+          "reason": "The chunk mentions page tables but focuses on *inverted* page tables, which is a specific type. It doesn't directly address what a standard 'sv39 page table' is, nor does it explain the general concept in a way that would satisfy someone searching for that term. It's related, but not a direct answer."
+        },
+        {
+          "chunk_id": 24742,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Management",
+            "Address Translation",
+            "Translation Tables"
+          ],
+          "reason": "The chunk mentions \"translation table\" which is present in the query, but doesn't explain what an sv39 page table is or how it functions. It discusses translation tables in a general sense, and specifies some details about non-secure tables, but doesn't address the specific query."
+        },
+        {
+          "chunk_id": 556,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.8999999999999999,
+          "subtopics": [
+            "Address Space",
+            "Page Tables",
+            "Virtual Memory"
+          ],
+          "reason": "The chunk directly mentions 'Sv39' and 'page table' in the context of virtual memory. It explains that Sv39 supports 39-bit virtual address spaces and relates it to other virtual memory systems (Sv32, Sv48, Sv57) which involve page tables. However, it doesn't *explain* how the Sv39 page table works, only that it exists and its relation to address space size."
+        },
+        {
+          "chunk_id": 3523,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Page Directory",
+            "Page Tables",
+            "Virtual Memory"
+          ],
+          "reason": "The chunk discusses page tables and page directory entries, which are directly related to the query 'sv39 page table'. It explains how page table indices are used and how page directory entries point to page tables. However, it doesn't specifically mention 'sv39' or any details unique to that architecture's page table implementation."
+        },
+        {
+          "chunk_id": 4937,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 0.7,
+          "subtopics": [
+            "memory management",
+            "Page Tables",
+            "cache attributes",
+            "Memory Attributes",
+            "Caching"
+          ],
+          "reason": "Not relevant: GIC ITS table entry cacheability, not a page table."
+        },
+        {
+          "chunk_id": 24749,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Management",
+            "Virtual Memory",
+            "Translation Lookaside Buffer"
+          ],
+          "reason": "The chunk discusses translation tables and memory regions (supersections, sections, large/small pages) which are related to page tables, but doesn't directly explain what a 'sv39 page table' is or how it functions. It mentions translation table formats (VMSAv8-32) but doesn't focus on sv39."
+        },
+        {
+          "chunk_id": 1143,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Page Tables",
+            "Virtual Memory",
+            "Memory Management Unit (MMU)"
+          ],
+          "reason": "The chunk discusses page tables, specifically multilevel page tables, which is directly related to the query. It explains how a two-level page table works and how virtual addresses are mapped. However, it doesn't specifically mention 'sv39' which is likely a specific architecture or implementation detail related to page tables, so it's not a *complete* answer."
+        },
+        {
+          "chunk_id": 1141,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "address translation",
+            "page tables",
+            "Page Tables",
+            "Memory Mapping",
+            "virtual memory"
+          ],
+          "reason": "The chunk explains the core concept of a page table - mapping virtual pages to physical frames - which is directly related to the query. It details how virtual page numbers are used as indices and how the page table provides the frame number. However, it doesn't specifically mention 'sv39' which is likely a specific architecture or implementation detail of page tables, so it's not a *complete* answer."
+        },
+        {
+          "chunk_id": 5079,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 0.6,
+          "subtopics": [
+            "memory caching",
+            "memory access",
+            "cache attributes",
+            "GIC registers",
+            "table attributes"
+          ],
+          "reason": "Not relevant: GIC GITS_BASER registers, not a page table."
+        }
+      ]
+    },
+    {
+      "id": "c01",
+      "query": "how the OS reclaims memory from a terminated process",
+      "category": "conceptual",
+      "subtopics": [
+        "Free List",
+        "Heap Memory",
+        "Linked Lists",
+        "Memory Management",
+        "Operating System Responsibilities",
+        "Process Termination",
+        "memory_free",
+        "process_exit"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 3434,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Memory Management",
+            "Process Termination",
+            "Operating System Responsibilities",
+            "Free List"
+          ],
+          "reason": "The chunk directly lists \"Reclaim memory from terminated processes\" as an OS requirement in a table. However, it doesn't *explain* how the OS does this, only that it *needs* to. It's relevant because it acknowledges the query topic, but doesn't provide a detailed answer."
+        },
+        {
+          "chunk_id": 1133,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Memory Management",
+            "Process Termination",
+            "Linked Lists"
+          ],
+          "reason": "The chunk explains how the OS updates a memory segment list when a process terminates, which directly relates to reclaiming memory. It details how process entries are replaced with holes and how adjacent segments can be coalesced. However, it doesn't explicitly state *how* the OS reclaims the memory, just how it updates its tracking of free/allocated space."
+        },
+        {
+          "chunk_id": 139,
+          "doc": "arm_aapcs64",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Management",
+            "Process Memory",
+            "Heap and Stack"
+          ],
+          "reason": "The chunk describes different types of memory used by a process, which is related to the query of reclaiming memory. However, it doesn't explain *how* the OS reclaims that memory when a process terminates. It only describes what memory exists."
+        },
+        {
+          "chunk_id": 3416,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Memory Management",
+            "Process Termination",
+            "Heap Memory"
+          ],
+          "reason": "The chunk directly and clearly explains how the OS reclaims memory from a terminated process, detailing the two levels of memory management and emphasizing that the OS reclaims all memory upon process termination."
+        },
+        {
+          "chunk_id": 1238,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "System Calls",
+            "Process Management",
+            "Memory Allocation"
+          ],
+          "reason": "The chunk discusses memory allocation and tracking, which is *related* to reclaiming memory from a terminated process, but doesn't directly explain *how* the OS does it. It only mentions that `alloc.c` keeps track of used and free memory."
+        },
+        {
+          "chunk_id": 28652,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "virtual memory",
+            "paging",
+            "translation lookaside buffer (TLB)",
+            "translation lookaside buffer"
+          ],
+          "reason": "The chunk discusses paging memory in and out, and invalidating translation table mappings, which are related to memory management. However, it doesn't directly explain how the OS reclaims memory *specifically* from a terminated process. It focuses on a general paging mechanism, not the termination scenario."
+        },
+        {
+          "chunk_id": 2236,
+          "doc": "riscv-unprivileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Execution Environments",
+            "Process Termination",
+            "Traps"
+          ],
+          "reason": "The chunk discusses process termination due to traps, which is related to a process ending. However, it doesn't explain *how* the OS reclaims the memory associated with that terminated process. It only states that execution terminates."
+        },
+        {
+          "chunk_id": 135,
+          "doc": "arm_aapcs64",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Management",
+            "processes",
+            "memory management",
+            "Threads",
+            "threads"
+          ],
+          "reason": "The chunk discusses processes and memory access, which are related to the query, but it doesn't explain *how* the OS reclaims memory after a process terminates. It only describes what memory a process *has* access to."
+        },
+        {
+          "chunk_id": 18420,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 0.9,
+          "subtopics": [
+            "memory safety",
+            "error handling",
+            "cache invalidation"
+          ],
+          "reason": "This chunk discusses \"poison\" in memory, which seems related to error handling, but it doesn't explain how the OS reclaims memory from a terminated process. It focuses on cleaning and validating memory locations after errors, not the process of freeing memory after a program exits."
+        },
+        {
+          "chunk_id": 4296,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Memory Partitioning",
+            "GICv3 Architecture",
+            "Memory Monitoring"
+          ],
+          "reason": "This chunk is a table of contents for a section on memory partitioning and monitoring within the GICv3 architecture. It does not discuss how the OS reclaims memory from terminated processes."
+        }
+      ]
+    },
+    {
+      "id": "c02",
+      "query": "why kernel code runs in privileged mode",
+      "category": "conceptual",
+      "subtopics": [
+        "Assembly language",
+        "CSRs (Control and Status Registers)",
+        "Control and Status Registers",
+        "Descriptor Tables",
+        "ECALLs",
+        "Exception Levels",
+        "Interrupt Handling",
+        "Interrupts/Exceptions",
+        "Operating System Architecture",
+        "Operating System Role",
+        "Operating System Security",
+        "Privilege",
+        "Privilege Levels",
+        "Privilege levels",
+        "Privileged Mode",
+        "Protected Mode",
+        "RISC-V Architecture",
+        "System Calls",
+        "hardware privilege levels",
+        "privilege",
+        "protection",
+        "system calls",
+        "user mode vs kernel mode"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 3306,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "system calls",
+            "kernel interaction",
+            "trap instructions"
+          ],
+          "reason": "The chunk explains *how* system calls are made, which is related to kernel interaction, but doesn't directly address *why* kernel code runs in privileged mode. It touches on the mechanism of transitioning to kernel code, but not the security/protection reasons for needing privileged mode."
+        },
+        {
+          "chunk_id": 650,
+          "doc": "riscv-privileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Management",
+            "Privilege Modes",
+            "Pointer Masking"
+          ],
+          "reason": "The chunk discusses privilege modes and pointer masking, which are related to kernel/user space separation. However, it doesn't directly *explain why* kernel code runs in privileged mode. It describes a mechanism (pointer masking) that's affected by privilege mode, but doesn't address the fundamental reason for the privilege distinction."
+        },
+        {
+          "chunk_id": 897,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Interrupts/Exceptions",
+            "Assembly language",
+            "Privilege levels"
+          ],
+          "reason": "The chunk explains that code can run with privilege level 0, which is the most privileged level, and implies this is why kernel code runs in privileged mode. However, it doesn't *directly* state that kernel code runs in privileged mode, only that some code *can* run at the highest privilege level. It's a relevant piece of the puzzle, but not a complete answer."
+        },
+        {
+          "chunk_id": 3262,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "system calls",
+            "hardware privilege levels",
+            "user mode vs kernel mode"
+          ],
+          "reason": "The chunk directly explains why kernel code runs in privileged mode: to protect system resources and user privacy. It details the concept of user mode vs. kernel mode (hardware privilege level) and how system calls facilitate the transition between them, which is the core of the answer."
+        },
+        {
+          "chunk_id": 382,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Control and Status Registers",
+            "CSRs (Control and Status Registers)",
+            "Privilege Levels",
+            "RISC-V Architecture"
+          ],
+          "reason": "The chunk explains privilege levels in RISC-V, which is related to why kernel code (often running in supervisor or machine mode) has special access. It doesn't *directly* answer *why* it runs in privileged mode, but it establishes the concept of privilege levels and how they control access to resources, which is a necessary foundation for understanding the query."
+        },
+        {
+          "chunk_id": 872,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Protected Mode",
+            "Privilege Levels",
+            "Descriptor Tables"
+          ],
+          "reason": "The chunk explains privilege levels and how the kernel uses the highest privilege level to access all system resources. It directly addresses *why* kernel code needs privileged mode, though it doesn't explicitly state it as a direct answer to the query. It focuses on the underlying mechanisms (descriptor tables, privilege levels) that enable this."
+        },
+        {
+          "chunk_id": 5658,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Operating System Architecture",
+            "Privilege Levels",
+            "Operating System Security",
+            "Privilege",
+            "Exception Levels"
+          ],
+          "reason": "The chunk explains exception levels and how applications typically run at the lowest privilege level (EL0). It hints at why higher privilege is needed for system software, which is related to the query, but doesn't directly *explain* why kernel code needs privileged mode."
+        },
+        {
+          "chunk_id": 21166,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.775,
+          "subtopics": [
+            "Exception Levels",
+            "Operating System Architecture",
+            "Privilege Levels",
+            "Operating System Role"
+          ],
+          "reason": "The chunk explains privilege levels (EL0 being unprivileged) and how the system software determines the privilege level at which applications run. It touches on the idea that kernel/system software runs at a higher privilege than applications, but doesn't directly *explain why* kernel code needs to run in privileged mode. It hints at resource allocation and protection as benefits."
+        },
+        {
+          "chunk_id": 2233,
+          "doc": "riscv-unprivileged",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Privileged Mode",
+            "ECALLs",
+            "Interrupt Handling",
+            "System Calls"
+          ],
+          "reason": "The chunk explains that user-mode code triggers transfers of control to supervisor/privileged mode handlers (ECALLs and interrupts). This directly addresses *how* kernel code (running in supervisor mode) gets executed as a result of events originating in user mode, which is relevant to the query. However, it doesn't explicitly state *why* kernel code needs to run in privileged mode - it just shows that it does."
+        },
+        {
+          "chunk_id": 2235,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 0.9,
+          "subtopics": [
+            "Traps",
+            "Interrupts",
+            "Virtual Memory"
+          ],
+          "reason": "This chunk discusses traps and fatal traps, but doesn't explain *why* kernel code runs in privileged mode. It describes *what* happens when a trap occurs, not the underlying reason for kernel privilege."
+        }
+      ]
+    },
+    {
+      "id": "c03",
+      "query": "interrupt handling from hardware signal to handler return",
+      "category": "conceptual",
+      "subtopics": [
+        "AArch32 Architecture",
+        "CSR Registers",
+        "CSRs",
+        "Context Switching",
+        "Event Handling",
+        "Exception Handling",
+        "Hardware Interrupts",
+        "Interrupt Completion",
+        "Interrupts",
+        "Memory-mapped I/O",
+        "PLIC",
+        "Processor Modes",
+        "RISC-V Architecture",
+        "context_save",
+        "irq_flow"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 891,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Local Labels",
+            "Assembly Language",
+            "Interrupt Handling",
+            "Interrupt Controller"
+          ],
+          "reason": "The chunk mentions interrupt handling and a handler function (`_Intr_ _handle_`), but it focuses on assembly-level details like labels and jumps, rather than the overall process from hardware signal to handler return. It hints at the handler scanning a list of functions, but doesn't explain the full flow."
+        },
+        {
+          "chunk_id": 24465,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Processor Modes",
+            "Interrupts",
+            "Exception Handling",
+            "AArch32 Architecture"
+          ],
+          "reason": "The chunk discusses interrupt handling (IRQ exceptions specifically) and mentions exception entry and return addresses (LR_abt). However, it doesn't provide a complete flow from hardware signal to handler return, but rather focuses on specific details of IRQ exceptions and how they are handled at different exception levels."
+        },
+        {
+          "chunk_id": 405,
+          "doc": "riscv-privileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "CSRs",
+            "Interrupt Enables",
+            "Privilege Levels",
+            "Atomicity"
+          ],
+          "reason": "The chunk discusses interrupt enables and privilege levels, which are related to interrupt handling. However, it doesn't describe the full flow from a hardware signal to a handler's return. It focuses on enabling/disabling interrupts based on privilege levels, not the actual handling process."
+        },
+        {
+          "chunk_id": 1200,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "memory protection",
+            "signal handlers",
+            "signal handling",
+            "signals"
+          ],
+          "reason": "The chunk discusses signals and signal handling, which is related to interrupt handling. However, it doesn't explain the full path from a hardware signal to a handler's return. It touches on signal generation (sigsegv) and processing, but lacks details on the initial hardware interrupt trigger and the complete handler lifecycle."
+        },
+        {
+          "chunk_id": 24344,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "ARM Architecture",
+            "Interrupts",
+            "Virtualization"
+          ],
+          "reason": "The chunk discusses interrupts, specifically *virtual* interrupts in an ARM architecture. It touches on how physical interrupts are routed and signaled, but doesn't detail the full flow *from* the hardware signal to the handler's return. It focuses more on virtualization aspects."
+        },
+        {
+          "chunk_id": 490,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Interrupts",
+            "RISC-V Architecture",
+            "Exception Handling"
+          ],
+          "reason": "The chunk discusses interrupt handling, specifically NMIs and RNMIs in RISC-V. It touches on the jump to a handler and resuming execution (with RNMIs), which are key parts of the query. However, it doesn't fully trace the signal *from* hardware to handler return; it focuses more on the handler mechanism itself. It's a relevant piece of the puzzle, but not a complete answer."
+        },
+        {
+          "chunk_id": 3316,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Context Switching",
+            "Interrupts",
+            "Concurrency"
+          ],
+          "reason": "The chunk acknowledges the topic of interrupt handling when another interrupt occurs, which is part of the query. However, it mostly defers a detailed explanation to a later section and only sketches 'basics' like disabling interrupts. It then includes code for context switching, which is related to interrupt handling but doesn't directly explain the flow from hardware signal to handler return."
+        },
+        {
+          "chunk_id": 234,
+          "doc": "riscv-plic",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Memory-mapped I/O",
+            "Interrupt Completion",
+            "PLIC",
+            "Hardware Interrupts"
+          ],
+          "reason": "The chunk discusses interrupt completion, which is part of the overall interrupt handling process from signal to handler return. It details how the PLIC signals completion and the need for a completion message to the gateway. However, it doesn't cover the entire flow from the hardware signal *to* the handler return, focusing primarily on the completion stage."
+        },
+        {
+          "chunk_id": 5222,
+          "doc": "gic_architecture_specification",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "GIC",
+            "System Registers",
+            "Interrupt Acknowledgement"
+          ],
+          "reason": "The chunk discusses acknowledging interrupts, which is *part* of interrupt handling. However, it doesn't cover the full flow from hardware signal to handler return. It focuses on a specific function (acknowledging) within that process. It lacks details about the initial signal, context switching, or the return from the handler."
+        },
+        {
+          "chunk_id": 329,
+          "doc": "riscv-sbi",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Event Handling",
+            "CSR Registers",
+            "Context Switching",
+            "CSRs",
+            "Interrupts"
+          ],
+          "reason": "The chunk describes saving the interrupted state, which is a key part of interrupt handling. It also mentions redirecting execution to a handler. However, it focuses on *software* event injection, and doesn't cover the initial hardware signal aspect or the handler *return* process. It's relevant, but not a complete answer to the query."
+        }
+      ]
+    },
+    {
+      "id": "c04",
+      "query": "how virtual addresses get translated to physical",
+      "category": "conceptual",
+      "subtopics": [
+        "Address Translation",
+        "Hardware Virtualization",
+        "Memory Management",
+        "Memory Management Unit (MMU)",
+        "Page Tables",
+        "Paging",
+        "Physical Memory",
+        "TLB",
+        "Virtual Memory",
+        "Virtualization",
+        "mmu",
+        "page_walk"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 3425,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Hardware Virtualization",
+            "Memory Management",
+            "Address Translation",
+            "Virtual Memory",
+            "Virtualization"
+          ],
+          "reason": "The chunk introduces \"hardware-based address translation\" which is directly related to translating virtual addresses to physical addresses. However, it doesn't *explain* how this translation happens, only that it *will* be used. It sets up the topic but doesn't answer the 'how' part of the query."
+        },
+        {
+          "chunk_id": 1146,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "TLB",
+            "Page Tables",
+            "Virtual Memory",
+            "Paging"
+          ],
+          "reason": "The chunk explains how TLBs are used to speed up the translation of virtual to physical addresses by caching page table entries. It doesn't detail the *process* of translation itself, but explains a key optimization for it."
+        },
+        {
+          "chunk_id": 16853,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Address Translation",
+            "Virtual Memory",
+            "Physical Memory"
+          ],
+          "reason": "The chunk explains the concept of virtual addresses (VA) being translated to physical addresses (PA) and that address translation is the process of converting between them. It also mentions translation stages. However, it doesn't *how* the translation happens, only *that* it happens."
+        },
+        {
+          "chunk_id": 3481,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Address Translation",
+            "Page Tables",
+            "Virtual Memory"
+          ],
+          "reason": "The chunk begins to explain how virtual addresses are translated by introducing the concepts of virtual page numbers (VPN) and offsets. It sets up an example to illustrate the process, but doesn't *complete* the translation. It's a good start, but doesn't fully answer the query."
+        },
+        {
+          "chunk_id": 24706,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Address Translation",
+            "Physical Memory",
+            "Virtual Address",
+            "Physical Address",
+            "Virtual Memory"
+          ],
+          "reason": "The chunk defines IPA and PA, which are involved in address translation, but doesn't *explain how* the translation happens. It states they are inputs and outputs of translation stages, but doesn't detail the process. It's relevant because it defines the addresses involved, but doesn't answer the 'how' of the query."
+        },
+        {
+          "chunk_id": 553,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.825,
+          "subtopics": [
+            "Address Translation",
+            "Page Tables",
+            "Virtual Memory"
+          ],
+          "reason": "The chunk details the steps involved in translating a virtual address to a physical address, directly addressing the query. However, it's presented as a series of technical steps with many abbreviations and register references, making it difficult to understand without prior knowledge. It *describes* the process, but doesn't *explain* it in a readily accessible way."
+        },
+        {
+          "chunk_id": 1137,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Virtual Memory",
+            "Memory Management Unit (MMU)",
+            "Address Translation"
+          ],
+          "reason": "This chunk directly explains how a virtual address is translated to a physical address using the MMU, providing a concrete example. It details the process of mapping a virtual address to a corresponding physical address."
+        },
+        {
+          "chunk_id": 621,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Virtual Memory",
+            "Address Translation",
+            "Virtualization"
+          ],
+          "reason": "The document chunk directly explains how virtual addresses are translated to physical addresses in a virtualized environment, detailing the two-stage process (VS-stage and G-stage translation) and the registers involved (`vsatp`, `hgatp`). It directly addresses the query."
+        },
+        {
+          "chunk_id": 4996,
+          "doc": "gic_architecture_specification",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Management",
+            "Memory Mapping",
+            "Interrupt Handling",
+            "Virtualization"
+          ],
+          "reason": "The chunk mentions that the hypervisor uses address translations to map virtual CPU interface accesses to physical addresses, which is related to the query. However, it doesn't *explain* how this translation happens, only that it *can* happen. It focuses more on the register mapping and consistency between virtual and physical interfaces."
+        },
+        {
+          "chunk_id": 136,
+          "doc": "arm_aapcs64",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "tagged addressing",
+            "address translation",
+            "address spaces",
+            "memory addressing",
+            "virtual memory"
+          ],
+          "reason": "The chunk discusses memory addresses and address translation, which are related to the query. However, it doesn't *explain how* virtual addresses are translated to physical addresses; it only states that 64 bits are passed to the translation system or that tagged addressing affects the process. It's a mention of the topic, but lacks detail."
+        }
+      ]
+    },
+    {
+      "id": "d01",
+      "query": "how ARM and RISC-V differ in exception handling",
+      "category": "cross_doc",
+      "subtopics": [
+        "Exception Handling",
+        "Interrupts",
+        "RISC-V ISA",
+        "arm_exception",
+        "riscv_trap"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 21240,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Interrupts",
+            "ARM Architecture",
+            "Exceptions"
+          ],
+          "reason": "Defines ARM exception terminology (exception, floating-point exception, abort) and exception entry to EL1/EL2/EL3. Foundational for comparing with RISC-V."
+        },
+        {
+          "chunk_id": 2232,
+          "doc": "riscv-unprivileged",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Traps",
+            "traps",
+            "interrupts",
+            "exceptions",
+            "Exceptions"
+          ],
+          "reason": "Defines RISC-V exception, interrupt, and trap terminology. Foundational for comparing with ARM exception model."
+        },
+        {
+          "chunk_id": 433,
+          "doc": "riscv-privileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "RISC-V",
+            "Hardware Errors",
+            "Exceptions"
+          ],
+          "reason": "The chunk discusses exception handling in RISC-V, which is relevant to the query about ARM and RISC-V differences. However, it *only* details RISC-V exception types and doesn't make any comparison to ARM. It mentions exceptions but doesn't explain how they differ between the two architectures."
+        },
+        {
+          "chunk_id": 24440,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Interrupts",
+            "ARM Architecture",
+            "Exception Handling"
+          ],
+          "reason": "Lists ARM exception types (Undefined Instruction, SVC, SMC, HVC, etc.) with handling details. Directly useful for comparing with RISC-V traps."
+        },
+        {
+          "chunk_id": 2399,
+          "doc": "riscv-unprivileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Floating-point operations",
+            "RISC-V",
+            "Floating-Point Operations",
+            "Exception Handling"
+          ],
+          "reason": "The chunk discusses exception handling in RISC-V, which is relevant to the query about the *difference* between ARM and RISC-V. However, it doesn't mention ARM at all, and therefore doesn't explain how the two architectures differ. It only describes RISC-V's approach."
+        },
+        {
+          "chunk_id": 377,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "RISC-V ISA",
+            "Interrupts",
+            "Exception Handling"
+          ],
+          "reason": "The chunk mentions \"synchronous exceptions\" and details changes related to exception causes and priority ordering. While it doesn't *explain* exception handling, it indicates changes *to* exception handling within the RISC-V architecture. It doesn't mention ARM at all, so it doesn't address the comparison aspect of the query."
+        },
+        {
+          "chunk_id": 4313,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "ARM Architecture",
+            "Execution States",
+            "GIC Registers"
+          ],
+          "reason": "This chunk discusses ARM architecture states and observability of GIC registers. It does not mention exception handling at all, and therefore is not relevant to the query."
+        },
+        {
+          "chunk_id": 204,
+          "doc": "arm_aapcs64",
+          "score": 1,
+          "confidence": 0.8,
+          "subtopics": [
+            "Lazy State Saving",
+            "ARM Architecture",
+            "Exception Handling"
+          ],
+          "reason": "The chunk discusses exception handling within the ARM architecture, specifically focusing on the interaction of exceptions with the ZA (lazy state saving) feature. It details conditions that must be met when entering an exception handler. However, it doesn't *compare* ARM's approach to RISC-V's, only describes ARM's implementation. Therefore, it's relevant but doesn't directly answer the query."
+        },
+        {
+          "chunk_id": 4303,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "GIC",
+            "Armv8-R",
+            "Interrupts"
+          ],
+          "reason": "This chunk discusses GIC configuration and LPI support for Armv8-R AArch64 processors. It does not mention or explain exception handling at all, nor does it make any comparison to RISC-V."
+        },
+        {
+          "chunk_id": 368,
+          "doc": "riscv-sbi",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Documentation",
+            "RISC-V",
+            "ARM"
+          ],
+          "reason": "This chunk only provides links to documentation. It does not contain any information *about* exception handling in ARM or RISC-V, nor does it explain how they differ."
+        }
+      ]
+    },
+    {
+      "id": "d02",
+      "query": "calling convention register usage",
+      "category": "cross_doc",
+      "subtopics": [
+        "AAPCS64",
+        "ARM registers",
+        "Callee-saved Registers",
+        "Calling Convention",
+        "Calling Conventions",
+        "Calling convention",
+        "Calling conventions",
+        "Floating-Point Registers",
+        "RISC-V instruction set",
+        "Register Allocation",
+        "Register Usage",
+        "Registers",
+        "Return address stack",
+        "Stack Pointer",
+        "System Call Interface (SBI)",
+        "arm_abi",
+        "calling convention",
+        "return address",
+        "riscv_abi",
+        "stack pointer"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 2241,
+          "doc": "riscv-unprivileged",
+          "score": 2,
+          "confidence": 0.8500000000000001,
+          "subtopics": [
+            "return address",
+            "calling convention",
+            "stack pointer",
+            "Stack Pointer",
+            "Register Usage"
+          ],
+          "reason": "The chunk directly discusses the software calling convention and specifically mentions register usage for the return address (`x1`, `x5`) and stack pointer (`x2`). It explains how these registers are used, which is relevant to the query."
+        },
+        {
+          "chunk_id": 8,
+          "doc": "riscv-abi",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Register Usage",
+            "Calling Conventions",
+            "Callee-saved Registers"
+          ],
+          "reason": "The chunk directly mentions 'calling convention' and 'register convention' and describes rules about register usage (callee-saved, argument registers, fixed registers). It doesn't *fully* explain register usage for different calling conventions, but it establishes the principles."
+        },
+        {
+          "chunk_id": 103,
+          "doc": "arm_aapcs64",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "calling convention",
+            "register allocation",
+            "function calls",
+            "calling conventions"
+          ],
+          "reason": "Defines callee-saved register preservation rule, a core calling convention concept in AAPCS64."
+        },
+        {
+          "chunk_id": 2250,
+          "doc": "riscv-unprivileged",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Return address stack",
+            "Calling conventions",
+            "RISC-V instruction set",
+            "Calling convention"
+          ],
+          "reason": "The chunk discusses calling convention *implicitly* through register usage with JAL/JALR instructions and how that impacts return-address stack prediction. It details specific register values ('x1', 'x5') and their effect on RAS actions, which is directly related to how calls are handled. However, it doesn't explicitly *define* calling convention, it shows how it's *used* in this architecture."
+        },
+        {
+          "chunk_id": 126,
+          "doc": "arm_aapcs64",
+          "score": 2,
+          "confidence": 0.825,
+          "subtopics": [
+            "Calling conventions",
+            "ARM registers",
+            "Calling Conventions",
+            "Registers",
+            "AAPCS64"
+          ],
+          "reason": "The chunk directly discusses register usage within the AAPCS64 procedure call standard, which is directly related to calling conventions. It provides a table outlining the roles of specific registers. However, it doesn't *explain* the calling convention itself, just how registers are used *within* it."
+        },
+        {
+          "chunk_id": 382,
+          "doc": "riscv-privileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "RISC-V",
+            "Privilege Levels",
+            "CSRs"
+          ],
+          "reason": "This chunk discusses privilege levels and modes in RISC-V, which is related to system architecture but doesn't mention calling conventions or register usage. It's a completely different topic."
+        },
+        {
+          "chunk_id": 6,
+          "doc": "riscv-abi",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Floating-Point Registers",
+            "Register Usage",
+            "Calling Convention",
+            "Register Allocation"
+          ],
+          "reason": "The document chunk details register usage, specifically for floating-point registers, within a calling convention. It outlines which registers are preserved across calls and which are temporary, directly addressing the 'register usage' aspect of the query. However, it focuses *only* on floating-point registers, not general-purpose registers, so it doesn't fully answer the query."
+        },
+        {
+          "chunk_id": 5660,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Program counter",
+            "Stack pointer",
+            "ARM registers"
+          ],
+          "reason": "The document chunk describes register usage (SP, PC, V0-V31) but doesn't specifically address *calling convention* register usage. It lists registers, but doesn't explain how they are used during function calls or how they are preserved/restored."
+        },
+        {
+          "chunk_id": 5902,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Register size",
+            "ARM registers",
+            "Register naming",
+            "Stack pointer",
+            "Data sizes (32/64 bit)"
+          ],
+          "reason": "The chunk discusses register naming and sizes, which are *related* to calling conventions (as calling conventions dictate register usage), but it doesn't directly explain how registers are used *during* calls, which is the core of the query. It's a foundational piece of information, but not a direct answer."
+        },
+        {
+          "chunk_id": 260,
+          "doc": "riscv-sbi",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Calling Conventions",
+            "Register Usage",
+            "System Call Interface (SBI)"
+          ],
+          "reason": "This chunk directly addresses the query by detailing register usage (`a0`, `a1`, `a6`) within a specific calling convention (legacy SBI). It explicitly states which registers must be preserved and how values are returned, which is exactly what the query asks for."
+        }
+      ]
+    },
+    {
+      "id": "d03",
+      "query": "interrupt controller setup and priority",
+      "category": "cross_doc",
+      "subtopics": [
+        "GIC",
+        "GIC (Generic Interrupt Controller)",
+        "GIC Architecture",
+        "Hardware Interrupts",
+        "Interrupt Controllers",
+        "Interrupt Disabling",
+        "Interrupt Handling",
+        "Interrupt Masking",
+        "Interrupt Priority",
+        "Interrupt Types",
+        "M-Mode Interrupts",
+        "Memory Mapping",
+        "Memory-Mapped Registers",
+        "Memory-mapped Registers",
+        "PLIC",
+        "Privilege Levels",
+        "RISC-V Registers",
+        "System Initialization",
+        "gic",
+        "plic"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 4168,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Interrupt Priority",
+            "GIC Architecture",
+            "Interrupt Masking"
+          ],
+          "reason": "The chunk directly addresses both 'interrupt controller setup' (through configuration of interrupt priority in the GIC) and 'priority' (detailed explanation of priority values, levels, and masking). It explains how priority is assigned and the range of possible levels."
+        },
+        {
+          "chunk_id": 228,
+          "doc": "riscv-plic",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Interrupt Priority",
+            "PLIC",
+            "Memory-Mapped Registers"
+          ],
+          "reason": "The document chunk directly addresses both interrupt controller setup (through mention of PLIC and memory-mapped registers) and interrupt priority (explaining the values, how they are assigned, and how ties are broken). It provides a clear explanation of the concepts."
+        },
+        {
+          "chunk_id": 424,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Interrupt Handling",
+            "Interrupt Priority",
+            "M-Mode Interrupts",
+            "Privilege Levels",
+            "Interrupt Types"
+          ],
+          "reason": "The chunk details interrupt priority ordering, directly addressing the query. It explains the priority of different interrupt types (MEI, MSI, etc.) and the rationale behind the ordering (privilege levels, external vs. internal, software vs. timer). However, it doesn't provide a general 'setup' guide, focusing more on the inherent priority scheme."
+        },
+        {
+          "chunk_id": 4886,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Memory-mapped Registers",
+            "Interrupt Priority",
+            "GIC (Generic Interrupt Controller)",
+            "GIC",
+            "Memory Mapping"
+          ],
+          "reason": "The chunk mentions \"interrupt priority\" registers (GICR_IPRIORITYR<n>) and discusses how changes to priority are handled. It doesn't *explain* how to set up the interrupt controller, but it does provide information about a register involved in priority configuration."
+        },
+        {
+          "chunk_id": 224,
+          "doc": "riscv-plic",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Interrupt IDs",
+            "Interrupt Priority",
+            "Interrupt Handling"
+          ],
+          "reason": "Explains PLIC interrupt ID assignment and priority tie-breaking rules. Directly addresses interrupt priority."
+        },
+        {
+          "chunk_id": 908,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Interrupt Controllers",
+            "System Initialization",
+            "Interrupt Disabling"
+          ],
+          "reason": "The chunk discusses interrupt controller initialization, which is directly related to the query. It details the steps taken to initialize the Intel 8259 interrupt controller. However, it doesn't explicitly address interrupt *priority* beyond mentioning how the controllers respond to external input. It focuses more on the setup process."
+        },
+        {
+          "chunk_id": 887,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Interrupt Controllers",
+            "Interrupt Handling",
+            "Hardware Interrupts"
+          ],
+          "reason": "The chunk discusses interrupt controllers and how they function, which directly relates to the query. It explains the role of the interrupt controller in handling signals from multiple devices and delivering them to the processor. However, it doesn't explicitly address *priority* levels or how they are set up, only the basic mechanism of interrupt handling."
+        },
+        {
+          "chunk_id": 26192,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "DCC Interrupts",
+            "Interrupt Masking",
+            "Interrupt Controller",
+            "DCC",
+            "Interrupt Controllers"
+          ],
+          "reason": "The chunk mentions \"interrupt controller\" and \"interrupt\" but focuses on a specific type (DCC) and doesn't explain general setup or priority concepts. It describes a masking mechanism but doesn't detail how priorities are assigned or configured."
+        },
+        {
+          "chunk_id": 533,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "RISC-V Registers",
+            "Interrupt Handling",
+            "Interrupt Priority"
+          ],
+          "reason": "The chunk discusses interrupts and their priority (SEI, SSI, STI, LCOFI), which directly addresses part of the query. However, it doesn't provide a comprehensive 'setup' explanation, focusing more on register details and interrupt handling within the system. It's relevant but not a complete answer."
+        },
+        {
+          "chunk_id": 19524,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Interrupt Status",
+            "Interrupts",
+            "Interrupt Priority",
+            "ARM Architecture"
+          ],
+          "reason": "The chunk discusses interrupt status and superpriority, which are related to the query. However, it doesn't explain *how* to set up an interrupt controller or define priority levels. It only indicates the presence of a 'Superpriority' flag."
+        }
+      ]
+    },
+    {
+      "id": "d04",
+      "query": "page table entry format and permission bits",
+      "category": "cross_doc",
+      "subtopics": [
+        "Address Translation",
+        "Memory Management",
+        "Memory Permissions",
+        "Memory Protection",
+        "NAPOT",
+        "PTE (Page Table Entry)",
+        "PTE Format",
+        "Page Table Entries",
+        "Page Tables",
+        "Translation Lookaside Buffer (TLB)",
+        "Virtual Memory",
+        "arm_pte",
+        "riscv_pte"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 549,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Address Translation",
+            "Page Tables",
+            "Virtual Memory"
+          ],
+          "reason": "Describes Sv32 page table format \u2014 VPN partition, two-level page table structure, satp register. Directly about PTE format."
+        },
+        {
+          "chunk_id": 24761,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Permissions",
+            "Page Tables",
+            "Translation Lookaside Buffer (TLB)",
+            "Page Table Entries"
+          ],
+          "reason": "The chunk mentions permission bits (XN, PXN, nG, AF, SH) and relates them to translation table entries, which are part of a page table. However, it doesn't provide a comprehensive *format* of a page table entry, just individual bit definitions. It's relevant but doesn't fully answer the query."
+        },
+        {
+          "chunk_id": 1145,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Page Tables",
+            "Virtual Memory",
+            "Memory Protection"
+          ],
+          "reason": "The chunk directly addresses both parts of the query: it describes the format of a page table entry and explains permission bits (protection bits) and their function. It provides details on the present/absent bit, page frame number, and how protection bits control read/write/execute access."
+        },
+        {
+          "chunk_id": 24758,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Permissions",
+            "Page Tables",
+            "Memory Attributes"
+          ],
+          "reason": "Describes VMSAv8-32 Long-descriptor translation table format with memory region attributes and next-level attributes. Directly about PTE format."
+        },
+        {
+          "chunk_id": 3487,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Memory Protection",
+            "Page Tables",
+            "Virtual Memory",
+            "Page Table Entries"
+          ],
+          "reason": "The chunk discusses permission bits (read/write, user/supervisor) within the context of page table entries, directly addressing part of the query. It also mentions other bits within a page table entry. However, it doesn't provide a comprehensive *format* of a page table entry, just details about some of the bits it contains."
+        },
+        {
+          "chunk_id": 3486,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Memory Management",
+            "Page Table Entries",
+            "Page Tables",
+            "PTE (Page Table Entry)",
+            "Virtual Memory"
+          ],
+          "reason": "The chunk discusses page table entries (PTEs) and specifically mentions the 'valid bit' which is a type of permission bit. It doesn't detail the full format of a PTE or all the permission bits, but it introduces the concept."
+        },
+        {
+          "chunk_id": 1174,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.825,
+          "subtopics": [
+            "Memory Management",
+            "Address Translation",
+            "Page Tables",
+            "Virtual Memory"
+          ],
+          "reason": "The chunk directly mentions \"page table entries\" and describes their format (32 bits, 20 for page frame number, remaining for access/dirty/protection bits). It also touches on permission bits by mentioning \"protection bits\". However, it doesn't *fully* explain the permission bits themselves, just that they exist."
+        },
+        {
+          "chunk_id": 4937,
+          "doc": "gic_architecture_specification",
+          "score": 1,
+          "confidence": 0.6499999999999999,
+          "subtopics": [
+            "Memory Management",
+            "Page Tables",
+            "Caching"
+          ],
+          "reason": "The chunk discusses bits within a page table entry, specifically related to caching and table structure (single vs. two level). It touches on aspects of page table entries, but doesn't explain the overall format or permission bits directly. It's related, but doesn't fully answer the query."
+        },
+        {
+          "chunk_id": 5079,
+          "doc": "gic_architecture_specification",
+          "score": 1,
+          "confidence": 0.6499999999999999,
+          "subtopics": [
+            "page tables",
+            "cache coherence",
+            "Page Tables",
+            "Cache Coherency",
+            "Memory Attributes"
+          ],
+          "reason": "The chunk mentions \"table\" and describes cacheability attributes which could be part of a page table entry, but it doesn't directly explain the format of a page table entry or permission bits. It focuses on outer cache attributes, which is a related but not central aspect."
+        },
+        {
+          "chunk_id": 563,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Management",
+            "PTE Format",
+            "Page Tables",
+            "NAPOT"
+          ],
+          "reason": "The chunk does contain a table related to page table entries (PTEs) and mentions bits within the PTE format (ppn, napot_bits). However, it doesn't explicitly explain permission bits. It focuses on a specific scheme (NAPOT) and how it affects PTEs, but doesn't give a general overview of PTE format or permission bits."
+        }
+      ]
+    },
+    {
+      "id": "n01",
+      "query": "my kernel crashes right after enabling the MMU",
+      "category": "natural",
+      "subtopics": [
+        "Faults",
+        "Kernel Architecture",
+        "MMU",
+        "Memory Management",
+        "Memory Protection",
+        "Translation Lookaside Buffers (TLBs)",
+        "Virtual Memory",
+        "fault",
+        "mmu_enable"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 24870,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Memory Protection",
+            "Memory Management",
+            "MMU",
+            "Faults",
+            "Translation Lookaside Buffers (TLBs)"
+          ],
+          "reason": "The chunk discusses MMU faults, which is directly related to the query about kernel crashes after enabling the MMU. It lists different types of MMU faults. However, it doesn't *explain* why the kernel might crash, or how to diagnose/fix it, only what kinds of faults can occur."
+        },
+        {
+          "chunk_id": 1137,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Address Translation",
+            "Virtual Memory",
+            "MMU"
+          ],
+          "reason": "The chunk discusses the MMU and address translation, which is related to kernel crashes when the MMU is enabled. However, it doesn't explain *why* a kernel might crash after enabling the MMU, only *how* the MMU works. It's a foundational concept, but doesn't directly address the query."
+        },
+        {
+          "chunk_id": 4072,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Kernel Concepts",
+            "Memory Management (Index)",
+            "System Architecture (Index)"
+          ],
+          "reason": "This document chunk is an index of terms. It does not contain any information about kernel crashes or the MMU. While it lists kernel-related terms, it doesn't explain anything about them or address the query."
+        },
+        {
+          "chunk_id": 16989,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "MMU",
+            "ARM Architecture",
+            "Faults"
+          ],
+          "reason": "The chunk discusses MMU faults, which is related to the query about kernel crashes after enabling the MMU. However, it doesn't directly address *why* a kernel might crash immediately after enabling the MMU, only details about how certain faults are reported. It's a tangential connection."
+        },
+        {
+          "chunk_id": 1140,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Page Faults",
+            "MMU",
+            "Virtual Memory"
+          ],
+          "reason": "Explains page fault: MMU detects unmapped page and traps to OS. Directly explains what causes crashes when MMU encounters unmapped addresses."
+        },
+        {
+          "chunk_id": 4073,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Memory Management",
+            "Kernel Architecture",
+            "MMU"
+          ],
+          "reason": "The chunk explicitly mentions \"memory management unit\" and \"MMU\" multiple times. While it doesn't explain *why* a kernel might crash after enabling the MMU, the presence of the term is relevant to the query."
+        },
+        {
+          "chunk_id": 464,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.75,
+          "subtopics": [
+            "Memory Protection",
+            "Virtual Memory",
+            "MMU"
+          ],
+          "reason": "The chunk discusses memory protection and virtual memory, which are directly related to the MMU. It explains how the PMP interacts with paging (enabling the MMU) and the need for synchronization (SFENCE.VMA) after modifying PMP settings. While it doesn't directly address *crashes*, it provides context about the mechanisms involved when the MMU is enabled, making it relevant to troubleshooting such issues."
+        },
+        {
+          "chunk_id": 658,
+          "doc": "riscv-privileged",
+          "score": 0,
+          "confidence": 0.85,
+          "subtopics": [
+            "Memory Management",
+            "Memory Protection",
+            "RISC-V Architecture",
+            "Register Configuration",
+            "MMU"
+          ],
+          "reason": "The chunk mentions memory management (through `mseccfg` and pointer masking) which is related to the MMU, but doesn't explain *why* a kernel might crash after enabling it. It describes a configuration option, not a debugging scenario."
+        },
+        {
+          "chunk_id": 2342,
+          "doc": "riscv-unprivileged",
+          "score": 1,
+          "confidence": 0.6,
+          "subtopics": [
+            "Memory Protection",
+            "Cache Management",
+            "Exceptions",
+            "Address Faults"
+          ],
+          "reason": "The chunk discusses exceptions and faults which *could* be related to kernel crashes after enabling the MMU, but it doesn't directly address the query. It details how exceptions are handled and the conditions that trigger them, but doesn't explain why enabling the MMU might cause a crash. It's a tangential connection."
+        },
+        {
+          "chunk_id": 2343,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Debug Mode",
+            "Breakpoint Exceptions",
+            "Memory Triggers"
+          ],
+          "reason": "This document chunk discusses breakpoint exceptions, debug modes, and trigger modules related to the Zicbom/Zicboz extensions. It does not contain any information about kernel crashes or MMU enabling, making it irrelevant to the query."
+        }
+      ]
+    },
+    {
+      "id": "n02",
+      "query": "context switch is losing register values",
+      "category": "natural",
+      "subtopics": [
+        "CPU Registers",
+        "Callee-saved registers",
+        "Caller-saved registers",
+        "Context Switching",
+        "Interrupt Handling",
+        "Process Table",
+        "Register Management",
+        "Registers",
+        "System Registers",
+        "Trace Units",
+        "callee_saved",
+        "context switching",
+        "function calls",
+        "registers",
+        "save_restore",
+        "system registers"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 3315,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "confidence": 0.95,
+          "subtopics": [
+            "Context Switching",
+            "Register Management",
+            "Interrupt Handling"
+          ],
+          "reason": "The document chunk directly addresses the query by explaining how register values are saved during a context switch. It details both hardware-saved registers (timer interrupt) and software-saved registers (OS switching between processes), and explicitly mentions saving and restoring registers."
+        },
+        {
+          "chunk_id": 16467,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.6,
+          "subtopics": [
+            "Context Switching",
+            "Exceptions",
+            "System Registers"
+          ],
+          "reason": "The chunk discusses context changes related to exceptions, which is tangentially related to context switching. However, it doesn't directly address *losing* register values during a context switch, only that a context element is generated when the context changes. It's about when context information is recorded, not the mechanism of losing data."
+        },
+        {
+          "chunk_id": 430,
+          "doc": "riscv-privileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "computer architecture",
+            "register allocation",
+            "context switching"
+          ],
+          "reason": "The chunk discusses register usage during context switches, specifically comparing MIPS and RISC-V approaches. It mentions registers being cleared/saved/restored, which relates to losing register values, but doesn't directly *explain* why or how context switches lead to this loss. It's more about how different architectures *handle* the issue rather than detailing the issue itself."
+        },
+        {
+          "chunk_id": 3316,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Interrupt Handling",
+            "registers",
+            "Context Switching",
+            "context switching",
+            "Register Management"
+          ],
+          "reason": "The chunk describes the `swtch` function which is directly involved in context switching. It details saving and loading register values as part of the switch. While it doesn't explicitly state that losing register values is a *problem* with context switching, it shows how register values are handled *during* a context switch, which is relevant to the query."
+        },
+        {
+          "chunk_id": 28604,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Context Switching",
+            "system registers",
+            "context switching",
+            "Trace Units",
+            "System Registers"
+          ],
+          "reason": "The chunk discusses context switching and mentions the need to disable/synchronize units during a context switch, which could relate to losing register values. It doesn't *directly* explain how register values are lost, but it highlights actions taken *during* a context switch that might be related to preserving or losing state."
+        },
+        {
+          "chunk_id": 536,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Context Switching",
+            "Exception Handling",
+            "Supervisor Mode",
+            "CSRs",
+            "CSRs (Control and Status Registers)"
+          ],
+          "reason": "Explains sscratch CSR used to save context during trap handling via CSRRW swap. Directly relevant to register save/restore during context switches."
+        },
+        {
+          "chunk_id": 102,
+          "doc": "arm_aapcs64",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Callee-saved registers",
+            "Caller-saved registers",
+            "function calls",
+            "registers",
+            "Registers"
+          ],
+          "reason": "The chunk discusses registers and how their values need to be saved and restored during function calls, which is directly related to the loss of register values during a context switch. It doesn't *explicitly* mention context switches, but the concepts are highly connected."
+        },
+        {
+          "chunk_id": 1201,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Context Switching",
+            "Process Table",
+            "CPU Registers"
+          ],
+          "reason": "The chunk discusses context switching and how register values are saved during the process, which is directly related to the query. It explains that CPU registers are copied into the stackframe in the process table to restore the process's original state. However, it doesn't explicitly state *why* losing register values is a problem during a context switch, only *how* they are preserved."
+        },
+        {
+          "chunk_id": 2468,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 0.8,
+          "subtopics": [
+            "Register Lists",
+            "Exception Handling",
+            "Stack Operations"
+          ],
+          "reason": "This chunk discusses PUSH/POP fault handling and register lists, but doesn't explain *why* or *how* context switches might lose register values. It mentions registers, but in the context of saving/restoring them during PUSH/POP, not the loss of values during a context switch."
+        },
+        {
+          "chunk_id": 103,
+          "doc": "arm_aapcs64",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Function Calls",
+            "Calling Conventions",
+            "Registers"
+          ],
+          "reason": "The chunk discusses registers and their preservation during function calls, which is related to context switching. However, it doesn't *directly* explain how context switches cause register value loss, only that registers need to be saved/restored. It's a tangential connection."
+        }
+      ]
+    },
+    {
+      "id": "n03",
+      "query": "how do I set up interrupts from scratch",
+      "category": "natural",
+      "subtopics": [
+        "Assembly Language",
+        "Context Switching",
+        "I/O Handling",
+        "Interrupt Descriptor Table",
+        "Interrupt Service Routines (ISRs)",
+        "Interrupts",
+        "Kernel Initialization",
+        "Segment Registers",
+        "irq_setup",
+        "vector_table"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 1495,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Assembly Language",
+            "Kernel Initialization",
+            "Segment Registers",
+            "Interrupt Descriptor Table"
+          ],
+          "reason": "The chunk mentions \"interrupt handlers\" and includes code related to setting up segment registers and loading the IDT (Interrupt Descriptor Table). This suggests it's involved in interrupt handling, but it doesn't *explain* how to set up interrupts from scratch. It's a code snippet, not a tutorial."
+        },
+        {
+          "chunk_id": 4790,
+          "doc": "gic_architecture_specification",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "GICD",
+            "Interrupt Pending States",
+            "Interrupts",
+            "SPI Communication",
+            "GICD Registers"
+          ],
+          "reason": "The chunk discusses SPI interrupts and how pending states are managed, which is related to interrupts. However, it doesn't explain *how to set them up from scratch*. It focuses on the behavior of an already configured interrupt."
+        },
+        {
+          "chunk_id": 533,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Interrupt Registers",
+            "Interrupt Priority",
+            "RISC-V Architecture"
+          ],
+          "reason": "Lists RISC-V interrupt registers (sip, sie, mip, mie) and interrupt types (SEI, STI, SSI). Fundamental to interrupt setup."
+        },
+        {
+          "chunk_id": 908,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Interrupt Controllers",
+            "8259 PIC",
+            "System Initialization",
+            "Interrupt Masking"
+          ],
+          "reason": "Describes Intel 8259 interrupt controller initialization: Intr_init ensures no interrupts occur before setup is complete. Directly about setting up interrupts."
+        },
+        {
+          "chunk_id": 5222,
+          "doc": "gic_architecture_specification",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "GIC",
+            "Interrupts",
+            "Interrupt Handling",
+            "System Registers"
+          ],
+          "reason": "The chunk discusses interrupt acknowledgement functions, which is related to handling interrupts. However, it doesn't explain *how* to set them up 'from scratch', only how to acknowledge them after they've occurred. It's a component of interrupt handling, but not a setup guide."
+        },
+        {
+          "chunk_id": 24344,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Interrupts",
+            "Virtualization",
+            "Exception Handling"
+          ],
+          "reason": "The chunk discusses interrupts, specifically *virtual* interrupts, but doesn't explain how to set them up 'from scratch'. It describes how they are routed and handled in a virtualized environment, which is not the same as initial setup."
+        },
+        {
+          "chunk_id": 26192,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "DCC",
+            "GICv3",
+            "Interrupt Controllers",
+            "Interrupts",
+            "ARM Architecture"
+          ],
+          "reason": "The chunk discusses interrupts, specifically a 'DCC interrupt' and 'COMMIRQ', but doesn't explain *how to set them up from scratch*. It describes an implementation recommendation and register details, not the setup process itself. It mentions interrupt controllers but doesn't detail configuration."
+        },
+        {
+          "chunk_id": 230,
+          "doc": "riscv-plic",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory Mapping",
+            "Interrupts",
+            "Interrupt Enable Registers",
+            "PLIC"
+          ],
+          "reason": "The chunk discusses interrupt enables within the PLIC, which is related to setting up interrupts. However, it doesn't explain *how* to set them up from scratch, only that it's done by setting bits in the enables register. It's more about the organization of interrupt enables than a tutorial on setup."
+        },
+        {
+          "chunk_id": 222,
+          "doc": "riscv-plic",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Level-Sensitive Interrupts",
+            "PLIC",
+            "Interrupt Types",
+            "Interrupt Gateways"
+          ],
+          "reason": "The chunk discusses interrupt handling, which is related to setting up interrupts. However, it focuses on the *mechanisms* of interrupt handling (gateways, PLIC core, level/edge triggered interrupts) rather than *how to set them up* from scratch. It describes what happens *after* an interrupt is triggered, not the initial configuration."
+        },
+        {
+          "chunk_id": 3771,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "confidence": 0.8,
+          "subtopics": [
+            "Context Switching",
+            "Interrupt Service Routines (ISRs)",
+            "Interrupts",
+            "I/O Handling"
+          ],
+          "reason": "The chunk explains what interrupts are and how they work at a high level, including the interrupt service routine (ISR). It doesn't provide a 'how-to' guide for *setting them up* from scratch, but it does explain the underlying concepts which are necessary for understanding how to do so."
+        }
+      ]
+    },
+    {
+      "id": "n04",
+      "query": "what order should I initialize hardware on boot",
+      "category": "natural",
+      "subtopics": [
+        "boot_sequence",
+        "init"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 825,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": [
+            "Boot process",
+            "Device drivers",
+            "Kernel initialization"
+          ],
+          "reason": "Discusses boot image loading order: essential kernel first, then process manager, file system, then reincarnation server. Directly addresses initialization order."
+        },
+        {
+          "chunk_id": 2936,
+          "doc": "riscv-unprivileged",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Hardware Self-Test (BIST)",
+            "Entropy Source",
+            "Hardware Self-Test",
+            "Boot Sequence"
+          ],
+          "reason": "The chunk mentions hardware initialization through resetting/booting, but doesn't describe *order* of initialization. It focuses on self-tests and entropy source status, which are related but don't directly answer the query."
+        },
+        {
+          "chunk_id": 5789,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.6,
+          "subtopics": [
+            "Memory ordering",
+            "Peripheral access",
+            "Memory effects",
+            "Hardware dependencies"
+          ],
+          "reason": "The document chunk discusses the ordering of memory effects to peripherals, which is *related* to hardware initialization order, but doesn't directly explain *what* order to initialize hardware in. It's a low-level detail about how memory accesses are ordered, not a high-level guide to boot sequence."
+        },
+        {
+          "chunk_id": 1034,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "System initialization",
+            "Boot process",
+            "device drivers",
+            "boot process",
+            "Device drivers"
+          ],
+          "reason": "The chunk discusses initialization of drivers during boot, which is related to hardware initialization. However, it doesn't explicitly state *the order* in which hardware should be initialized, but rather advocates for postponing initialization as much as possible. It focuses on avoiding boot paralysis due to misconfigured hardware."
+        },
+        {
+          "chunk_id": 28655,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Memory ordering",
+            "Memory-mapped peripherals",
+            "Data consistency",
+            "DMA"
+          ],
+          "reason": "The chunk discusses ordering requirements when accessing memory-mapped peripherals like DMA, which is related to hardware initialization. However, it doesn't directly answer *what order* to initialize hardware on boot, but rather focuses on memory access ordering *during* operation. It's a relevant detail for boot, but not a direct answer to the query."
+        },
+        {
+          "chunk_id": 3436,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1,
+          "confidence": 0.7,
+          "subtopics": [
+            "Boot process",
+            "Hardware/OS interaction",
+            "Process management"
+          ],
+          "reason": "The chunk mentions boot time and hardware/OS interaction, which are related to the query. However, it doesn't actually *describe* the order of hardware initialization. It focuses on what happens *after* boot and during process execution."
+        },
+        {
+          "chunk_id": 5062,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 0.9,
+          "subtopics": [
+            "hardware interrupts",
+            "reset behavior",
+            "ARM architecture"
+          ],
+          "reason": "This chunk discusses hardware interrupts and reset behavior, but doesn't address the order of hardware initialization on boot. It's about interrupt *handling* after boot, not the boot process itself."
+        },
+        {
+          "chunk_id": 3150,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Memory Coherency",
+            "I/O Access",
+            "RISC-V Architecture"
+          ],
+          "reason": "This chunk discusses memory coherency and I/O access ordering, but does *not* address the order in which hardware should be initialized on boot. It's about how memory accesses are handled *after* the system is running, not the boot sequence."
+        },
+        {
+          "chunk_id": 455,
+          "doc": "riscv-privileged",
+          "score": 0,
+          "confidence": 0.9,
+          "subtopics": [
+            "Memory Ordering",
+            "I/O Regions",
+            "Hardware Abstraction"
+          ],
+          "reason": "This chunk discusses memory ordering and I/O regions, but does not address the order of hardware initialization on boot. It's a low-level detail about how memory accesses are handled, not a high-level boot sequence."
+        },
+        {
+          "chunk_id": 3769,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "PCIe",
+            "NVMe",
+            "Device Interfaces"
+          ],
+          "reason": "This chunk describes system architecture and device components (interfaces, internal structure, firmware) but does not discuss the order of hardware initialization during boot. It mentions hardware components but doesn't relate to the boot process."
+        }
+      ]
+    },
+    {
+      "id": "x01",
+      "query": "Python asyncio event loop",
+      "category": "negative",
+      "subtopics": [
+        "Event Handler",
+        "Event Loop",
+        "Event-based Concurrency"
+      ],
+      "judgments": [
+        {
+          "chunk_id": 3756,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 0.7,
+          "subtopics": [
+            "event loops",
+            "concurrency",
+            "event-driven programming",
+            "blocking I/O"
+          ],
+          "reason": "Not relevant: generic OS event-based programming, not Python asyncio."
+        },
+        {
+          "chunk_id": 24485,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 0.825,
+          "subtopics": [
+            "Pseudocode",
+            "System synchronization",
+            "Processor Execution",
+            "Event Registers",
+            "Event handling"
+          ],
+          "reason": "The chunk mentions \"event\" and procedures related to waiting for events, which are concepts related to an event loop. However, it's presented as pseudocode for a specific system (PE) and doesn't explain the Python asyncio event loop at all. It's a tangential connection."
+        },
+        {
+          "chunk_id": 326,
+          "doc": "riscv-sbi",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Software Events",
+            "Hart Architecture",
+            "Event Handling"
+          ],
+          "reason": "This document chunk discusses software events and their states within a supervisor/hart architecture. It has absolutely no connection to Python's `asyncio` event loop."
+        },
+        {
+          "chunk_id": 3752,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [],
+          "reason": "Not relevant: generic event loop concept, no Python asyncio content."
+        },
+        {
+          "chunk_id": 24383,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "ARM Architecture",
+            "Asynchronous Exceptions",
+            "Interrupt Handling"
+          ],
+          "reason": "This document chunk discusses asynchronous exceptions in the context of the ARM architecture. It has absolutely no connection to Python's `asyncio` event loop."
+        },
+        {
+          "chunk_id": 365,
+          "doc": "riscv-sbi",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Embedded Systems",
+            "Message Passing",
+            "Event Notification"
+          ],
+          "reason": "This document chunk discusses message passing and notification events in an embedded system context (SBI, MPXY channels). It has absolutely no connection to Python's asyncio event loop."
+        },
+        {
+          "chunk_id": 935,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Interrupt Handling",
+            "Clock Interrupts",
+            "Message Loops"
+          ],
+          "reason": "This chunk discusses a clock interrupt handler and its message loop, but has absolutely no connection to Python's `asyncio` event loop. The query is specifically about a Python library feature, and this text is about low-level system interrupts."
+        },
+        {
+          "chunk_id": 2345,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Cache Coherence",
+            "Load-Linked/Store-Conditional",
+            "Hardware Architecture"
+          ],
+          "reason": "This chunk discusses constrained LR/SC loops and cache coherence protocols, which have absolutely no relation to Python's asyncio event loop. It's about low-level hardware and architecture."
+        },
+        {
+          "chunk_id": 1087,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "terminal drivers",
+            "message handling",
+            "interrupts"
+          ],
+          "reason": "This document chunk describes a terminal driver's main loop and message handling, with no mention of Python, asyncio, or event loops. It's completely unrelated to the query."
+        },
+        {
+          "chunk_id": 159,
+          "doc": "arm_aapcs64",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "ARM architecture",
+            "Asynchronous control transfer",
+            "Lazy saving"
+          ],
+          "reason": "This document chunk discusses low-level system details related to lazy saving and asynchronous control transfers, specifically in the context of ARM architecture. It does not mention Python, asyncio, or event loops at all."
+        }
+      ]
+    },
+    {
+      "id": "x02",
+      "query": "React component lifecycle hooks",
+      "category": "negative",
+      "subtopics": [],
+      "judgments": [
+        {
+          "chunk_id": 4147,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Interrupt Handling",
+            "GIC Architecture",
+            "Embedded Systems"
+          ],
+          "reason": "This document chunk describes a GIC interrupt lifecycle, which is completely unrelated to React component lifecycle hooks. There is no mention of React or component lifecycles."
+        },
+        {
+          "chunk_id": 27849,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "ARM Architecture",
+            "System Status",
+            "Embedded Systems"
+          ],
+          "reason": "This document chunk discusses low-level ARM architecture components and status checks (OS locks, component types). It has absolutely no connection to React component lifecycle hooks, which are a JavaScript/web development concept."
+        },
+        {
+          "chunk_id": 3944,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "File Systems",
+            "Data Storage",
+            "Data Integrity"
+          ],
+          "reason": "This document chunk discusses a low-level file system mechanism (LFS) and has absolutely no connection to React component lifecycle hooks."
+        },
+        {
+          "chunk_id": 16477,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "timestamping",
+            "event handling",
+            "system architecture"
+          ],
+          "reason": "This document chunk is completely unrelated to React component lifecycle hooks. It discusses timestamp requests and elements within a system named 'ViewInst', 'RHZSYP', and 'IWFXVV'. There's no mention of React or component lifecycles."
+        },
+        {
+          "chunk_id": 661,
+          "doc": "riscv-privileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "RISC-V Architecture",
+            "Instruction Sets",
+            "Assembly Language"
+          ],
+          "reason": "This document chunk details RISC-V instruction set architecture, specifically trap-return, interrupt-management, and memory-management instructions. It has absolutely no relation to React component lifecycle hooks."
+        },
+        {
+          "chunk_id": 1951,
+          "doc": "macintosh_HIG_1992",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Input Validation",
+            "User Interface Design",
+            "Event Handling"
+          ],
+          "reason": "This chunk discusses input validation and scrolling lists, and has no mention of React component lifecycle hooks."
+        },
+        {
+          "chunk_id": 240,
+          "doc": "riscv-sbi",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "versioning",
+            "document management"
+          ],
+          "reason": "This document chunk details versioning information for a document. It has no connection to React component lifecycle hooks."
+        },
+        {
+          "chunk_id": 2025,
+          "doc": "macintosh_HIG_1992",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Keyboard input",
+            "Text editing",
+            "User interface interaction"
+          ],
+          "reason": "This chunk discusses the 'Return' key and its behavior in text and arrays, which has absolutely no connection to React component lifecycle hooks."
+        },
+        {
+          "chunk_id": 247,
+          "doc": "riscv-sbi",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Software Versioning",
+            "Release Notes",
+            "System Updates"
+          ],
+          "reason": "This document chunk is a release log and contains no information about React component lifecycle hooks."
+        },
+        {
+          "chunk_id": 2345,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Cache Coherence",
+            "Load-Linked/Store-Conditional (LR/SC)",
+            "Computer Architecture"
+          ],
+          "reason": "This chunk discusses constrained LR/SC loops and cache coherence protocols, which are completely unrelated to React component lifecycle hooks. It doesn't mention React or component lifecycles at all."
+        }
+      ]
+    },
+    {
+      "id": "x03",
+      "query": "SQL JOIN optimization strategies",
+      "category": "negative",
+      "subtopics": [],
+      "judgments": [
+        {
+          "chunk_id": 3673,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Concurrency",
+            "Hash Tables",
+            "Performance Optimization"
+          ],
+          "reason": "This chunk discusses concurrent data structures and premature optimization, but has no mention of SQL, JOINs, or optimization strategies related to them. It's about general performance considerations, not specifically SQL."
+        },
+        {
+          "chunk_id": 1026,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Disk Scheduling",
+            "Seek Time Optimization",
+            "Data Structures"
+          ],
+          "reason": "This document chunk discusses disk scheduling algorithms (specifically Shortest Seek First) and has absolutely no relation to SQL JOIN optimization strategies."
+        },
+        {
+          "chunk_id": 16498,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Trace analysis",
+            "Data compression",
+            "Commit optimization (in tracing)"
+          ],
+          "reason": "This document chunk discusses trace stream compression techniques and implied commits within that context. It has absolutely no connection to SQL JOIN optimization strategies."
+        },
+        {
+          "chunk_id": 3334,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "System Scheduling",
+            "I/O Optimization",
+            "Turnaround vs Response Time"
+          ],
+          "reason": "This chunk discusses system scheduling and I/O optimization in a general sense, but has absolutely no connection to SQL JOIN optimization strategies. It doesn't mention SQL, databases, or joins."
+        },
+        {
+          "chunk_id": 17234,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Profiling",
+            "Performance Optimization",
+            "Sampling"
+          ],
+          "reason": "This chunk discusses performance implications of profiling and sampling intervals, and has absolutely no connection to SQL JOIN optimization strategies."
+        },
+        {
+          "chunk_id": 1293,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "disk scheduling",
+            "file system optimization",
+            "block allocation"
+          ],
+          "reason": "This document chunk discusses file system optimization techniques related to disk block allocation and seeks. It has absolutely no connection to SQL JOIN optimization strategies."
+        },
+        {
+          "chunk_id": 3154,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Memory Models",
+            "Cache Coherence",
+            "Microarchitecture"
+          ],
+          "reason": "This chunk discusses memory models (RVWMO, RVTSO) and their implications for microarchitecture. It has absolutely no connection to SQL JOIN optimization strategies."
+        },
+        {
+          "chunk_id": 2962,
+          "doc": "riscv-unprivileged",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "RISC-V",
+            "Cryptography",
+            "Hardware Design"
+          ],
+          "reason": "This document chunk discusses policies for designing vector crypto extensions for RISC-V. It has absolutely no connection to SQL JOIN optimization strategies."
+        },
+        {
+          "chunk_id": 67,
+          "doc": "riscv-abi",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Linker Relaxation",
+            "Relocation Groups",
+            "Assembly Language"
+          ],
+          "reason": "This document chunk discusses linker relaxation, a topic completely unrelated to SQL JOIN optimization strategies. It contains no information relevant to the query."
+        },
+        {
+          "chunk_id": 73,
+          "doc": "riscv-abi",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "RISC-V Assembly",
+            "Instruction Relaxation",
+            "Global Pointers"
+          ],
+          "reason": "This chunk discusses RISC-V instruction relaxation and global pointer optimization, which is completely unrelated to SQL JOIN optimization strategies. It focuses on assembly-level code optimization, not database query optimization."
+        }
+      ]
+    },
+    {
+      "id": "x04",
+      "query": "Kubernetes pod scheduling",
+      "category": "negative",
+      "subtopics": [],
+      "judgments": [
+        {
+          "chunk_id": 3371,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 0.7,
+          "subtopics": [
+            "scheduling algorithms",
+            "system performance",
+            "computer science history",
+            "computer science research"
+          ],
+          "reason": "Not relevant: academic scheduling papers, not Kubernetes."
+        },
+        {
+          "chunk_id": 816,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0,
+          "confidence": 0.7,
+          "subtopics": [
+            "Scheduling Policy",
+            "scheduling",
+            "priority scheduling",
+            "process management",
+            "Scheduling Mechanism"
+          ],
+          "reason": "Not relevant: OS process scheduling, not Kubernetes pod scheduling."
+        },
+        {
+          "chunk_id": 4280,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Virtualization",
+            "Interrupt Handling",
+            "Hypervisor Scheduling"
+          ],
+          "reason": "This document chunk discusses virtual interrupts and their handling within a hypervisor/virtualized environment. It does not mention Kubernetes or pod scheduling at all. While it deals with scheduling (of vPEs by the hypervisor), it's unrelated to Kubernetes pod scheduling."
+        },
+        {
+          "chunk_id": 3360,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Lottery Scheduling",
+            "Stride Scheduling",
+            "Resource Allocation"
+          ],
+          "reason": "This chunk discusses lottery and stride scheduling, but does not mention Kubernetes or pod scheduling at all. It's about general scheduling algorithms, not container orchestration."
+        },
+        {
+          "chunk_id": 812,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "scheduling algorithms",
+            "lottery scheduling",
+            "CPU scheduling"
+          ],
+          "reason": "This chunk discusses lottery scheduling, an operating system scheduling algorithm. It has no connection to Kubernetes pod scheduling."
+        },
+        {
+          "chunk_id": 4288,
+          "doc": "gic_architecture_specification",
+          "score": 0,
+          "confidence": 0.9,
+          "subtopics": [
+            "LPI Configuration",
+            "vPE Configuration",
+            "Configuration Tables",
+            "Redistributor",
+            "vPE (Virtual Processor Element)"
+          ],
+          "reason": "The chunk mentions 'scheduling' in the context of a 'vPE' (virtual processor element), but it doesn't explain Kubernetes pod scheduling. It describes a very specific hardware scheduling mechanism unrelated to container orchestration."
+        },
+        {
+          "chunk_id": 113,
+          "doc": "arm_aapcs64",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Scalable Predicates",
+            "Data Representation",
+            "Pointers"
+          ],
+          "reason": "This document chunk discusses scalable predicates and pointers, which have absolutely no relation to Kubernetes pod scheduling."
+        },
+        {
+          "chunk_id": 11633,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "ARM Assembly",
+            "Vector Registers",
+            "Instruction Set Architecture"
+          ],
+          "reason": "This document chunk discusses ARM vector registers and has no connection to Kubernetes pod scheduling."
+        },
+        {
+          "chunk_id": 11979,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "ARM Assembly",
+            "Register Names",
+            "Scalable Vector Registers"
+          ],
+          "reason": "This document chunk appears to be about ARM assembly language and register names (sz, Pg, Zn) and has no connection to Kubernetes pod scheduling."
+        },
+        {
+          "chunk_id": 112,
+          "doc": "arm_aapcs64",
+          "score": 0,
+          "confidence": 1.0,
+          "subtopics": [
+            "Scalable Vectors",
+            "Data Layout",
+            "Computer Architecture"
+          ],
+          "reason": "This document chunk discusses scalable vectors, a concept related to computer architecture and data types. It has absolutely no connection to Kubernetes pod scheduling."
+        }
+      ]
+    }
+  ]
+}
