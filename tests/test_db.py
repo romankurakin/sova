@@ -123,3 +123,80 @@ class TestGetDocStatus:
         assert status["complete"] is False  # 2 chunks < 3 expected
         assert status["chunks"] == 2
         conn.close()
+
+
+class TestChunkContextsTable:
+    @staticmethod
+    def _make_db() -> sqlite3.Connection:
+        conn = sqlite3.connect(":memory:")
+        conn.executescript("""
+            CREATE TABLE documents (
+                id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
+                path TEXT NOT NULL, line_count INTEGER, expected_chunks INTEGER
+            );
+            CREATE TABLE chunks (
+                id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL,
+                section_id INTEGER, start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL, word_count INTEGER NOT NULL,
+                text TEXT NOT NULL, embedding BLOB,
+                FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
+            );
+            CREATE TABLE chunk_contexts (
+                chunk_id INTEGER PRIMARY KEY,
+                context TEXT NOT NULL,
+                model TEXT NOT NULL,
+                FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
+            );
+            PRAGMA foreign_keys = ON;
+        """)
+        return conn
+
+    def test_insert_and_retrieve(self):
+        conn = self._make_db()
+        conn.execute(
+            "INSERT INTO documents (name, path) VALUES ('doc1', '/tmp/doc1.md')"
+        )
+        conn.execute(
+            "INSERT INTO chunks (doc_id, start_line, end_line, word_count, text) VALUES (1, 1, 10, 50, 'hello')"
+        )
+        conn.execute(
+            "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (1, 'This covers auth.', 'gemma3:12b')"
+        )
+        conn.commit()
+
+        row = conn.execute(
+            "SELECT context, model FROM chunk_contexts WHERE chunk_id = 1"
+        ).fetchone()
+        assert row == ("This covers auth.", "gemma3:12b")
+        conn.close()
+
+    def test_one_context_per_chunk(self):
+        conn = self._make_db()
+        conn.execute(
+            "INSERT INTO documents (name, path) VALUES ('doc1', '/tmp/doc1.md')"
+        )
+        conn.execute(
+            "INSERT INTO chunks (doc_id, start_line, end_line, word_count, text) VALUES (1, 1, 10, 50, 'hello')"
+        )
+        conn.execute(
+            "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (1, 'ctx', 'gemma3:12b')"
+        )
+        conn.commit()
+
+        # Inserting a second context for the same chunk should fail (PK constraint).
+        try:
+            conn.execute(
+                "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (1, 'ctx2', 'gemma3:12b')"
+            )
+            assert False, "Should have raised IntegrityError"
+        except sqlite3.IntegrityError:
+            pass
+        conn.close()
+
+    def test_missing_context_returns_none(self):
+        conn = self._make_db()
+        row = conn.execute(
+            "SELECT context FROM chunk_contexts WHERE chunk_id = 999"
+        ).fetchone()
+        assert row is None
+        conn.close()

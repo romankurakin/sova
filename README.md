@@ -32,6 +32,7 @@ uv run sova [doc...]               # Index specific docs
 uv run sova --list                 # List docs and status
 uv run sova --reset                # Delete DB and extracted files
 uv run sova --clear-cache          # Clear semantic search cache
+uv run sova --reset-context        # Regenerate LLM contexts on next run
 ```
 
 ## Under the Hood
@@ -46,8 +47,12 @@ flowchart LR
 PDFs get converted to Markdown, split at header boundaries, and indexed two
 ways.
 
-**Contextual embeddings** prepend `[doc_name | section_title]` to each chunk before
-embedding. This helps vectors understand content in context [3].
+**Contextual embeddings** — at index time, a local LLM (`gemma3:12b`) generates a
+one-sentence summary situating each chunk within its document and section. This
+context is prepended to the chunk text before embedding, so vectors capture
+meaning beyond the raw text [3]. The format is
+`[doc | section]\n\n{llm_context}\n\n{chunk_text}`. Context generation is
+incremental — just run `sova` and it fills in what's missing.
 
 **BM25 full-text** catches exact terms that vectors miss. Porter stemming
 handles plurals and verb forms.
@@ -67,7 +72,9 @@ text density [2]. Results are capped per document so you see multiple sources.
 **Semantic cache** returns cached results for similar queries (cosine > 0.92),
 avoiding redundant embedding calls.
 
-Model runs locally via Ollama: `qwen3-embedding:4b` for embeddings (2560 dims).
+Models run locally via Ollama: `qwen3-embedding:4b` for embeddings (2560 dims),
+`gemma3:12b` for contextual summaries. Both are pulled automatically on first
+run.
 
 ## Benchmarks
 

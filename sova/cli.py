@@ -9,7 +9,7 @@ from pathlib import Path
 from rich.table import Table
 
 from sova.cache import get_cache
-from sova.config import BATCH_SIZE, DATA_DIR, DB_PATH
+from sova.config import BATCH_SIZE, CONTEXT_MODEL, DATA_DIR, DB_PATH
 from sova.db import (
     connect_readonly,
     embedding_to_blob,
@@ -26,6 +26,7 @@ from sova.extract import (
 )
 from sova.ollama_client import (
     check_ollama,
+    generate_context,
     get_embeddings_batch,
     get_query_embedding,
 )
@@ -56,7 +57,7 @@ def process_doc(
     md_path: Path | None,
     conn: sqlite3.Connection,
 ) -> None:
-    """Process a single document: extract, chunk, and embed."""
+    """Process a single document: extract, chunk, generate context, and embed."""
     console.print(f"\n[bold]{name}[/bold]")
 
     extracted_now = False
@@ -114,64 +115,155 @@ def process_doc(
     ).fetchall()
     section_ids = {r[1]: r[0] for r in section_rows}
 
-    existing = set(
+    # Insert any new chunks that don't exist in DB yet (text extraction).
+    existing_starts = set(
         r[0]
         for r in conn.execute(
-            "SELECT start_line FROM chunks WHERE doc_id = ? AND embedding IS NOT NULL",
-            (doc_id,),
+            "SELECT start_line FROM chunks WHERE doc_id = ?", (doc_id,)
         ).fetchall()
     )
-    pending = [(i, c) for i, c in enumerate(chunks) if c["start_line"] not in existing]
+    for i, chunk in enumerate(chunks):
+        if chunk["start_line"] not in existing_starts:
+            sec_idx = find_section(sections, chunk["start_line"])
+            sec_line = (
+                sections[sec_idx]["start_line"] if sec_idx is not None else None
+            )
+            sec_id = section_ids.get(sec_line)
+            conn.execute(
+                "INSERT INTO chunks (doc_id, section_id, start_line, end_line, word_count, text) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    doc_id,
+                    sec_id,
+                    chunk["start_line"],
+                    chunk["end_line"],
+                    chunk["word_count"],
+                    chunk["text"],
+                ),
+            )
+    conn.commit()
 
-    if not pending:
+    # Build a map from start_line to chunk_id for this document.
+    chunk_rows = conn.execute(
+        "SELECT id, start_line FROM chunks WHERE doc_id = ?", (doc_id,)
+    ).fetchall()
+    chunk_id_by_start = {r[1]: r[0] for r in chunk_rows}
+
+    # --- Pass 1: Generate context for chunks missing chunk_contexts rows ---
+    chunks_needing_context = []
+    for i, chunk in enumerate(chunks):
+        chunk_id = chunk_id_by_start.get(chunk["start_line"])
+        if chunk_id is None:
+            continue
+        has_context = conn.execute(
+            "SELECT 1 FROM chunk_contexts WHERE chunk_id = ?", (chunk_id,)
+        ).fetchone()
+        if not has_context:
+            chunks_needing_context.append((i, chunk, chunk_id))
+
+    if chunks_needing_context:
+        try:
+            start = time.time()
+            total = len(chunks_needing_context)
+
+            with report_progress("context") as progress:
+                task = progress.add_task("", total=total)
+                for i, chunk, chunk_id in chunks_needing_context:
+                    sec_idx = find_section(sections, chunk["start_line"])
+                    sec_title = (
+                        sections[sec_idx]["title"] if sec_idx is not None else None
+                    )
+                    prev_text = chunks[i - 1]["text"] if i > 0 else ""
+                    next_text = chunks[i + 1]["text"] if i + 1 < len(chunks) else ""
+
+                    try:
+                        ctx = generate_context(
+                            name, sec_title, chunk["text"], prev_text, next_text
+                        )
+                    except Exception:
+                        # Graceful fallback: skip context, embedding will use
+                        # the basic [doc | section] prefix instead.
+                        progress.update(task, advance=1)
+                        continue
+
+                    conn.execute(
+                        "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (?, ?, ?)",
+                        (chunk_id, ctx, CONTEXT_MODEL),
+                    )
+                    # NULL the embedding so Pass 2 re-embeds with context.
+                    conn.execute(
+                        "UPDATE chunks SET embedding = NULL WHERE id = ?",
+                        (chunk_id,),
+                    )
+                    conn.commit()
+                    progress.update(task, advance=1)
+
+            report("context", f"{total:>9,} chunks {fmt_duration(time.time() - start)}")
+
+        except Exception as e:
+            conn.rollback()
+            report("error", f"[red]{e}[/red]")
+            return
+    else:
+        count = len(chunks)
+        report("context", f"{count:>9,} chunks")
+
+    # --- Pass 2: Embed chunks with embedding IS NULL, prepending context ---
+    # Load all contexts for this doc's chunks.
+    context_map: dict[int, str] = {}
+    for chunk_id in chunk_id_by_start.values():
+        row = conn.execute(
+            "SELECT context FROM chunk_contexts WHERE chunk_id = ?", (chunk_id,)
+        ).fetchone()
+        if row:
+            context_map[chunk_id] = row[0]
+
+    pending_embed = []
+    for i, chunk in enumerate(chunks):
+        chunk_id = chunk_id_by_start.get(chunk["start_line"])
+        if chunk_id is None:
+            continue
+        has_embedding = conn.execute(
+            "SELECT 1 FROM chunks WHERE id = ? AND embedding IS NOT NULL", (chunk_id,)
+        ).fetchone()
+        if not has_embedding:
+            pending_embed.append((i, chunk, chunk_id))
+
+    if not pending_embed:
         count = len(chunks)
         report("embed", f"{count:>9,} chunks")
     else:
         try:
             start = time.time()
-            total = len(pending)
+            total = len(pending_embed)
 
             with report_progress("embed") as progress:
                 task = progress.add_task("", total=total)
-                for batch_start in range(0, len(pending), BATCH_SIZE):
-                    batch = pending[batch_start : batch_start + BATCH_SIZE]
+                for batch_start in range(0, len(pending_embed), BATCH_SIZE):
+                    batch = pending_embed[batch_start : batch_start + BATCH_SIZE]
 
                     contextual_texts = []
-                    for i, chunk in batch:
+                    for i, chunk, chunk_id in batch:
                         sec_idx = find_section(sections, chunk["start_line"])
                         sec_title = (
                             sections[sec_idx]["title"] if sec_idx is not None else None
                         )
-                        # Prepend doc name and section to each chunk before embedding
-                        # so the vector captures document context, not just raw text.
-                        # This improves retrieval when multiple docs cover similar topics.
-                        context = f"[{name}"
+                        prefix = f"[{name}"
                         if sec_title:
-                            context += f" | {sec_title}"
-                        context += "]\n\n"
-                        contextual_texts.append(context + chunk["text"])
+                            prefix += f" | {sec_title}"
+                        prefix += "]\n\n"
+
+                        llm_ctx = context_map.get(chunk_id)
+                        if llm_ctx:
+                            prefix += llm_ctx + "\n\n"
+
+                        contextual_texts.append(prefix + chunk["text"])
 
                     embeddings = get_embeddings_batch(contextual_texts)
 
-                    for (idx, chunk), emb in zip(batch, embeddings):
-                        sec_idx = find_section(sections, chunk["start_line"])
-                        sec_line = (
-                            sections[sec_idx]["start_line"]
-                            if sec_idx is not None
-                            else None
-                        )
-                        sec_id = section_ids.get(sec_line)
+                    for (idx, chunk, chunk_id), emb in zip(batch, embeddings):
                         conn.execute(
-                            "INSERT INTO chunks (doc_id, section_id, start_line, end_line, word_count, text, embedding) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (
-                                doc_id,
-                                sec_id,
-                                chunk["start_line"],
-                                chunk["end_line"],
-                                chunk["word_count"],
-                                chunk["text"],
-                                embedding_to_blob(emb),
-                            ),
+                            "UPDATE chunks SET embedding = ? WHERE id = ?",
+                            (embedding_to_blob(emb), chunk_id),
                         )
                     conn.commit()
                     progress.update(task, advance=len(batch))
@@ -196,20 +288,23 @@ def list_docs() -> None:
     table.add_column("Name")
     table.add_column("PDF", justify="right", style="dim")
     table.add_column("Chunks", justify="right")
+    table.add_column("Context", justify="right")
     table.add_column("Text", justify="right")
     table.add_column("Vectors", justify="right")
 
-    total_chunks, total_text, total_embed = 0, 0, 0
+    total_chunks, total_text, total_embed, total_ctx = 0, 0, 0, 0
 
     for d in docs:
         status = get_doc_status(conn, d["name"]) if conn else {}
         chunks = status.get("chunks", 0)
         text_size = status.get("text_size", 0)
         embed_size = status.get("embed_size", 0)
+        ctx_count = status.get("contextualized", 0)
 
         total_chunks += chunks
         total_text += text_size
         total_embed += embed_size
+        total_ctx += ctx_count
 
         pdf_col = fmt_size(d["size"])
         if chunks:
@@ -220,10 +315,17 @@ def list_docs() -> None:
                 chunks_col = str(chunks)
         else:
             chunks_col = "[dim]-[/dim]"
+        if ctx_count:
+            if chunks and ctx_count < chunks:
+                ctx_col = f"[yellow]{ctx_count}/{chunks}[/yellow]"
+            else:
+                ctx_col = str(ctx_count)
+        else:
+            ctx_col = "[dim]-[/dim]"
         text_col = fmt_size(text_size, dim_zero=True)
         embed_col = fmt_size(embed_size, dim_zero=True)
 
-        table.add_row(d["name"], pdf_col, chunks_col, text_col, embed_col)
+        table.add_row(d["name"], pdf_col, chunks_col, ctx_col, text_col, embed_col)
 
     if total_chunks > 0:
         table.add_section()
@@ -231,6 +333,7 @@ def list_docs() -> None:
             "[bold]Total[/bold]",
             "",
             f"[bold]{total_chunks}[/bold]",
+            f"[bold]{total_ctx}[/bold]",
             f"[bold]{fmt_size(total_text)}[/bold]",
             f"[bold]{fmt_size(total_embed)}[/bold]",
         )
@@ -320,6 +423,11 @@ def main() -> None:
     parser.add_argument(
         "--clear-cache", action="store_true", help="Clear semantic search cache"
     )
+    parser.add_argument(
+        "--reset-context",
+        action="store_true",
+        help="Delete generated contexts; next run regenerates them",
+    )
     args = parser.parse_args()
 
     console.print(SOVA_ASCII)
@@ -343,6 +451,18 @@ def main() -> None:
         cache = get_cache()
         cache.clear()
         console.print("cache cleared")
+        return
+
+    if args.reset_context:
+        if not DB_PATH.exists():
+            console.print("[dim]no database[/dim]")
+            return
+        conn = init_db()
+        deleted = conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
+        conn.execute("DELETE FROM chunk_contexts")
+        conn.commit()
+        conn.close()
+        console.print(f"deleted {deleted} contexts; embeddings kept")
         return
 
     if args.list:

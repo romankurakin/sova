@@ -41,6 +41,12 @@ def init_db() -> sqlite3.Connection:
             model TEXT NOT NULL,
             candidate_count INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL,
+            FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
+        );
         CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
         CREATE INDEX IF NOT EXISTS idx_query_cache_created ON query_cache(created_at);
         PRAGMA foreign_keys = ON;
@@ -134,6 +140,7 @@ def get_doc_status(conn: sqlite3.Connection, name: str) -> dict:
         "expected": None,
         "text_size": 0,
         "embed_size": 0,
+        "contextualized": 0,
     }
     row = conn.execute(
         "SELECT id, expected_chunks FROM documents WHERE name = ?", (name,)
@@ -156,6 +163,18 @@ def get_doc_status(conn: sqlite3.Connection, name: str) -> dict:
         (doc_id,),
     ).fetchone()[0]
 
+    try:
+        contextualized = conn.execute(
+            """
+            SELECT COUNT(*) FROM chunk_contexts cc
+            JOIN chunks c ON cc.chunk_id = c.id
+            WHERE c.doc_id = ?
+        """,
+            (doc_id,),
+        ).fetchone()[0]
+    except Exception:
+        contextualized = 0
+
     complete = expected is not None and chunk_count >= expected
 
     return {
@@ -166,4 +185,5 @@ def get_doc_status(conn: sqlite3.Connection, name: str) -> dict:
         "expected": expected,
         "text_size": text_size,
         "embed_size": embed_size,
+        "contextualized": contextualized,
     }

@@ -6,14 +6,6 @@ from pathlib import Path
 
 import sqlite_vector
 
-EMBEDDING_MODEL = "qwen3-embedding:4b"
-EMBEDDING_DIM = 2560
-
-# Asymmetric retrieval: queries get this instruction prefix, chunks don't.
-# This tells the model to optimize for query-passage matching rather than
-# generic similarity, which measurably improves recall on retrieval tasks.
-QUERY_TASK = "Given a search query, retrieve relevant passages that answer the query"
-
 SCRIPT_DIR = Path(__file__).parent.parent.resolve()
 DATA_DIR = SCRIPT_DIR / "data"
 DOCS_DIR = SCRIPT_DIR / "docs"
@@ -28,14 +20,12 @@ if _platform not in _ext:
     sys.exit(1)
 VECTOR_EXT = _binaries / _ext[_platform]
 
+EMBEDDING_MODEL = "qwen3-embedding:4b"
+CONTEXT_MODEL = "gemma3:12b"
+EMBEDDING_DIM = 2560
+
+# Number of documents to embed per batch.
 BATCH_SIZE = 10
 # Target words per chunk. 512 balances embedding quality (models degrade on
 # very long inputs) against preserving enough context per chunk.
 CHUNK_SIZE = 512
-
-# Diversification prevents top results from being dominated by a single doc.
-# These were tuned empirically: 2 per doc keeps variety without dropping
-# highly relevant repeated hits, 1 per section avoids near-duplicate content.
-MAX_PER_DOC = 2
-MAX_PER_SECTION = 1
-MIN_UNIQUE_DOCS = 3

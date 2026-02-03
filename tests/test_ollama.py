@@ -10,10 +10,12 @@ class TestCheckOllama:
         from sova.ollama_client import check_ollama
 
         with patch("sova.ollama_client.ollama") as mock_ollama:
-            mock_model = MagicMock()
-            mock_model.model = "qwen3-embedding:4b"
+            mock_embed = MagicMock()
+            mock_embed.model = "qwen3-embedding:4b"
+            mock_context = MagicMock()
+            mock_context.model = "gemma3:12b"
             mock_list = MagicMock()
-            mock_list.models = [mock_model]
+            mock_list.models = [mock_embed, mock_context]
             mock_ollama.list.return_value = mock_list
 
             ok, msg = check_ollama()
@@ -35,7 +37,8 @@ class TestCheckOllama:
             ok, msg = check_ollama()
 
             assert ok is True
-            mock_ollama.pull.assert_called_once()
+            # Both embedding and context models should be pulled
+            assert mock_ollama.pull.call_count == 2
 
     def test_response_error(self):
         from sova.ollama_client import check_ollama
@@ -120,3 +123,101 @@ class TestGetEmbeddingsBatch:
             prompt = call_args[1]["input"]
             # Document embeddings don't have instruction prefix
             assert "Instruct:" not in str(prompt)
+
+
+class TestGenerateContext:
+    def test_returns_stripped_string(self):
+        from sova.ollama_client import generate_context
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_message = MagicMock()
+            mock_message.content = "  This chunk covers authentication flows.  "
+            mock_response = MagicMock()
+            mock_response.message = mock_message
+            mock_ollama.chat.return_value = mock_response
+
+            result = generate_context("doc1", "Auth", "chunk text here")
+
+            assert result == "This chunk covers authentication flows."
+
+    def test_prompt_contains_doc_and_section(self):
+        from sova.ollama_client import generate_context
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_message = MagicMock()
+            mock_message.content = "Context."
+            mock_response = MagicMock()
+            mock_response.message = mock_message
+            mock_ollama.chat.return_value = mock_response
+
+            generate_context("my-doc", "Introduction", "some text")
+
+            call_args = mock_ollama.chat.call_args
+            prompt = call_args[1]["messages"][0]["content"]
+            assert "my-doc" in prompt
+            assert "Introduction" in prompt
+
+    def test_none_section_uses_placeholder(self):
+        from sova.ollama_client import generate_context
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_message = MagicMock()
+            mock_message.content = "Context."
+            mock_response = MagicMock()
+            mock_response.message = mock_message
+            mock_ollama.chat.return_value = mock_response
+
+            generate_context("doc1", None, "text")
+
+            call_args = mock_ollama.chat.call_args
+            prompt = call_args[1]["messages"][0]["content"]
+            assert "(no section)" in prompt
+
+    def test_surrounding_text_included(self):
+        from sova.ollama_client import generate_context
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_message = MagicMock()
+            mock_message.content = "Context."
+            mock_response = MagicMock()
+            mock_response.message = mock_message
+            mock_ollama.chat.return_value = mock_response
+
+            generate_context("doc1", "Sec", "main", "prev text", "next text")
+
+            call_args = mock_ollama.chat.call_args
+            prompt = call_args[1]["messages"][0]["content"]
+            assert "prev text" in prompt
+            assert "next text" in prompt
+
+    def test_empty_surrounding_uses_placeholders(self):
+        from sova.ollama_client import generate_context
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_message = MagicMock()
+            mock_message.content = "Context."
+            mock_response = MagicMock()
+            mock_response.message = mock_message
+            mock_ollama.chat.return_value = mock_response
+
+            generate_context("doc1", "Sec", "text", "", "")
+
+            call_args = mock_ollama.chat.call_args
+            prompt = call_args[1]["messages"][0]["content"]
+            assert "(start of document)" in prompt
+            assert "(end of document)" in prompt
+
+    def test_uses_context_model(self):
+        from sova.ollama_client import generate_context
+
+        with patch("sova.ollama_client.ollama") as mock_ollama:
+            mock_message = MagicMock()
+            mock_message.content = "Context."
+            mock_response = MagicMock()
+            mock_response.message = mock_message
+            mock_ollama.chat.return_value = mock_response
+
+            generate_context("doc1", "Sec", "text")
+
+            call_args = mock_ollama.chat.call_args
+            assert call_args[1]["model"] == "gemma3:12b"
