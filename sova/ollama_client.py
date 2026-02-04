@@ -1,6 +1,5 @@
 """Ollama API client for embeddings and context generation."""
 
-import numpy as np
 import ollama
 
 from sova.config import CONTEXT_MODEL, EMBEDDING_MODEL
@@ -47,10 +46,10 @@ def get_query_embedding(query: str) -> list[float]:
     return list(response.embeddings[0])
 
 
-def get_embeddings_batch(texts: list[str]) -> list[bytes]:
-    """Embed document chunks - NO instruction prefix. Returns float32 blobs."""
+def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
+    """Embed document chunks - NO instruction prefix."""
     response = ollama.embed(model=EMBEDDING_MODEL, input=texts)
-    return [np.array(emb, dtype=np.float32).tobytes() for emb in response.embeddings]
+    return [list(emb) for emb in response.embeddings]
 
 
 def generate_context(

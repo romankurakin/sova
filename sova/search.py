@@ -1,34 +1,95 @@
 """Search functionality: vector search, FTS, and hybrid fusion."""
 
+import heapq
+import math
 import re
+import sqlite3
+from array import array
 
-import numpy as np
-
+from sova.config import EMBEDDING_DIM
+from sova.db import embedding_to_blob
 from sova.diversity import score_decay_diversify
 
 
 def search_vector(
-    conn, query_emb: list[float], candidates: int
+    conn: sqlite3.Connection, query_blob: bytes, candidates: int
 ) -> list[tuple[int, float]]:
     """Vector similarity search. Returns list of (chunk_id, similarity_score)."""
     try:
-        query_blob = np.array(query_emb, dtype=np.float32).tobytes()
+        conn.execute(
+            f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    # Preload quantized vectors into memory for faster search. Not all DBs
+    # have quantized data yet (first run, interrupted indexing), so we ignore
+    # the error and fall through to brute-force if needed.
+    try:
+        conn.execute("SELECT vector_quantize_preload('chunks', 'embedding')")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
         rows = conn.execute(
             """
-            SELECT c.id, vector_distance_cos(c.embedding, ?)
-            FROM vector_top_k('chunks_vec_idx', ?, ?) AS vt
-            JOIN chunks c ON c.rowid = vt.id
+            SELECT c.id, v.distance
+            FROM chunks c
+            JOIN vector_quantize_scan('chunks', 'embedding', ?, ?) AS v
+            ON c.id = v.rowid
         """,
-            (query_blob, query_blob, candidates),
+            (query_blob, candidates),
         ).fetchall()
-        # vector_distance_cos returns cosine distance (0 = identical),
-        # convert to similarity (1 = identical) for consistent scoring.
+        # sqlite-vector returns cosine distance (0 = identical), convert to
+        # similarity (1 = identical) for consistent scoring downstream.
         return [(row[0], 1.0 - row[1]) for row in rows]
-    except Exception:
+    except sqlite3.OperationalError:
         return []
 
 
-def search_fts(conn, query: str, limit: int) -> list[tuple[int, float]]:
+def fallback_vector_scan(
+    conn: sqlite3.Connection, query_emb: list[float], candidates: int
+) -> list[tuple[int, float]]:
+    """Fallback brute-force vector search when quantized index unavailable."""
+    query_norm = math.sqrt(sum(v * v for v in query_emb))
+    if query_norm == 0:
+        return []
+
+    q_len = len(query_emb)
+    rows = conn.execute(
+        """
+        SELECT c.id, c.embedding
+        FROM chunks c
+        WHERE c.embedding IS NOT NULL
+    """
+    ).fetchall()
+
+    # Use a min-heap to track top-K without sorting all results. O(n log k)
+    # vs O(n log n) for sorted(), which matters when scanning thousands of chunks.
+    top: list[tuple[float, int]] = []
+    for chunk_id, emb_blob in rows:
+        emb = array("f")
+        emb.frombytes(emb_blob)
+        if len(emb) != q_len:
+            continue
+
+        dot = sum(qv * ev for qv, ev in zip(query_emb, emb))
+        norm = math.sqrt(sum(ev * ev for ev in emb))
+        if norm == 0.0:
+            continue
+
+        sim = dot / (query_norm * norm)
+        if len(top) < candidates:
+            heapq.heappush(top, (sim, chunk_id))
+        elif sim > top[0][0]:
+            heapq.heapreplace(top, (sim, chunk_id))
+
+    return [(chunk_id, sim) for sim, chunk_id in sorted(top, reverse=True)]
+
+
+def search_fts(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> list[tuple[int, float]]:
     """FTS5 BM25 search. Returns list of (chunk_id, bm25_score)."""
     try:
         # Quote each term for exact matching in FTS5 syntax. Single-char
@@ -104,7 +165,7 @@ def compute_candidates(total_chunks: int, limit: int) -> int:
 
 
 def get_vector_candidates(
-    conn,
+    conn: sqlite3.Connection,
     query_emb: list[float],
     limit: int,
 ) -> list[tuple[int, float]]:
@@ -112,7 +173,13 @@ def get_vector_candidates(
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     candidates = compute_candidates(total_chunks, limit)
 
-    return search_vector(conn, query_emb, candidates)
+    query_blob = embedding_to_blob(query_emb)
+
+    vector_results = search_vector(conn, query_blob, candidates)
+    if not vector_results:
+        vector_results = fallback_vector_scan(conn, query_emb, candidates)
+
+    return vector_results
 
 
 def fuse_and_rank(

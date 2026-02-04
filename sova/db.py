@@ -1,19 +1,22 @@
 """Database initialization and connection management."""
 
-import libsql_experimental as libsql
+import sqlite3
+import struct
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Generator
 
-from sova.config import DATA_DIR, DB_PATH, EMBEDDING_DIM
+from sova.config import DATA_DIR, DB_PATH, EMBEDDING_DIM, VECTOR_EXT
 
 
-def init_db() -> Any:
+def init_db() -> sqlite3.Connection:
     """Initialize database with tables and indexes."""
     DATA_DIR.mkdir(exist_ok=True)
-    conn = libsql.connect(str(DB_PATH))  # ty: ignore[unresolved-attribute]
+    conn = sqlite3.connect(DB_PATH)
+    conn.enable_load_extension(True)
+    conn.load_extension(str(VECTOR_EXT))
+    conn.enable_load_extension(False)
 
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS documents (
             id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
             path TEXT NOT NULL, line_count INTEGER, expected_chunks INTEGER,
@@ -27,8 +30,8 @@ def init_db() -> Any:
         CREATE TABLE IF NOT EXISTS chunks (
             id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL, section_id INTEGER,
             start_line INTEGER NOT NULL, end_line INTEGER NOT NULL,
-            word_count INTEGER NOT NULL, text TEXT NOT NULL,
-            embedding F32_BLOB({dim}), is_index INTEGER NOT NULL DEFAULT 0,
+            word_count INTEGER NOT NULL, text TEXT NOT NULL, embedding BLOB,
+            is_index INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
         );
         CREATE TABLE IF NOT EXISTS query_cache (
@@ -48,8 +51,7 @@ def init_db() -> Any:
         CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
         CREATE INDEX IF NOT EXISTS idx_query_cache_created ON query_cache(created_at);
         PRAGMA foreign_keys = ON;
-    """.format(dim=EMBEDDING_DIM)
-    )
+    """)
 
     conn.executescript("""
         CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -79,22 +81,48 @@ def init_db() -> Any:
         conn.execute("INSERT INTO chunks_fts(rowid, text) SELECT id, text FROM chunks")
         conn.commit()
 
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS chunks_vec_idx ON chunks("
-        "libsql_vector_idx(embedding, 'metric=cosine', 'compress_neighbors=float8'))"
-    )
-    conn.commit()
+    # vector_init is idempotent but raises if already initialized.
+    try:
+        conn.execute(
+            f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     return conn
 
 
-def connect_readonly() -> Any:
+def connect_readonly() -> sqlite3.Connection:
     """Connect to database in read-only mode."""
-    return libsql.connect(str(DB_PATH))  # ty: ignore[unresolved-attribute]
+    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    conn.enable_load_extension(True)
+    conn.load_extension(str(VECTOR_EXT))
+    conn.enable_load_extension(False)
+    return conn
+
+
+def quantize_vectors(conn: sqlite3.Connection) -> None:
+    """Quantize vectors for fast native search."""
+    try:
+        conn.execute("SELECT vector_quantize('chunks', 'embedding')")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+
+def embedding_to_blob(emb: list[float]) -> bytes:
+    """Convert embedding list to binary blob."""
+    return struct.pack(f"{len(emb)}f", *emb)
+
+
+def blob_to_embedding(blob: bytes) -> list[float]:
+    """Convert binary blob to embedding list."""
+    return list(struct.unpack(f"{len(blob) // 4}f", blob))
 
 
 @contextmanager
-def get_connection(readonly: bool = False) -> Generator[Any, None, None]:
+def get_connection(readonly: bool = False) -> Generator[sqlite3.Connection, None, None]:
     """Context manager for database connections."""
     conn = connect_readonly() if readonly else init_db()
     try:

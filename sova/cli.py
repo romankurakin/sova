@@ -1,6 +1,7 @@
 """Command-line interface and Rich UI."""
 
 import argparse
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -11,8 +12,10 @@ from sova.cache import get_cache
 from sova.config import BATCH_SIZE, CONTEXT_MODEL, DATA_DIR, DB_PATH
 from sova.db import (
     connect_readonly,
+    embedding_to_blob,
     get_doc_status,
     init_db,
+    quantize_vectors,
 )
 from sova.extract import (
     chunk_text,
@@ -86,7 +89,7 @@ def process_doc(
     name: str,
     pdf_path: Path | None,
     md_path: Path | None,
-    conn,
+    conn: sqlite3.Connection,
 ) -> None:
     """Process a single document: extract, chunk, generate context, and embed."""
     console.print(f"\n{name}")
@@ -299,12 +302,12 @@ def process_doc(
 
                         contextual_texts.append(prefix + chunk["text"])
 
-                    emb_blobs = get_embeddings_batch(contextual_texts)
+                    embeddings = get_embeddings_batch(contextual_texts)
 
-                    for (idx, chunk, chunk_id), blob in zip(batch, emb_blobs):
+                    for (idx, chunk, chunk_id), emb in zip(batch, embeddings):
                         conn.execute(
                             "UPDATE chunks SET embedding = ? WHERE id = ?",
-                            (blob, chunk_id),
+                            (embedding_to_blob(emb), chunk_id),
                         )
                     conn.commit()
                     progress.update(task, advance=len(batch))
@@ -417,13 +420,13 @@ def search_semantic(query: str, limit: int = 10, verbose: bool = False) -> None:
     # results that searched at least as broadly as we need.
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     min_candidates = compute_candidates(total_chunks, limit)
-    cached_vectors = cache.get(conn, query_emb, min_candidates)
+    cached_vectors = cache.get(query_emb, min_candidates)
     if cached_vectors:
         console.print("cache: hit")
         results, n_vector, n_fts = fuse_and_rank(conn, cached_vectors, query, limit)
     else:
         vector_results = get_vector_candidates(conn, query_emb, limit)
-        cache.put(conn, query_emb, vector_results)
+        cache.put(query_emb, vector_results)
         results, n_vector, n_fts = fuse_and_rank(conn, vector_results, query, limit)
 
     conn.close()
@@ -561,8 +564,15 @@ def main() -> None:
         interrupted = True
         console.print()  # newline after progress bar
 
+    # Only quantize if all docs finished. Partial quantization would create
+    # an index missing the latest chunks, giving incomplete search results.
+    if not interrupted:
+        console.print()
+        report("quantize", "building index...")
+        quantize_vectors(conn)
+
     # Invalidate cached search results since new chunks were indexed.
-    get_cache().clear(conn)
+    get_cache().clear()
 
     conn.close()
     console.print()

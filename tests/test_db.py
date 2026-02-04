@@ -1,6 +1,6 @@
 """Tests for db module."""
 
-import libsql_experimental as libsql
+import sqlite3
 import struct
 
 from sova.db import get_doc_status
@@ -9,7 +9,7 @@ from sova.db import get_doc_status
 class TestGetDocStatus:
     @staticmethod
     def _make_db():
-        conn = libsql.connect(":memory:")  # ty: ignore[unresolved-attribute]
+        conn = sqlite3.connect(":memory:")
         conn.executescript("""
             CREATE TABLE documents (
                 id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
@@ -101,7 +101,7 @@ class TestGetDocStatus:
 class TestChunkContextsTable:
     @staticmethod
     def _make_db():
-        conn = libsql.connect(":memory:")  # ty: ignore[unresolved-attribute]
+        conn = sqlite3.connect(":memory:")
         conn.executescript("""
             CREATE TABLE documents (
                 id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,

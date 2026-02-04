@@ -164,17 +164,6 @@ wheels = [
 ]
 
 [[package]]
-name = "libsql-experimental"
-version = "0.0.55"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/53/14/d3eb81673e2096f38eb48f08e38b447f6f2fdc37a50bdb1810d4a225a7aa/libsql_experimental-0.0.55.tar.gz", hash = "sha256:34df13ad6da446e4ccede9b3803af40684da399c8f304848b54ea37e7111b249", size = 31954, upload-time = "2025-06-09T07:26:48.682Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/9f/3589b9590ba948922bd200a02d754fa29e739da81a2953367e9283667a16/libsql_experimental-0.0.55-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:f3bfd7af2ca9d1ff8f8c7f7fce5f1a650bfe53c23b45658253480fe287283bae", size = 4881245, upload-time = "2025-06-09T07:26:37.382Z" },
-    { url = "https://files.pythonhosted.org/packages/37/cf/4aead944cb90f82ab1b61edc78dbe893420e8c4ceee19e1fdae775b1273d/libsql_experimental-0.0.55-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:b3476a78edb8f59aa6c571d6def1840fff8d263eb4bbc4b26b2afd7400cb9ba2", size = 4656348, upload-time = "2025-06-09T07:26:39.04Z" },
-    { url = "https://files.pythonhosted.org/packages/70/73/134dc2db0c3805f62953c85778bf93ac2f4a5ad81d49e592be990b012711/libsql_experimental-0.0.55-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7a5dd325f87425546e0a7f0d460d4b6e1852bc4d4194a7b5ad127614ef8b3b10", size = 5273740, upload-time = "2025-06-09T07:26:40.597Z" },
-]
-
-[[package]]
 name = "markdown-it-py"
 version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -523,7 +512,6 @@ name = "sova"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "libsql-experimental" },
     { name = "msgpack" },
     { name = "numpy" },
     { name = "ollama" },
@@ -531,6 +519,7 @@ dependencies = [
     { name = "pymupdf-layout" },
     { name = "pymupdf4llm" },
     { name = "rich" },
+    { name = "sqliteai-vector" },
 ]
 
 [package.dev-dependencies]
@@ -543,7 +532,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "libsql-experimental", specifier = ">=0.0.5" },
     { name = "msgpack", specifier = ">=1.1.2" },
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "ollama", specifier = ">=0.6.1" },
@@ -551,6 +539,7 @@ requires-dist = [
     { name = "pymupdf-layout", specifier = ">=1.26.6" },
     { name = "pymupdf4llm", specifier = ">=0.2.9" },
     { name = "rich", specifier = ">=14.3.2" },
+    { name = "sqliteai-vector", specifier = ">=0.9.70" },
 ]
 
 [package.metadata.requires-dev]
@@ -559,6 +548,18 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "ruff", specifier = ">=0.14.14" },
     { name = "ty", specifier = ">=0.0.14" },
+]
+
+[[package]]
+name = "sqliteai-vector"
+version = "0.9.70"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/9c/93df43ffe5a91eb337773742fec5acce574d373584516e388f9992af2343/sqliteai_vector-0.9.70-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:4f6411acfcd8be3cc53a0c862596a35647f7a139dfedcc9a5574e0f55abb93df", size = 116131, upload-time = "2026-01-26T15:32:40.677Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/15/38de3e018b1b9d9fd53aa78e08b3778c5fc761732ef38d32e1194e87483f/sqliteai_vector-0.9.70-py3-none-macosx_11_0_arm64.whl", hash = "sha256:827fcbddbe9bcb7738629d4053bd7b5a788746ec8cb9d7b31bf38023e1724127", size = 116131, upload-time = "2026-01-26T15:32:38.89Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/1a/1602bdf0fc2481788d5f4ce01316598291177e2d61aaea62ecc68214f3f6/sqliteai_vector-0.9.70-py3-none-manylinux2014_aarch64.whl", hash = "sha256:1dacf6e659b50ba6255ea8327145ad1aca3ff4a5cff139716285ac3232641ad1", size = 54639, upload-time = "2026-01-26T15:32:37.181Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/4e/95b6a10ffaeb088559572cbb6e0790ec814618fdea4cdcc575475388f17d/sqliteai_vector-0.9.70-py3-none-manylinux2014_x86_64.whl", hash = "sha256:6809c21c40ac1de0f73f721b5d335fa8a653f213b00ee58a4511271b41f35e77", size = 69812, upload-time = "2026-01-26T15:32:42.515Z" },
+    { url = "https://files.pythonhosted.org/packages/96/bf/5d27af8140bbb1821946715e4568dd782c1e142e4ff07fc6422a70b10975/sqliteai_vector-0.9.70-py3-none-win_amd64.whl", hash = "sha256:1c17800a43ec609ffa882130e3ac955628f8b0fbd5fbead101a23e29d9fd8194", size = 69615, upload-time = "2026-01-26T15:32:41.461Z" },
 ]
 
 [[package]]

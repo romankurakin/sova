@@ -131,9 +131,9 @@ class TestSearchFtsSingleChar:
 
     @staticmethod
     def _make_fts_db():
-        import libsql_experimental as libsql
+        import sqlite3
 
-        conn = libsql.connect(":memory:")  # ty: ignore[unresolved-attribute]
+        conn = sqlite3.connect(":memory:")
         conn.executescript("""
             CREATE TABLE chunks (
                 id INTEGER PRIMARY KEY, text TEXT NOT NULL

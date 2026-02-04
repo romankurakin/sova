@@ -107,7 +107,7 @@ class TestGetEmbeddingsBatch:
             result = get_embeddings_batch(["text1", "text2"])
 
             assert len(result) == 2
-            assert all(isinstance(emb, bytes) for emb in result)
+            assert all(isinstance(emb, list) for emb in result)
 
     def test_no_instruction_prefix(self):
         from sova.ollama_client import get_embeddings_batch

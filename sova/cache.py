@@ -33,19 +33,20 @@ class SemanticCache:
         self.ttl = ttl
 
     def get(
-        self, conn, query_emb: list[float], min_candidates: int = 0
+        self, query_emb: list[float], min_candidates: int = 0
     ) -> list[tuple[int, float]] | None:
         """Get cached vector results if similar query exists."""
         now = time.time()
         cutoff = now - self.ttl
         query_arr = np.array(query_emb, dtype=np.float32)
 
-        rows = conn.execute(
-            """SELECT id, embedding, vector_results
-               FROM query_cache
-               WHERE created_at > ? AND model = ? AND candidate_count >= ?""",
-            (cutoff, EMBEDDING_MODEL, min_candidates),
-        ).fetchall()
+        with get_connection(readonly=True) as conn:
+            rows = conn.execute(
+                """SELECT id, embedding, vector_results
+                   FROM query_cache
+                   WHERE created_at > ? AND model = ? AND candidate_count >= ?""",
+                (cutoff, EMBEDDING_MODEL, min_candidates),
+            ).fetchall()
 
         if not rows:
             return None
@@ -67,47 +68,45 @@ class SemanticCache:
         if similarities[best_idx] >= self.threshold:
             row_id = row_ids[best_idx]
             # Touch created_at so this entry survives LRU eviction longer.
-            conn.execute(
-                "UPDATE query_cache SET created_at = ? WHERE id = ?", (now, row_id)
-            )
-            conn.commit()
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE query_cache SET created_at = ? WHERE id = ?", (now, row_id)
+                )
+                conn.commit()
             return msgpack.unpackb(results_blobs[best_idx])
 
         return None
 
     def put(
-        self, conn, query_emb: list[float], vector_results: list[tuple[int, float]]
+        self, query_emb: list[float], vector_results: list[tuple[int, float]]
     ) -> None:
         """Cache vector results for query embedding."""
-        count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
-        if count >= self.max_size:
+        with get_connection() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
+            if count >= self.max_size:
+                conn.execute(
+                    """DELETE FROM query_cache WHERE id = (
+                        SELECT id FROM query_cache ORDER BY created_at ASC LIMIT 1
+                    )"""
+                )
+
             conn.execute(
-                """DELETE FROM query_cache WHERE id = (
-                    SELECT id FROM query_cache ORDER BY created_at ASC LIMIT 1
-                )"""
+                """INSERT INTO query_cache
+                   (embedding, vector_results, created_at, model, candidate_count)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    np.array(query_emb, dtype=np.float32).tobytes(),
+                    msgpack.packb(vector_results),
+                    time.time(),
+                    EMBEDDING_MODEL,
+                    len(vector_results),
+                ),
             )
+            conn.commit()
 
-        conn.execute(
-            """INSERT INTO query_cache
-               (embedding, vector_results, created_at, model, candidate_count)
-               VALUES (?, ?, ?, ?, ?)""",
-            (
-                np.array(query_emb, dtype=np.float32).tobytes(),
-                msgpack.packb(vector_results),
-                time.time(),
-                EMBEDDING_MODEL,
-                len(vector_results),
-            ),
-        )
-        conn.commit()
-
-    def clear(self, conn=None) -> None:
+    def clear(self) -> None:
         """Clear all cached entries."""
-        if conn is None:
-            with get_connection() as conn:
-                conn.execute("DELETE FROM query_cache")
-                conn.commit()
-        else:
+        with get_connection() as conn:
             conn.execute("DELETE FROM query_cache")
             conn.commit()
 
