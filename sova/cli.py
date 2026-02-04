@@ -439,7 +439,9 @@ def search_semantic(query: str, limit: int = 10, verbose: bool = False) -> None:
     for i, r in enumerate(results, 1):
         location = f"{r['doc']}.md:{r['start']}-{r['end']}"
         if verbose:
-            console.print(f"[bold]{location}[/bold]  [dim]{r['display_score']:.2f}[/dim]")
+            console.print(
+                f"[bold]{location}[/bold]  [dim]{r['display_score']:.2f}[/dim]"
+            )
         else:
             console.print(f"[bold]{location}[/bold]")
         if verbose:

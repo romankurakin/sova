@@ -167,16 +167,18 @@ def fuse_and_rank(
         rrf_score = rrf_scores.get(chunk_id, 0.0)
         embed_score = vector_score_map.get(chunk_id, 0.0)
         index_penalty = -0.5 if is_idx else 0.0
-        scored.append({
-            "chunk_id": chunk_id,
-            "doc": doc,
-            "final_score": rrf_score * 30 + index_penalty,
-            "embed_score": embed_score,
-            "rrf_score": rrf_score,
-            "fts_hit": chunk_id in fts_id_set,
-            "is_idx": is_idx,
-            "fts_terms": fts_terms,
-        })
+        scored.append(
+            {
+                "chunk_id": chunk_id,
+                "doc": doc,
+                "final_score": rrf_score * 30 + index_penalty,
+                "embed_score": embed_score,
+                "rrf_score": rrf_score,
+                "fts_hit": chunk_id in fts_id_set,
+                "is_idx": is_idx,
+                "fts_terms": fts_terms,
+            }
+        )
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
     filtered = score_decay_diversify(scored, limit=limit, decay=0.8)

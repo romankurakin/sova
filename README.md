@@ -40,8 +40,9 @@ uv run sova --reset-context        # Regenerate LLM contexts on next run
 ```mermaid
 flowchart LR
     PDF --> Markdown --> Chunks
-    Chunks --> Context[+ Context] --> Embeddings[(Vector)]
-    Chunks --> BM25[(FTS)]
+    Chunks --> Classify{ToC?}
+    Classify --> Embeddings[(Vector)]
+    Classify --> BM25[(FTS)]
 ```
 
 PDFs get converted to Markdown, split at header boundaries, and indexed two
@@ -50,12 +51,15 @@ ways.
 **Contextual embeddings** — at index time, a local LLM (`gemma3:12b`) generates a
 one-sentence summary situating each chunk within its document and section. This
 context is prepended to the chunk text before embedding, so vectors capture
-meaning beyond the raw text [3]. The format is
-`[doc | section]\n\n{llm_context}\n\n{chunk_text}`. Context generation is
+meaning beyond the raw text [1]. The format is
+`[doc | section]\n\n{chunk_context}\n\n{chunk_text}`. Context generation is
 incremental — just run `sova` and it fills in what's missing.
 
 **BM25 full-text** catches exact terms that vectors miss. Porter stemming
 handles plurals and verb forms.
+
+**ToC detection** — chunks are classified at index time using text density [2].
+ToC and index pages are flagged so they can be down-ranked at search time.
 
 ```mermaid
 flowchart LR
@@ -66,8 +70,9 @@ flowchart LR
     RRF --> Diverse[Diversify] --> Results
 ```
 
-At search time, both results merge via RRF [1]. ToC pages get down-ranked using
-text density [2]. Results are capped per document so you see multiple sources.
+At search time, both results merge via RRF [3]. Flagged ToC pages are
+down-ranked so content chunks win. Results are diversified per document so you
+see multiple sources.
 
 **Semantic cache** returns cached results for similar queries (cosine > 0.92),
 avoiding redundant embedding calls.
@@ -90,11 +95,11 @@ See `benchmarks/README.md` for details.
 
 ## References
 
-[1] G. V. Cormack, C. L. A. Clarke, and S. Büttcher, "[Reciprocal rank fusion outperforms condorcet and individual rank learning methods](https://doi.org/10.1145/1571941.1572114)," *Proc. SIGIR*, 2009.
+[1] Anthropic, "[Contextual retrieval](https://www.anthropic.com/news/contextual-retrieval)," Anthropic Blog, 2024.
 
 [2] C. Kohlschütter, P. Fankhauser, and W. Nejdl, "[Boilerplate detection using shallow text features](https://doi.org/10.1145/1718487.1718542)," *Proc. WSDM*, 2010.
 
-[3] Anthropic, "[Contextual retrieval](https://www.anthropic.com/news/contextual-retrieval)," Anthropic Blog, 2024.
+[3] G. V. Cormack, C. L. A. Clarke, and S. Büttcher, "[Reciprocal rank fusion outperforms condorcet and individual rank learning methods](https://doi.org/10.1145/1571941.1572114)," *Proc. SIGIR*, 2009.
 
 ## Requirements
 
@@ -103,4 +108,4 @@ See `benchmarks/README.md` for details.
 
 ## License
 
-MIT. Note: sqliteai-vector uses Elastic License 2.0.
+MIT
