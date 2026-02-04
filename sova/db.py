@@ -80,7 +80,8 @@ def init_db() -> Any:
         conn.commit()
 
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS chunks_vec_idx ON chunks(libsql_vector_idx(embedding, 'metric=cosine'))"
+        "CREATE INDEX IF NOT EXISTS chunks_vec_idx ON chunks("
+        "libsql_vector_idx(embedding, 'metric=cosine', 'compress_neighbors=float8'))"
     )
     conn.commit()
 
