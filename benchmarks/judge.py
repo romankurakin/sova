@@ -15,6 +15,7 @@ from .search_interface import get_backend
 class JudgeError(Exception):
     """Raised when the judge model fails permanently (e.g. model not found)."""
 
+
 JUDGE_MODEL = "gemini-3-flash-preview:cloud"
 
 # Rate limiting for cloud models (avoid getting banned)
@@ -36,6 +37,7 @@ def _throttle():
     if elapsed < _MIN_INTERVAL:
         time.sleep(_MIN_INTERVAL - elapsed)
     _last_request_time = time.monotonic()
+
 
 JUDGE_PROMPT = """You are an information retrieval judge. Rate how well this document chunk satisfies the search query. Imagine a developer searched for this query while building an OS kernel — would this chunk help them?
 

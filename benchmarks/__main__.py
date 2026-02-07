@@ -92,7 +92,10 @@ def cmd_judge(use_debiasing: bool = True):
         total_existing = sum(
             len(q.get("judgments", [])) for q in existing_queries.values()
         )
-        report("existing", f"{total_existing} judgments across {len(existing_queries)} queries")
+        report(
+            "existing",
+            f"{total_existing} judgments across {len(existing_queries)} queries",
+        )
     console.print()
 
     start = time.time()
@@ -108,7 +111,9 @@ def cmd_judge(use_debiasing: bool = True):
 
     def save_checkpoint():
         queries_list = [completed[s.id] for s in QUERY_SET if s.id in completed]
-        gt = _build_ground_truth(queries_list, k_per_strategy, JUDGE_MODEL, use_debiasing)
+        gt = _build_ground_truth(
+            queries_list, k_per_strategy, JUDGE_MODEL, use_debiasing
+        )
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint_path.write_text(json.dumps(gt, indent=2))
 
@@ -163,13 +168,20 @@ def cmd_judge(use_debiasing: bool = True):
             from .judge import Judgment as _J
 
             all_j_objs = [
-                _J(chunk_id=j["chunk_id"], doc=j["doc"], score=j["score"],
-                   reason=j["reason"], subtopics=j.get("subtopics", []))
+                _J(
+                    chunk_id=j["chunk_id"],
+                    doc=j["doc"],
+                    score=j["score"],
+                    reason=j["reason"],
+                    subtopics=j.get("subtopics", []),
+                )
                 for j in merged_judgments
             ]
             extracted_subtopics = collect_query_subtopics(all_j_objs)
             existing_subtopics = completed.get(spec.id, {}).get("subtopics", [])
-            all_subtopics = sorted(set(spec.subtopics + existing_subtopics + extracted_subtopics))
+            all_subtopics = sorted(
+                set(spec.subtopics + existing_subtopics + extracted_subtopics)
+            )
 
             completed[spec.id] = {
                 "id": spec.id,
@@ -188,10 +200,14 @@ def cmd_judge(use_debiasing: bool = True):
 
     if new_judgments_total > 0:
         report(
-            "judged", f"{new_judgments_total} new chunks in {fmt_duration(time.time() - start)}"
+            "judged",
+            f"{new_judgments_total} new chunks in {fmt_duration(time.time() - start)}",
         )
     else:
-        report("status", f"no new chunks to judge ({fmt_duration(time.time() - start).strip()})")
+        report(
+            "status",
+            f"no new chunks to judge ({fmt_duration(time.time() - start).strip()})",
+        )
 
     # Build final output in query order
     queries_list = [completed[spec.id] for spec in QUERY_SET if spec.id in completed]
@@ -232,7 +248,12 @@ def cmd_run(name: str | None = None, no_autofill: bool = False):
     """Run benchmark against ground truth with auto-fill for unjudged chunks."""
     from .run_benchmark import run_search
     from .evaluate import aggregate_metrics, aggregate_by_category
-    from .search_interface import measure_latency, clear_cache, close_backend, get_backend
+    from .search_interface import (
+        measure_latency,
+        clear_cache,
+        close_backend,
+        get_backend,
+    )
     from .judge import judge_single_chunk
     import json
     from pathlib import Path
@@ -600,7 +621,9 @@ def main():
 
     p_judge = sub.add_parser("judge", help="Generate ground truth judgments")
     p_judge.add_argument(
-        "--debias", action="store_true", help="Enable debiasing (re-judge borderline chunks)"
+        "--debias",
+        action="store_true",
+        help="Enable debiasing (re-judge borderline chunks)",
     )
 
     p_run = sub.add_parser("run", help="Run benchmark against ground truth")

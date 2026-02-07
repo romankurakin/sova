@@ -58,7 +58,10 @@ def _ensure_replaceable(path: Path, force: bool, label: str) -> None:
 
 def _link_path(source: Path, destination: Path, force: bool, label: str) -> None:
     if destination.exists() or destination.is_symlink():
-        if destination.is_symlink() and _resolve_link_target(destination) == source.resolve():
+        if (
+            destination.is_symlink()
+            and _resolve_link_target(destination) == source.resolve()
+        ):
             return
         _ensure_replaceable(destination, force, label)
     destination.parent.mkdir(parents=True, exist_ok=True)

@@ -50,7 +50,9 @@ class TestJudgeFailFast:
                 judge_chunk("test query", "some chunk text")
 
     def test_404_is_permanent(self):
-        assert _is_permanent_error(Exception("model 'foo' not found (status code: 404)"))
+        assert _is_permanent_error(
+            Exception("model 'foo' not found (status code: 404)")
+        )
 
     def test_timeout_is_not_permanent(self):
         assert not _is_permanent_error(Exception("connection timed out"))
