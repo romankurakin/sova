@@ -7,9 +7,10 @@ import time
 from pathlib import Path
 
 from rich.table import Table
+from rich.text import Text
 
 from sova.cache import get_cache
-from sova.config import BATCH_SIZE, CONTEXT_MODEL, DATA_DIR, DB_PATH
+from sova import config
 from sova.db import (
     connect_readonly,
     embedding_to_blob,
@@ -39,32 +40,38 @@ from sova.search import (
 from sova.ui import console, fmt_duration, report, report_progress
 
 
-def _snippet(text: str, terms: list[str], width: int = 200) -> str:
-    """Extract a preview snippet, centering on the first FTS term match."""
-    flat = " ".join(text.split())
-    if len(flat) <= width:
-        return flat
-    flat_lower = flat.lower()
-    best_pos = -1
-    for term in terms:
-        pos = flat_lower.find(term.lower())
-        if pos != -1:
-            best_pos = pos
-            break
-    if best_pos == -1:
-        return flat[:width] + "..."
-    # Center the window around the match.
-    start = max(0, best_pos - width // 2)
-    end = start + width
-    if end > len(flat):
-        end = len(flat)
-        start = max(0, end - width)
-    snippet = flat[start:end]
-    if start > 0:
-        snippet = "..." + snippet
-    if end < len(flat):
-        snippet = snippet + "..."
-    return snippet
+def _display_path(path: Path) -> str:
+    """Render path with ~ for home-relative locations."""
+    home = Path.home()
+    try:
+        rel = path.relative_to(home)
+        return "~" if str(rel) == "." else f"~/{rel}"
+    except ValueError:
+        return str(path)
+
+
+def _safe_resolve(path: Path) -> Path:
+    try:
+        return path.resolve()
+    except Exception:
+        return path
+
+
+def _display_path_with_target(path: Path) -> str:
+    """Render symlink as source -> target for visibility."""
+    shown = _display_path(path)
+    if path.is_symlink():
+        shown += f" -> {_display_path(_safe_resolve(path))}"
+    return shown
+
+
+def _runtime_paths() -> dict[str, Path]:
+    return {
+        "sova_home": config.SOVA_HOME,
+        "docs_dir": config.DOCS_DIR,
+        "data_dir": config.DATA_DIR,
+        "db_path": config.get_db_path(),
+    }
 
 
 SOVA_ASCII = """\
@@ -102,8 +109,8 @@ def process_doc(
         try:
             start = time.time()
             markdown = extract_pdf(pdf_path)
-            DATA_DIR.mkdir(exist_ok=True)
-            md_path = DATA_DIR / f"{name}.md"
+            config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+            md_path = config.DATA_DIR / f"{name}.md"
             md_path.write_text(markdown, encoding="utf-8")
             lines = len(markdown.splitlines())
             report("extract", f"{lines:>9,} lines  {fmt_duration(time.time() - start)}")
@@ -229,7 +236,7 @@ def process_doc(
 
                     conn.execute(
                         "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (?, ?, ?)",
-                        (chunk_id, ctx, CONTEXT_MODEL),
+                        (chunk_id, ctx, config.CONTEXT_MODEL),
                     )
                     # NULL the embedding so Pass 2 re-embeds with context.
                     conn.execute(
@@ -282,8 +289,8 @@ def process_doc(
 
             with report_progress("embed") as progress:
                 task = progress.add_task("", total=total)
-                for batch_start in range(0, len(pending_embed), BATCH_SIZE):
-                    batch = pending_embed[batch_start : batch_start + BATCH_SIZE]
+                for batch_start in range(0, len(pending_embed), config.BATCH_SIZE):
+                    batch = pending_embed[batch_start : batch_start + config.BATCH_SIZE]
 
                     contextual_texts = []
                     for i, chunk, chunk_id in batch:
@@ -323,9 +330,10 @@ def process_doc(
 def list_docs() -> None:
     """List all documents and their indexing status."""
     docs = find_docs()
+    db_path = config.get_db_path()
 
     conn = None
-    if DB_PATH.exists():
+    if db_path.exists():
         conn = connect_readonly()
 
     table = Table(show_header=True, header_style="dim")
@@ -389,10 +397,23 @@ def list_docs() -> None:
 
 def show_stats() -> None:
     """Show database statistics."""
-    if DB_PATH.exists():
-        console.print(
-            f"\nDatabase: {DB_PATH.name} ({fmt_size(DB_PATH.stat().st_size)})"
-        )
+    paths = _runtime_paths()
+    db_path = paths["db_path"]
+
+    console.print(f"\nHome: {_display_path(paths['sova_home'])}")
+    console.print(f"Docs: {_display_path_with_target(paths['docs_dir'])}")
+    console.print(f"Data: {_display_path(paths['data_dir'])}")
+
+    db_path = config.get_db_path()
+    if db_path.exists() or db_path.is_symlink():
+        if db_path.exists():
+            console.print(
+                f"Database: {_display_path_with_target(db_path)} ({fmt_size(db_path.stat().st_size)})"
+            )
+        else:
+            console.print(f"Database: {_display_path_with_target(db_path)} [missing]")
+
+    if db_path.exists():
         cache = get_cache()
         conn = connect_readonly()
         count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
@@ -400,9 +421,13 @@ def show_stats() -> None:
         console.print(f"Cache: {count} entries (max {cache.max_size})")
 
 
-def search_semantic(query: str, limit: int = 10, verbose: bool = False) -> None:
+def search_semantic(
+    query: str,
+    limit: int = 10,
+    verbose: bool = False,
+) -> None:
     """Perform semantic search and display results."""
-    if not DB_PATH.exists():
+    if not config.get_db_path().exists():
         console.print("[red]error:[/red] no database, run indexing first")
         return
 
@@ -440,7 +465,12 @@ def search_semantic(query: str, limit: int = 10, verbose: bool = False) -> None:
 
     console.print()
     for i, r in enumerate(results, 1):
-        location = f"{r['doc']}.md:{r['start']}-{r['end']}"
+        path = r.get("path")
+        if path:
+            shown_path = _display_path(Path(path))
+            location = f"{shown_path}:{r['start']}-{r['end']}"
+        else:
+            location = f"{r['doc']}.md:{r['start']}-{r['end']}"
         if verbose:
             console.print(
                 f"[bold]{location}[/bold]  [dim]{r['display_score']:.2f}[/dim]"
@@ -459,7 +489,10 @@ def search_semantic(query: str, limit: int = 10, verbose: bool = False) -> None:
                 f". [dim]rrf[/dim] {r['rrf_score']:.4f}"
                 f"  {tag_str}"
             )
-        console.print(f"  [dim]{_snippet(r['text'], r.get('fts_terms', []))}[/dim]")
+        body = r["text"]
+        lines = body.splitlines() or [body]
+        for line in lines:
+            console.print(Text(f"  {line}", style="dim"))
         console.print()
 
 
@@ -477,6 +510,11 @@ def main() -> None:
         "-n", "--limit", type=int, default=10, help="Max results (default: 10)"
     )
     parser.add_argument(
+        "--db",
+        metavar="PATH",
+        help="Path to SQLite database file (default: indexed.db under data dir)",
+    )
+    parser.add_argument(
         "--reset", action="store_true", help="Delete DB and extracted files"
     )
     parser.add_argument(
@@ -492,6 +530,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.db:
+        config.set_db_path(args.db)
+
     console.print(SOVA_ASCII)
 
     if args.search:
@@ -499,11 +540,12 @@ def main() -> None:
         return
 
     if args.reset:
-        if DB_PATH.exists():
-            DB_PATH.unlink()
-            console.print(f"deleted: {DB_PATH.name}")
-        if DATA_DIR.exists():
-            for md in DATA_DIR.glob("*.md"):
+        db_path = config.get_db_path()
+        if db_path.exists():
+            db_path.unlink()
+            console.print(f"deleted: {db_path}")
+        if config.DATA_DIR.exists():
+            for md in config.DATA_DIR.glob("*.md"):
                 md.unlink()
                 console.print(f"deleted: {md.name}")
         console.print("reset complete")
@@ -516,7 +558,7 @@ def main() -> None:
         return
 
     if args.reset_context:
-        if not DB_PATH.exists():
+        if not config.get_db_path().exists():
             console.print("no database")
             return
         conn = init_db()

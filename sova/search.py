@@ -314,8 +314,9 @@ def fuse_and_rank(
         text_data = {
             r[0]: r
             for r in conn.execute(
-                f"SELECT id, section_id, start_line, end_line, text"
-                f" FROM chunks WHERE id IN ({ph})",
+                f"SELECT c.id, c.section_id, c.start_line, c.end_line, c.text, d.path"
+                f" FROM chunks c JOIN documents d ON c.doc_id = d.id"
+                f" WHERE c.id IN ({ph})",
                 tuple(final_ids),
             ).fetchall()
         }
@@ -326,6 +327,7 @@ def fuse_and_rank(
                 r["start"] = row[2]
                 r["end"] = row[3]
                 r["text"] = row[4]
+                r["path"] = row[5]
 
     return filtered, len(vector_results), len(fts_results)
 

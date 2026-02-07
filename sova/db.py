@@ -5,13 +5,16 @@ import struct
 from contextlib import contextmanager
 from typing import Generator
 
-from sova.config import DATA_DIR, DB_PATH, EMBEDDING_DIM, VECTOR_EXT
+from sova import config
+from sova.config import EMBEDDING_DIM, VECTOR_EXT
 
 
 def init_db() -> sqlite3.Connection:
     """Initialize database with tables and indexes."""
-    DATA_DIR.mkdir(exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    db_path = config.get_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
     conn.enable_load_extension(True)
     conn.load_extension(str(VECTOR_EXT))
     conn.enable_load_extension(False)
@@ -95,7 +98,8 @@ def init_db() -> sqlite3.Connection:
 
 def connect_readonly() -> sqlite3.Connection:
     """Connect to database in read-only mode."""
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    db_path = config.get_db_path()
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     conn.enable_load_extension(True)
     conn.load_extension(str(VECTOR_EXT))
     conn.enable_load_extension(False)

@@ -22,8 +22,30 @@ uv run sova                           # Index all PDFs
 ```bash
 uv run sova -s "your query"           # Semantic search
 uv run sova -s "query" -n 20          # More results
+uv run sova --db /tmp/sova.db -s "query"  # Use custom DB file
 ```
 
+## Binary + Install
+
+```bash
+# Build one-file macOS binary
+./scripts/build-macos-onefile.sh
+./dist/sova -s "your query"
+
+# Install globally (recommended for tools/skills)
+uv run sova-install
+sova --list
+sova -s "your query"
+
+# Remove global install
+uv run sova-remove
+```
+
+Defaults after `sova-install`:
+
+- binary: `~/.local/bin/sova`
+- docs: `~/.sova/docs` (symlink to project `docs`)
+- db: `~/.sova/data/indexed.db` (symlink to project `data/indexed.db`)
 ## Commands
 
 ```bash
@@ -31,6 +53,7 @@ uv run sova                        # Index all PDFs
 uv run sova [doc...]               # Index specific docs
 uv run sova --list                 # List docs and status
 uv run sova --reset                # Delete DB and extracted files
+uv run sova --db /tmp/sova.db --list
 uv run sova --clear-cache          # Clear semantic search cache
 uv run sova --reset-context        # Regenerate LLM contexts on next run
 ```

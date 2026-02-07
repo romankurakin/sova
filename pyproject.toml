@@ -18,6 +18,8 @@ dependencies = [
 [project.scripts]
 sova = "sova.cli:main"
 check = "sova.check:main"
+sova-install = "sova.install:install_main"
+sova-remove = "sova.install:remove_main"
 
 [build-system]
 requires = ["hatchling"]

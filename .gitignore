@@ -10,6 +10,11 @@ __pycache__/
 *.egg-info/
 .ruff_cache/
 .pytest_cache
+.uv-cache/
+.pyinstaller/
+build/
+dist/
+sova.spec
 
 # MacOS
 .DS_Store
