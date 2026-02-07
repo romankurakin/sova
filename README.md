@@ -46,6 +46,7 @@ Defaults after `sova-install`:
 - binary: `~/.local/bin/sova`
 - docs: `~/.sova/docs` (symlink to project `docs`)
 - db: `~/.sova/data/indexed.db` (symlink to project `data/indexed.db`)
+
 ## Commands
 
 ```bash

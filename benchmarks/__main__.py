@@ -75,7 +75,6 @@ def cmd_judge(use_debiasing: bool = True):
     existing_gt = _load_ground_truth(output_path)
     existing_queries: dict[str, dict] = {}
     if existing_gt:
-        existing_gt = _migrate_v1(existing_gt)
         for q in existing_gt.get("queries", []):
             existing_queries[q["id"]] = q
 
