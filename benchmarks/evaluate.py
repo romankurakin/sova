@@ -33,6 +33,9 @@ class Metrics:
     alpha_ndcg: dict[int, float] = field(default_factory=dict)
     doc_coverage: dict[int, float] = field(default_factory=dict)
 
+    # Diagnostic
+    unjudged_count: int = 0
+
 
 @dataclass
 class QueryResult:
@@ -200,6 +203,7 @@ def compute_metrics(
 
     relevant = {d for d, s in relevance.items() if s >= threshold}
     m = Metrics()
+    m.unjudged_count = sum(1 for r in results if r not in relevance)
 
     for k in k_values:
         m.mrr[k] = reciprocal_rank(results, relevant, k)

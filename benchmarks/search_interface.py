@@ -56,6 +56,65 @@ class SovaBackend:
             for h in hits
         ]
 
+    def search_fts_only(self, query: str, limit: int = 20) -> list[SearchResult]:
+        """BM25-only search via FTS5."""
+        from sova.search import search_fts
+
+        fts_results = search_fts(self.conn, query, limit)
+        return self._hydrate_chunks(fts_results)
+
+    def search_vector_only(self, query: str, limit: int = 20) -> list[SearchResult]:
+        """Vector-only search."""
+        from sova.search import get_vector_candidates
+
+        embedding = self._embed_query(query)
+        vector_results = get_vector_candidates(self.conn, embedding, limit)
+        return self._hydrate_chunks(vector_results[:limit])
+
+    def _hydrate_chunks(
+        self, chunk_id_score_pairs: list[tuple[int, float]]
+    ) -> list[SearchResult]:
+        """Fetch text + doc for a list of (chunk_id, score) pairs."""
+        if not chunk_id_score_pairs:
+            return []
+
+        ids = [cid for cid, _ in chunk_id_score_pairs]
+        score_map = {cid: score for cid, score in chunk_id_score_pairs}
+        placeholders = ",".join("?" * len(ids))
+
+        rows = self.conn.execute(
+            f"SELECT c.id, d.name, c.text, c.section_id"
+            f" FROM chunks c JOIN documents d ON c.doc_id = d.id"
+            f" WHERE c.id IN ({placeholders})",
+            tuple(ids),
+        ).fetchall()
+
+        row_map = {r[0]: r for r in rows}
+        results = []
+        for cid in ids:
+            row = row_map.get(cid)
+            if row:
+                results.append(
+                    SearchResult(
+                        chunk_id=row[0],
+                        doc=row[1],
+                        text=row[2],
+                        score=score_map.get(cid, 0.0),
+                        section_id=row[3],
+                    )
+                )
+        return results
+
+    def get_chunk_text(self, chunk_id: int) -> tuple[str, str] | None:
+        """Fetch (doc, text) for a single chunk. Returns None if not found."""
+        row = self.conn.execute(
+            "SELECT d.name, c.text FROM chunks c"
+            " JOIN documents d ON c.doc_id = d.id"
+            " WHERE c.id = ?",
+            (chunk_id,),
+        ).fetchone()
+        return (row[0], row[1]) if row else None
+
 
 _backend: SovaBackend | None = None
 

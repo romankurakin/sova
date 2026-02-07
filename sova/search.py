@@ -182,6 +182,52 @@ def get_vector_candidates(
     return vector_results
 
 
+def _exact_match_bonuses(
+    conn: sqlite3.Connection,
+    chunk_ids: list[int],
+    query: str,
+) -> dict[int, float]:
+    """Score bonus for chunks containing query text verbatim (case-insensitive).
+
+    Checks two signals:
+    - Full phrase match (query appears as-is in chunk): +0.3
+    - Per-term match (fraction of query terms found):   +0.15 * fraction
+    """
+    if not chunk_ids or not query.strip():
+        return {}
+
+    terms = [t for t in re.findall(r"[a-zA-Z0-9_-]+", query) if len(t) >= 2]
+    if not terms:
+        return {}
+
+    query_lower = query.strip().lower()
+    placeholders = ",".join("?" * len(chunk_ids))
+
+    # Single SQL query: check full phrase + each individual term via INSTR.
+    cols = ["CASE WHEN INSTR(LOWER(text), ?) > 0 THEN 1 ELSE 0 END"]
+    params: list = [query_lower]
+    for term in terms:
+        cols.append("CASE WHEN INSTR(LOWER(text), ?) > 0 THEN 1 ELSE 0 END")
+        params.append(term.lower())
+
+    select = ", ".join(cols)
+    rows = conn.execute(
+        f"SELECT id, {select} FROM chunks WHERE id IN ({placeholders})",
+        params + list(chunk_ids),
+    ).fetchall()
+
+    bonuses: dict[int, float] = {}
+    for row in rows:
+        phrase_hit = row[1]
+        term_frac = sum(row[2:]) / len(terms)
+
+        bonus = 0.3 * phrase_hit + 0.15 * term_frac
+        if bonus > 0:
+            bonuses[row[0]] = bonus
+
+    return bonuses
+
+
 def fuse_and_rank(
     conn,
     vector_results: list[tuple[int, float]],
@@ -214,6 +260,9 @@ def fuse_and_rank(
     vector_score_map = {r[0]: r[1] for r in vector_results}
     fts_id_set = {r[0] for r in fts_results}
 
+    # Exact match bonus: boost chunks containing the query verbatim.
+    exact_bonuses = _exact_match_bonuses(conn, top_ids, query_text)
+
     # Fetch only doc name and is_index for ranking and diversification,
     # deferring the heavier text column to after we know the final top-k.
     meta = {
@@ -234,11 +283,12 @@ def fuse_and_rank(
         rrf_score = rrf_scores.get(chunk_id, 0.0)
         embed_score = vector_score_map.get(chunk_id, 0.0)
         index_penalty = -0.5 if is_idx else 0.0
+        exact_bonus = exact_bonuses.get(chunk_id, 0.0)
         scored.append(
             {
                 "chunk_id": chunk_id,
                 "doc": doc,
-                "final_score": rrf_score * 30 + index_penalty,
+                "final_score": rrf_score * 30 + index_penalty + exact_bonus,
                 "embed_score": embed_score,
                 "rrf_score": rrf_score,
                 "fts_hit": chunk_id in fts_id_set,
@@ -248,7 +298,7 @@ def fuse_and_rank(
         )
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
-    filtered = score_decay_diversify(scored, limit=limit, decay=0.8)
+    filtered = score_decay_diversify(scored, limit=limit, decay=0.95)
 
     if filtered:
         hi, lo = filtered[0]["diversity_score"], filtered[-1]["diversity_score"]

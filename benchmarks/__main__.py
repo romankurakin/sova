@@ -16,8 +16,46 @@ from sova.ui import console, fmt_duration, report, report_progress
 _BENCH_DIR = Path(__file__).parent
 
 
+def _load_ground_truth(path: Path) -> dict | None:
+    """Load ground truth JSON, returning None if missing."""
+    import json
+
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+
+def _save_ground_truth(path: Path, gt: dict):
+    """Atomically save ground truth JSON."""
+    import json
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(gt, indent=2))
+
+
+def _build_ground_truth(
+    queries_list: list[dict],
+    k_per_strategy: int,
+    judge_model: str,
+    use_debiasing: bool,
+) -> dict:
+    """Build v2.0 ground truth envelope."""
+    return {
+        "version": "2.0",
+        "created": time.strftime("%Y-%m-%d"),
+        "pooling": ["hybrid", "fts", "vector"],
+        "k_per_strategy": k_per_strategy,
+        "judge_model": judge_model,
+        "use_debiasing": use_debiasing,
+        "queries": queries_list,
+    }
+
+
 def cmd_judge(use_debiasing: bool = True):
-    """Generate ground truth judgments."""
+    """Generate ground truth judgments with multi-source pooling."""
     from .judge import QUERY_SET, judge_query, JUDGE_MODEL, collect_query_subtopics
     from .search_interface import close_backend
     from sova.config import DB_PATH
@@ -31,93 +69,136 @@ def cmd_judge(use_debiasing: bool = True):
     output_path = _BENCH_DIR / "ground_truth.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Load existing progress
-    completed: dict[str, dict] = {}
-    if checkpoint_path.exists():
-        try:
-            data = json.loads(checkpoint_path.read_text())
-            for q in data.get("queries", []):
-                completed[q["id"]] = q
-        except Exception:
-            pass
+    k_per_strategy = 20
 
-    remaining = [spec for spec in QUERY_SET if spec.id not in completed]
+    # Load existing ground truth (supports incremental judging)
+    existing_gt = _load_ground_truth(output_path)
+    existing_queries: dict[str, dict] = {}
+    if existing_gt:
+        existing_gt = _migrate_v1(existing_gt)
+        for q in existing_gt.get("queries", []):
+            existing_queries[q["id"]] = q
+
+    # Also load partial checkpoint (interrupted previous run)
+    partial_gt = _load_ground_truth(checkpoint_path)
+    if partial_gt:
+        for q in partial_gt.get("queries", []):
+            if q["id"] not in existing_queries:
+                existing_queries[q["id"]] = q
 
     report("model", JUDGE_MODEL)
     report("mode", "debiasing enabled" if use_debiasing else "debiasing disabled")
+    report("pooling", f"hybrid + fts + vector @ k={k_per_strategy}")
+    if existing_queries:
+        total_existing = sum(
+            len(q.get("judgments", [])) for q in existing_queries.values()
+        )
+        report("existing", f"{total_existing} judgments across {len(existing_queries)} queries")
     console.print()
 
     start = time.time()
-    if not remaining:
-        report("status", "all queries already judged")
-    else:
-        k = 10
 
-        def save_checkpoint():
-            ground_truth = {
-                "version": "1.0",
-                "created": time.strftime("%Y-%m-%d"),
-                "judge_model": JUDGE_MODEL,
-                "candidates_per_query": k,
-                "use_debiasing": use_debiasing,
-                "queries": list(completed.values()),
-            }
-            checkpoint_path.write_text(json.dumps(ground_truth, indent=2))
+    # For each query, build existing_judgments map for incremental judging
+    completed: dict[str, dict] = dict(existing_queries)
+    new_judgments_total = 0
 
-        total = len(QUERY_SET)
-        done = len(completed)
+    queries_to_process = list(QUERY_SET)
 
-        progress = Progress(BarColumn(bar_width=30), TimeElapsedColumn())
-        task = progress.add_task("", total=total, completed=done)
+    total = len(queries_to_process)
+    done = 0
 
-        def _display():
-            return Group(Text(f"queries: {done}/{total}"), progress)
+    def save_checkpoint():
+        queries_list = [completed[s.id] for s in QUERY_SET if s.id in completed]
+        gt = _build_ground_truth(queries_list, k_per_strategy, JUDGE_MODEL, use_debiasing)
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_path.write_text(json.dumps(gt, indent=2))
 
-        with Live(_display(), console=console, transient=True) as live:
-            for spec in remaining:
-                qj = judge_query(spec, k=k, verbose=False, use_debiasing=use_debiasing)
+    progress = Progress(BarColumn(bar_width=30), TimeElapsedColumn())
+    task = progress.add_task("", total=total, completed=done)
 
-                extracted_subtopics = collect_query_subtopics(qj.judgments)
-                all_subtopics = sorted(set(qj.query.subtopics + extracted_subtopics))
-
-                query_data = {
-                    "id": qj.query.id,
-                    "query": qj.query.query,
-                    "category": qj.query.category,
-                    "subtopics": all_subtopics,
-                    "judgments": [
-                        {
-                            "chunk_id": j.chunk_id,
-                            "doc": j.doc,
-                            "score": j.score,
-                            "confidence": j.confidence,
-                            "subtopics": j.subtopics,
-                            "reason": j.reason,
-                        }
-                        for j in qj.judgments
-                    ],
-                }
-                completed[spec.id] = query_data
-                save_checkpoint()
-                done += 1
-                progress.update(task, completed=done)
-                live.update(_display())
-
-        close_backend()
-        report(
-            "judged", f"{len(remaining)} queries in {fmt_duration(time.time() - start)}"
+    def _display():
+        return Group(
+            Text(f"queries: {done}/{total}  new judgments: {new_judgments_total}"),
+            progress,
         )
+
+    with Live(_display(), console=console, transient=True) as live:
+        for spec in queries_to_process:
+            # Build map of already-judged chunk_ids for this query
+            existing_for_query: dict[int, int] = {}
+            if spec.id in completed:
+                for j in completed[spec.id].get("judgments", []):
+                    existing_for_query[j["chunk_id"]] = j["score"]
+
+            qj = judge_query(
+                spec,
+                verbose=False,
+                use_debiasing=use_debiasing,
+                existing_judgments=existing_for_query,
+                k_per_strategy=k_per_strategy,
+            )
+
+            new_count = len(qj.judgments)
+            new_judgments_total += new_count
+
+            # Merge new judgments into existing ones
+            existing_judgment_list = completed.get(spec.id, {}).get("judgments", [])
+            existing_chunk_ids = {j["chunk_id"] for j in existing_judgment_list}
+
+            new_judgment_dicts = [
+                {
+                    "chunk_id": j.chunk_id,
+                    "doc": j.doc,
+                    "score": j.score,
+                    "confidence": j.confidence,
+                    "subtopics": j.subtopics,
+                    "reason": j.reason,
+                }
+                for j in qj.judgments
+                if j.chunk_id not in existing_chunk_ids
+            ]
+
+            merged_judgments = existing_judgment_list + new_judgment_dicts
+
+            # Collect subtopics from all judgments
+            from .judge import Judgment as _J
+
+            all_j_objs = [
+                _J(chunk_id=j["chunk_id"], doc=j["doc"], score=j["score"],
+                   reason=j["reason"], subtopics=j.get("subtopics", []))
+                for j in merged_judgments
+            ]
+            extracted_subtopics = collect_query_subtopics(all_j_objs)
+            existing_subtopics = completed.get(spec.id, {}).get("subtopics", [])
+            all_subtopics = sorted(set(spec.subtopics + existing_subtopics + extracted_subtopics))
+
+            completed[spec.id] = {
+                "id": spec.id,
+                "query": spec.query,
+                "category": spec.category,
+                "subtopics": all_subtopics,
+                "judgments": merged_judgments,
+            }
+
+            save_checkpoint()
+            done += 1
+            progress.update(task, completed=done)
+            live.update(_display())
+
+    close_backend()
+
+    if new_judgments_total > 0:
+        report(
+            "judged", f"{new_judgments_total} new chunks in {fmt_duration(time.time() - start)}"
+        )
+    else:
+        report("status", f"no new chunks to judge ({fmt_duration(time.time() - start).strip()})")
 
     # Build final output in query order
     queries_list = [completed[spec.id] for spec in QUERY_SET if spec.id in completed]
-    ground_truth = {
-        "version": "1.0",
-        "created": time.strftime("%Y-%m-%d"),
-        "judge_model": JUDGE_MODEL,
-        "candidates_per_query": k if remaining else 10,
-        "use_debiasing": use_debiasing,
-        "queries": queries_list,
-    }
+    ground_truth = _build_ground_truth(
+        queries_list, k_per_strategy, JUDGE_MODEL, use_debiasing
+    )
 
     total_judgments = 0
     score_counts = {0: 0, 1: 0, 2: 0, 3: 0}
@@ -126,11 +207,11 @@ def cmd_judge(use_debiasing: bool = True):
             total_judgments += 1
             score_counts[j["score"]] = score_counts.get(j["score"], 0) + 1
 
-    output_path.write_text(json.dumps(ground_truth, indent=2))
+    _save_ground_truth(output_path, ground_truth)
     if checkpoint_path.exists():
         checkpoint_path.unlink()
 
-    report("judged", f"{total_judgments} chunks in {fmt_duration(time.time() - start)}")
+    report("total", f"{total_judgments} judgments")
     report("saved", f"{output_path.name}")
     console.print()
     table = Table(title="Score Distribution", show_header=True, header_style="dim")
@@ -142,17 +223,18 @@ def cmd_judge(use_debiasing: bool = True):
     for score in range(4):
         count = score_counts[score]
         pct = count / total_judgments * 100 if total_judgments else 0
-        bar = "[green]" + "█" * int(pct / 5) + "[/green]"
+        bar = "[green]" + "\u2588" * int(pct / 5) + "[/green]"
         table.add_row(f"{score} {labels[score]}", str(count), f"{pct:.0f}% {bar}")
 
     console.print(table)
 
 
-def cmd_run(name: str | None = None):
-    """Run benchmark against ground truth."""
+def cmd_run(name: str | None = None, no_autofill: bool = False):
+    """Run benchmark against ground truth with auto-fill for unjudged chunks."""
     from .run_benchmark import run_search
     from .evaluate import aggregate_metrics, aggregate_by_category
-    from .search_interface import measure_latency, clear_cache, close_backend
+    from .search_interface import measure_latency, clear_cache, close_backend, get_backend
+    from .judge import judge_single_chunk
     import json
     from pathlib import Path
     import statistics
@@ -172,6 +254,8 @@ def cmd_run(name: str | None = None):
 
     ground_truth = json.loads(gt_path.read_text())
     report("queries", str(len(ground_truth["queries"])))
+    if no_autofill:
+        report("auto-fill", "disabled")
 
     clear_cache()
     latency_queries = [
@@ -204,6 +288,11 @@ def cmd_run(name: str | None = None):
     k_values = STANDARD_K
     results = []
 
+    # Track auto-fill stats
+    autofill_count = 0
+    unjudged_count = 0
+    gt_modified = False
+
     start = time.time()
     with report_progress("evaluating") as progress:
         task = progress.add_task("", total=len(ground_truth["queries"]))
@@ -212,9 +301,44 @@ def cmd_run(name: str | None = None):
             hits = run_search(q["query"], limit=max(k_values))
 
             judgments = {j["chunk_id"]: j["score"] for j in q["judgments"]}
+            judgment_list = q["judgments"]
+
+            # Check for unjudged chunks and auto-fill
+            for h in hits:
+                chunk_id = h["chunk_id"]
+                if chunk_id not in judgments:
+                    if no_autofill:
+                        unjudged_count += 1
+                        continue
+
+                    # Auto-fill: judge on the fly
+                    backend = get_backend()
+                    chunk_info = backend.get_chunk_text(chunk_id)
+                    if chunk_info is None:
+                        unjudged_count += 1
+                        continue
+
+                    doc, text = chunk_info
+                    j = judge_single_chunk(q["query"], chunk_id, text, doc)
+
+                    # Add to in-memory ground truth
+                    new_judgment = {
+                        "chunk_id": j.chunk_id,
+                        "doc": j.doc,
+                        "score": j.score,
+                        "confidence": j.confidence,
+                        "subtopics": j.subtopics,
+                        "reason": j.reason,
+                        "auto_filled": True,
+                    }
+                    judgment_list.append(new_judgment)
+                    judgments[chunk_id] = j.score
+                    autofill_count += 1
+                    gt_modified = True
+
             subtopics = {
                 j["chunk_id"]: j.get("subtopics", [])
-                for j in q["judgments"]
+                for j in judgment_list
                 if j["score"] >= 2
             }
 
@@ -238,6 +362,10 @@ def cmd_run(name: str | None = None):
             )
             progress.update(task, advance=1)
 
+    # Save updated ground truth if auto-fill added judgments
+    if gt_modified:
+        _save_ground_truth(gt_path, ground_truth)
+
     close_backend()
 
     # Separate negative queries from main metrics
@@ -254,9 +382,13 @@ def cmd_run(name: str | None = None):
             neg_fp_rate[kv] = sum(fp_counts) / len(fp_counts) if fp_counts else 0
 
     report("evaluated", f"in {fmt_duration(time.time() - start).strip()}")
+    if autofill_count > 0:
+        report("auto-fill", f"judged {autofill_count} new chunks")
+    if unjudged_count > 0:
+        report("unjudged", f"{unjudged_count} chunks (no judgments)")
     console.print()
 
-    blank = "—"
+    blank = "\u2014"
     table = Table(title="Results", show_header=True, header_style="dim")
     table.add_column("Metric")
     for kv in k_values:
@@ -277,7 +409,7 @@ def cmd_run(name: str | None = None):
         ("hit_rate", "Hit Rate"),
         ("doc_coverage", "Doc-Cov"),
         ("subtopic_recall", "S-Recall"),
-        ("alpha_ndcg", "α-nDCG"),
+        ("alpha_ndcg", "\u03b1-nDCG"),
     ]:
         row = [label] + [f"{agg.get(metric, {}).get(kv, 0):.3f}" for kv in k_values]
         table.add_row(*row)
@@ -317,6 +449,8 @@ def cmd_run(name: str | None = None):
         "metrics": agg,
         "negative_fp_rate": neg_fp_rate,
         "by_category": by_cat,
+        "auto_filled": autofill_count,
+        "unjudged": unjudged_count,
     }
 
     results_dir = Path(__file__).parent / "results"
@@ -392,7 +526,7 @@ def cmd_show(run_name: str | None = None):
     def get_val(d, k):
         return d.get(str(k), d.get(k, 0))
 
-    blank = "—"
+    blank = "\u2014"
     lat = data.get("latency_ms", {})
     neg_fp = data.get("negative_fp_rate", {})
 
@@ -425,7 +559,7 @@ def cmd_show(run_name: str | None = None):
         ("hit_rate", "Hit Rate"),
         ("doc_coverage", "Doc-Cov"),
         ("subtopic_recall", "S-Recall"),
-        ("alpha_ndcg", "α-nDCG"),
+        ("alpha_ndcg", "\u03b1-nDCG"),
     ]:
         row = [label] + [f"{get_val(m.get(metric, {}), kv):.3f}" for kv in STANDARD_K]
         table.add_row(*row)
@@ -467,11 +601,16 @@ def main():
 
     p_judge = sub.add_parser("judge", help="Generate ground truth judgments")
     p_judge.add_argument(
-        "--no-debias", action="store_true", help="Skip debiasing (faster)"
+        "--debias", action="store_true", help="Enable debiasing (re-judge borderline chunks)"
     )
 
     p_run = sub.add_parser("run", help="Run benchmark against ground truth")
     p_run.add_argument("name", help="Benchmark run name (e.g. 'baseline-v2')")
+    p_run.add_argument(
+        "--no-autofill",
+        action="store_true",
+        help="Skip auto-judging unjudged chunks (just report count)",
+    )
 
     p_show = sub.add_parser("show", help="Display benchmark results")
     p_show.add_argument(
@@ -485,9 +624,9 @@ def main():
         sys.exit(0)
 
     if args.command == "judge":
-        cmd_judge(use_debiasing=not args.no_debias)
+        cmd_judge(use_debiasing=args.debias)
     elif args.command == "run":
-        cmd_run(name=args.name)
+        cmd_run(name=args.name, no_autofill=args.no_autofill)
     elif args.command == "show":
         cmd_show(run_name=args.name)
 

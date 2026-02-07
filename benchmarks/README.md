@@ -7,7 +7,7 @@ Measure search quality against LLM-judged ground truth.
 ```bash
 uv run python -m sova                               # Index docs first
 uv run python -m benchmarks judge                   # Generate ground truth
-uv run python -m benchmarks judge --no-debias       # Faster, skip debiasing
+uv run python -m benchmarks judge --debias          # Use debiasing
 uv run python -m benchmarks run my-test             # Run benchmark
 uv run python -m benchmarks show                    # View results
 uv run python -m benchmarks --help                  # Full CLI help

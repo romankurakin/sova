@@ -1,5 +1,6 @@
 """LLM-as-Judge for creating ground truth relevance judgments."""
 
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -10,9 +11,33 @@ from pydantic import BaseModel
 
 from .search_interface import get_backend
 
-JUDGE_MODEL = "gemma3:27b"
 
-JUDGE_PROMPT = """Rate how well this document chunk answers the search query.
+class JudgeError(Exception):
+    """Raised when the judge model fails permanently (e.g. model not found)."""
+
+JUDGE_MODEL = "gemini-3-flash-preview:cloud"
+
+# Rate limiting for cloud models (avoid getting banned)
+_MIN_INTERVAL = 1.0  # seconds between requests for cloud models
+_last_request_time: float = 0.0
+
+
+def _is_cloud_model(model: str) -> bool:
+    return ":cloud" in model
+
+
+def _throttle():
+    """Sleep if needed to maintain minimum interval between cloud API calls."""
+    global _last_request_time
+    if not _is_cloud_model(JUDGE_MODEL):
+        return
+    now = time.monotonic()
+    elapsed = now - _last_request_time
+    if elapsed < _MIN_INTERVAL:
+        time.sleep(_MIN_INTERVAL - elapsed)
+    _last_request_time = time.monotonic()
+
+JUDGE_PROMPT = """You are an information retrieval judge. Rate how well this document chunk satisfies the search query. Imagine a developer searched for this query while building an OS kernel — would this chunk help them?
 
 Query: {query}
 
@@ -21,24 +46,23 @@ Document chunk:
 {chunk}
 ---
 
-Rules:
-- Score ONLY what the chunk actually says. Do not assume or infer content.
-- If the query names a specific term, that term must appear in the chunk to score
-  above 0. A similar concept from a different domain does not count.
-- Definitions, mechanisms, and format descriptions about the query topic are score 2.
-  Score 1 is only for passing mentions without explanation.
+Scoring rules:
+- Judge ONLY what the chunk explicitly states. Never infer or assume content beyond the text.
+- A chunk can be relevant through exact terminology OR through describing the same concept, mechanism, or procedure the query asks about.
+- However, a similar concept from an unrelated domain is NOT relevant (e.g., "Python exception handling" is not relevant to "ARM exception handling").
+- A chunk that provides context needed to understand the query topic (e.g., prerequisite concepts, surrounding architecture) is at least score 1.
 
-Scores:
-3 = Directly and thoroughly answers the query
-2 = Explains, defines, or gives useful detail about the query topic
-1 = Mentions a query term in passing without explaining it
-0 = No meaningful connection to the query
+Score definitions:
+3 = Directly and thoroughly addresses the query. A developer would bookmark this.
+2 = Provides useful detail — definitions, mechanisms, formats, or procedures related to the query topic.
+1 = Partially relevant — mentions the topic briefly, covers a prerequisite, or addresses a related aspect without detail.
+0 = Not relevant — no meaningful connection to what the developer is looking for.
 
 Return JSON with:
 - score: integer 0-3
-- confidence: float 0.0-1.0 (lower when uncertain)
-- subtopics: list of 1-3 technical concepts this chunk covers
-- reason: one sentence; note whether key query terms appear in the chunk"""
+- confidence: float 0.0-1.0 (lower when the chunk is borderline between two scores)
+- subtopics: list of 1-3 specific technical concepts this chunk covers (e.g., "page table walk", "ELR_EL1 fields", "trap vector setup")
+- reason: one sentence explaining your score; mention which query concepts are or are not present in the chunk"""
 
 
 class JudgmentResponse(BaseModel):
@@ -167,22 +191,49 @@ QUERY_SET: list[QuerySpec] = [
 ]
 
 
+def _is_permanent_error(exc: Exception) -> bool:
+    """Check if an ollama error is permanent (no point retrying)."""
+    msg = str(exc).lower()
+    return "not found" in msg or "status code: 404" in msg
+
+
+_JSON_RE = re.compile(r"\{[^{}]*\}", re.DOTALL)
+
+
+def _extract_json(text: str) -> str:
+    """Extract first JSON object from text (strips markdown fences, thinking, etc)."""
+    m = _JSON_RE.search(text)
+    return m.group(0) if m else text
+
+
+def _call_judge(prompt: str) -> JudgmentResponse:
+    """Call the judge model, extract JSON, return parsed response."""
+    _throttle()
+    response = ollama.chat(
+        model=JUDGE_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        format=JudgmentResponse.model_json_schema(),
+        options={"temperature": 0},
+    )
+    content = response.message.content or ""
+    if not content.strip():
+        raise ValueError("empty response from model")
+    return JudgmentResponse.model_validate_json(_extract_json(content))
+
+
 def judge_chunk(
     query: str, chunk_text: str, max_retries: int = 2
 ) -> tuple[int, str, float, list[str]]:
-    """Judge relevance of a single chunk. Returns (score, reason, confidence, subtopics)."""
+    """Judge relevance of a single chunk. Returns (score, reason, confidence, subtopics).
+
+    Raises JudgeError on permanent failures (e.g. model not found).
+    Cloud models are throttled automatically via _throttle().
+    """
     prompt = JUDGE_PROMPT.format(query=query, chunk=chunk_text[:1500])
 
     for attempt in range(max_retries + 1):
         try:
-            response = ollama.chat(
-                model=JUDGE_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                format=JudgmentResponse.model_json_schema(),
-                options={"num_predict": 200, "temperature": 0},
-            )
-            content = response.message.content or ""
-            result = JudgmentResponse.model_validate_json(content)
+            result = _call_judge(prompt)
             return (
                 max(0, min(3, result.score)),
                 result.reason.strip(),
@@ -190,6 +241,8 @@ def judge_chunk(
                 result.subtopics[:5] if result.subtopics else [],
             )
         except Exception as e:
+            if _is_permanent_error(e):
+                raise JudgeError(str(e)) from e
             if attempt == max_retries:
                 return 0, f"error: {e}", 0.0, []
             time.sleep(0.5)
@@ -212,14 +265,7 @@ def judge_chunk_with_debiasing(
     padded_prompt = padding + JUDGE_PROMPT.format(query=query, chunk=chunk_text[:1400])
 
     try:
-        response = ollama.chat(
-            model=JUDGE_MODEL,
-            messages=[{"role": "user", "content": padded_prompt}],
-            format=JudgmentResponse.model_json_schema(),
-            options={"num_predict": 200, "temperature": 0},
-        )
-        content = response.message.content or ""
-        result = JudgmentResponse.model_validate_json(content)
+        result = _call_judge(padded_prompt)
         score2 = max(0, min(3, result.score))
         subs2 = result.subtopics[:5] if result.subtopics else []
     except Exception:
@@ -253,18 +299,69 @@ def collect_candidates(query: str, k: int = 50) -> list[dict]:
     ]
 
 
+def collect_pool(query: str, k_per_strategy: int = 20) -> list[dict]:
+    """Multi-source pooling: union of hybrid, FTS-only, and vector-only results.
+
+    Returns deduplicated candidates (~30-50 per query). This is the TREC
+    pooling approach — ground truth is independent of any single retrieval strategy.
+    """
+    backend = get_backend()
+
+    seen: dict[int, dict] = {}
+
+    def _add_results(results):
+        for r in results:
+            if r.chunk_id not in seen:
+                seen[r.chunk_id] = {
+                    "chunk_id": r.chunk_id,
+                    "doc": r.doc,
+                    "text": r.text,
+                    "section_id": r.section_id,
+                }
+
+    # Strategy 1: hybrid (existing search)
+    _add_results(backend.search(query, limit=k_per_strategy))
+
+    # Strategy 2: BM25-only
+    _add_results(backend.search_fts_only(query, limit=k_per_strategy))
+
+    # Strategy 3: vector-only
+    _add_results(backend.search_vector_only(query, limit=k_per_strategy))
+
+    return list(seen.values())
+
+
 def judge_query(
     spec: QuerySpec,
     k: int = 50,
     verbose: bool = True,
     use_debiasing: bool = False,
     on_chunk_done: Callable[[], None] | None = None,
+    existing_judgments: dict[int, int] | None = None,
+    k_per_strategy: int | None = None,
 ) -> QueryJudgments:
-    """Collect and judge all candidates for a query."""
-    candidates = collect_candidates(spec.query, k=k)
+    """Collect and judge all candidates for a query.
+
+    If k_per_strategy is set, uses multi-source pooling (3 strategies).
+    Otherwise falls back to single-source collection with limit=k.
+
+    existing_judgments maps chunk_id -> score for chunks already judged.
+    These are preserved and not re-judged.
+    """
+    if k_per_strategy is not None:
+        candidates = collect_pool(spec.query, k_per_strategy=k_per_strategy)
+    else:
+        candidates = collect_candidates(spec.query, k=k)
+
     judgments = []
 
     for hit in candidates:
+        chunk_id = hit["chunk_id"]
+
+        # Skip already-judged chunks (incremental)
+        if existing_judgments and chunk_id in existing_judgments:
+            continue
+
         if use_debiasing:
             score, reason, confidence, subtopics, _ = judge_chunk_with_debiasing(
                 spec.query, hit["text"]
@@ -274,7 +371,7 @@ def judge_query(
 
         judgments.append(
             Judgment(
-                chunk_id=hit["chunk_id"],
+                chunk_id=chunk_id,
                 doc=hit["doc"],
                 score=score,
                 reason=reason,
@@ -288,6 +385,32 @@ def judge_query(
 
     return QueryJudgments(
         query=spec, judgments=judgments, timestamp=time.strftime("%Y-%m-%dT%H:%M:%S")
+    )
+
+
+def judge_single_chunk(
+    query: str,
+    chunk_id: int,
+    text: str,
+    doc: str,
+    use_debiasing: bool = True,
+) -> Judgment:
+    """Judge a single chunk. Used by auto-fill during cmd_run."""
+    if use_debiasing:
+        score, reason, confidence, subtopics, _ = judge_chunk_with_debiasing(
+            query, text
+        )
+    else:
+        score, reason, confidence, subtopics = judge_chunk(query, text)
+
+    return Judgment(
+        chunk_id=chunk_id,
+        doc=doc,
+        score=score,
+        reason=reason,
+        confidence=confidence,
+        subtopics=subtopics,
+        text_preview=text[:100].replace("\n", " "),
     )
 
 
