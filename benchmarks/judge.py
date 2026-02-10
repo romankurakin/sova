@@ -268,7 +268,11 @@ _judge_client: ollama.Client | None = None
 def _get_judge_client() -> ollama.Client:
     global _judge_client
     if _judge_client is None:
-        timeout = _REQUEST_TIMEOUT_CLOUD if _is_cloud_model(JUDGE_MODEL) else _REQUEST_TIMEOUT_LOCAL
+        timeout = (
+            _REQUEST_TIMEOUT_CLOUD
+            if _is_cloud_model(JUDGE_MODEL)
+            else _REQUEST_TIMEOUT_LOCAL
+        )
         _judge_client = ollama.Client(timeout=timeout)
     return _judge_client
 
@@ -330,9 +334,7 @@ def judge_chunk(
                     continue
                 raise JudgeRateLimitError(str(e)) from e
             if attempt >= max_retries:
-                raise JudgeError(
-                    f"failed after {attempt + 1} attempts: {e}"
-                ) from e
+                raise JudgeError(f"failed after {attempt + 1} attempts: {e}") from e
             time.sleep(0.5)
 
     raise JudgeRateLimitError(str(last_error))
