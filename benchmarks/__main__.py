@@ -126,6 +126,9 @@ def cmd_judge(use_debiasing: bool = True):
             progress,
         )
 
+    from .judge import JudgeRateLimitError, JudgeError, Judgment as _J
+
+    rate_limited = False
     with Live(_display(), console=console, transient=True) as live:
         for spec in queries_to_process:
             # Build map of already-judged chunk_ids for this query
@@ -134,67 +137,77 @@ def cmd_judge(use_debiasing: bool = True):
                 for j in completed[spec.id].get("judgments", []):
                     existing_for_query[j["chunk_id"]] = j["score"]
 
-            qj = judge_query(
-                spec,
-                verbose=False,
-                use_debiasing=use_debiasing,
-                existing_judgments=existing_for_query,
-                k_per_strategy=k_per_strategy,
-            )
-
-            new_count = len(qj.judgments)
-            new_judgments_total += new_count
-
-            # Merge new judgments into existing ones
+            # Per-chunk checkpoint: merge each judgment immediately
             existing_judgment_list = completed.get(spec.id, {}).get("judgments", [])
             existing_chunk_ids = {j["chunk_id"] for j in existing_judgment_list}
+            current_query_judgments = list(existing_judgment_list)
 
-            new_judgment_dicts = [
-                {
-                    "chunk_id": j.chunk_id,
-                    "doc": j.doc,
-                    "score": j.score,
-                    "confidence": j.confidence,
-                    "subtopics": j.subtopics,
-                    "reason": j.reason,
-                }
-                for j in qj.judgments
-                if j.chunk_id not in existing_chunk_ids
-            ]
+            def _on_chunk_judged(j: _J):
+                nonlocal new_judgments_total
+                if j.chunk_id not in existing_chunk_ids:
+                    current_query_judgments.append(
+                        {
+                            "chunk_id": j.chunk_id,
+                            "doc": j.doc,
+                            "score": j.score,
+                            "confidence": j.confidence,
+                            "subtopics": j.subtopics,
+                            "reason": j.reason,
+                        }
+                    )
+                    existing_chunk_ids.add(j.chunk_id)
+                new_judgments_total += 1
 
-            merged_judgments = existing_judgment_list + new_judgment_dicts
-
-            # Collect subtopics from all judgments
-            from .judge import Judgment as _J
-
-            all_j_objs = [
-                _J(
-                    chunk_id=j["chunk_id"],
-                    doc=j["doc"],
-                    score=j["score"],
-                    reason=j["reason"],
-                    subtopics=j.get("subtopics", []),
+                # Update completed with partial progress and checkpoint
+                all_j_objs = [
+                    _J(
+                        chunk_id=jd["chunk_id"],
+                        doc=jd["doc"],
+                        score=jd["score"],
+                        reason=jd["reason"],
+                        subtopics=jd.get("subtopics", []),
+                    )
+                    for jd in current_query_judgments
+                ]
+                extracted_subtopics = collect_query_subtopics(all_j_objs)
+                existing_subtopics = completed.get(spec.id, {}).get("subtopics", [])
+                all_subtopics = sorted(
+                    set(spec.subtopics + existing_subtopics + extracted_subtopics)
                 )
-                for j in merged_judgments
-            ]
-            extracted_subtopics = collect_query_subtopics(all_j_objs)
-            existing_subtopics = completed.get(spec.id, {}).get("subtopics", [])
-            all_subtopics = sorted(
-                set(spec.subtopics + existing_subtopics + extracted_subtopics)
-            )
+                completed[spec.id] = {
+                    "id": spec.id,
+                    "query": spec.query,
+                    "category": spec.category,
+                    "subtopics": all_subtopics,
+                    "judgments": current_query_judgments,
+                }
+                save_checkpoint()
+                live.update(_display())
 
-            completed[spec.id] = {
-                "id": spec.id,
-                "query": spec.query,
-                "category": spec.category,
-                "subtopics": all_subtopics,
-                "judgments": merged_judgments,
-            }
+            try:
+                judge_query(
+                    spec,
+                    verbose=False,
+                    use_debiasing=use_debiasing,
+                    existing_judgments=existing_for_query,
+                    k_per_strategy=k_per_strategy,
+                    on_chunk_judged=_on_chunk_judged,
+                )
+            except (JudgeRateLimitError, JudgeError) as e:
+                save_checkpoint()
+                rate_limited = True
+                console.print(f"[yellow]stopped:[/yellow] {e}")
+                console.print(
+                    f"\nprogress saved ({done}/{total} queries). re-run to continue."
+                )
+                break
 
-            save_checkpoint()
             done += 1
             progress.update(task, completed=done)
             live.update(_display())
+
+    if rate_limited:
+        sys.exit(1)
 
     close_backend()
 

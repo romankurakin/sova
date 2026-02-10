@@ -1,5 +1,7 @@
 """LLM-as-Judge for creating ground truth relevance judgments."""
 
+import ast
+import json
 import re
 import time
 import uuid
@@ -16,15 +18,28 @@ class JudgeError(Exception):
     """Raised when the judge model fails permanently (e.g. model not found)."""
 
 
-JUDGE_MODEL = "gemini-3-flash-preview:cloud"
+class JudgeRateLimitError(Exception):
+    """Raised when rate-limited and retries exhausted."""
+
+
+JUDGE_MODEL = "kimi-k2.5:cloud"
 
 # Rate limiting for cloud models (avoid getting banned)
 _MIN_INTERVAL = 1.0  # seconds between requests for cloud models
 _last_request_time: float = 0.0
 
+# Retry settings for rate limits (429)
+_RATE_LIMIT_RETRIES = 3
+_RATE_LIMIT_BASE_DELAY = 2.0  # seconds, doubles each retry (max wait ~14s)
+
 
 def _is_cloud_model(model: str) -> bool:
     return ":cloud" in model
+
+
+def _is_rate_limit(exc: Exception) -> bool:
+    msg = str(exc)
+    return "429" in msg or "rate limit" in msg.lower() or "usage limit" in msg.lower()
 
 
 def _throttle():
@@ -138,25 +153,28 @@ QUERY_SET: list[QuerySpec] = [
         "conceptual",
         ["mmu", "page_walk"],
     ),
-    # Cross-doc (4) — should return results from multiple documents
+    # Cross-doc (4) — queries answerable by chunks from multiple documents
     QuerySpec(
         "d01",
-        "how ARM and RISC-V differ in exception handling",
+        "exception vector table base address register",
         "cross_doc",
-        ["arm_exception", "riscv_trap"],
+        ["vbar_el1", "mtvec"],
     ),
     QuerySpec(
         "d02",
-        "calling convention register usage",
+        "function argument passing in registers",
         "cross_doc",
         ["arm_abi", "riscv_abi"],
     ),
     QuerySpec(
-        "d03", "interrupt controller setup and priority", "cross_doc", ["gic", "plic"]
+        "d03",
+        "interrupt priority registers",
+        "cross_doc",
+        ["gic_priority", "plic_priority"],
     ),
     QuerySpec(
         "d04",
-        "page table entry format and permission bits",
+        "page table entry permission bits",
         "cross_doc",
         ["arm_pte", "riscv_pte"],
     ),
@@ -199,28 +217,84 @@ def _is_permanent_error(exc: Exception) -> bool:
     return "not found" in msg or "status code: 404" in msg
 
 
-_JSON_RE = re.compile(r"\{[^{}]*\}", re.DOTALL)
-
-
 def _extract_json(text: str) -> str:
-    """Extract first JSON object from text (strips markdown fences, thinking, etc)."""
-    m = _JSON_RE.search(text)
-    return m.group(0) if m else text
+    """Extract first JSON payload from text (fences/thinking/prose tolerated)."""
+    text = text.strip()
+    if not text:
+        return text
+
+    # Prefer fenced payloads if present.
+    for m in re.finditer(r"```(?:json)?\s*(.*?)```", text, re.IGNORECASE | re.DOTALL):
+        candidate = m.group(1).strip()
+        if candidate:
+            return candidate
+
+    # Fall back to scanning for a valid JSON object/array anywhere in the text.
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch not in "{[":
+            continue
+        try:
+            _, end = decoder.raw_decode(text[i:])
+            return text[i : i + end]
+        except json.JSONDecodeError:
+            continue
+
+    return text
+
+
+def _parse_judgment_response(text: str) -> JudgmentResponse:
+    """Parse model output into JudgmentResponse with tolerant fallback formats."""
+    payload = _extract_json(text)
+    try:
+        return JudgmentResponse.model_validate_json(payload)
+    except Exception as json_error:
+        # Some models emit Python dict literals instead of strict JSON.
+        try:
+            parsed = ast.literal_eval(payload)
+        except (SyntaxError, ValueError):
+            raise json_error
+        if not isinstance(parsed, dict):
+            raise json_error
+        return JudgmentResponse.model_validate(parsed)
+
+
+_REQUEST_TIMEOUT_LOCAL = 30.0  # seconds — local models
+_REQUEST_TIMEOUT_CLOUD = 300.0  # seconds — cloud models are slow with long prompts
+
+_judge_client: ollama.Client | None = None
+
+
+def _get_judge_client() -> ollama.Client:
+    global _judge_client
+    if _judge_client is None:
+        timeout = _REQUEST_TIMEOUT_CLOUD if _is_cloud_model(JUDGE_MODEL) else _REQUEST_TIMEOUT_LOCAL
+        _judge_client = ollama.Client(timeout=timeout)
+    return _judge_client
 
 
 def _call_judge(prompt: str) -> JudgmentResponse:
     """Call the judge model, extract JSON, return parsed response."""
     _throttle()
-    response = ollama.chat(
-        model=JUDGE_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        format=JudgmentResponse.model_json_schema(),
-        options={"temperature": 0},
-    )
+    client = _get_judge_client()
+    # format= breaks cloud models (hangs or returns non-JSON), skip it
+    if _is_cloud_model(JUDGE_MODEL):
+        response = client.chat(
+            model=JUDGE_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0},
+        )
+    else:
+        response = client.chat(
+            model=JUDGE_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            format=JudgmentResponse.model_json_schema(),
+            options={"temperature": 0},
+        )
     content = response.message.content or ""
     if not content.strip():
         raise ValueError("empty response from model")
-    return JudgmentResponse.model_validate_json(_extract_json(content))
+    return _parse_judgment_response(content)
 
 
 def judge_chunk(
@@ -229,11 +303,14 @@ def judge_chunk(
     """Judge relevance of a single chunk. Returns (score, reason, confidence, subtopics).
 
     Raises JudgeError on permanent failures (e.g. model not found).
+    Raises JudgeRateLimitError when rate-limited after exhausting retries.
     Cloud models are throttled automatically via _throttle().
     """
     prompt = JUDGE_PROMPT.format(query=query, chunk=chunk_text[:1500])
+    last_error: Exception | None = None
 
-    for attempt in range(max_retries + 1):
+    total_attempts = max(max_retries + 1, _RATE_LIMIT_RETRIES)
+    for attempt in range(total_attempts):
         try:
             result = _call_judge(prompt)
             return (
@@ -243,13 +320,22 @@ def judge_chunk(
                 result.subtopics[:5] if result.subtopics else [],
             )
         except Exception as e:
+            last_error = e
             if _is_permanent_error(e):
                 raise JudgeError(str(e)) from e
-            if attempt == max_retries:
-                return 0, f"error: {e}", 0.0, []
+            if _is_rate_limit(e):
+                if attempt + 1 < _RATE_LIMIT_RETRIES:
+                    delay = _RATE_LIMIT_BASE_DELAY * (2**attempt)
+                    time.sleep(delay)
+                    continue
+                raise JudgeRateLimitError(str(e)) from e
+            if attempt >= max_retries:
+                raise JudgeError(
+                    f"failed after {attempt + 1} attempts: {e}"
+                ) from e
             time.sleep(0.5)
 
-    return 0, "max_retries", 0.0, []
+    raise JudgeRateLimitError(str(last_error))
 
 
 def judge_chunk_with_debiasing(
@@ -339,6 +425,7 @@ def judge_query(
     verbose: bool = True,
     use_debiasing: bool = False,
     on_chunk_done: Callable[[], None] | None = None,
+    on_chunk_judged: Callable[["Judgment"], None] | None = None,
     existing_judgments: dict[int, int] | None = None,
     k_per_strategy: int | None = None,
 ) -> QueryJudgments:
@@ -349,6 +436,9 @@ def judge_query(
 
     existing_judgments maps chunk_id -> score for chunks already judged.
     These are preserved and not re-judged.
+
+    on_chunk_judged is called after each successful judgment, enabling
+    per-chunk checkpointing. Exceptions propagate to the caller.
     """
     if k_per_strategy is not None:
         candidates = collect_pool(spec.query, k_per_strategy=k_per_strategy)
@@ -371,17 +461,18 @@ def judge_query(
         else:
             score, reason, confidence, subtopics = judge_chunk(spec.query, hit["text"])
 
-        judgments.append(
-            Judgment(
-                chunk_id=chunk_id,
-                doc=hit["doc"],
-                score=score,
-                reason=reason,
-                confidence=confidence,
-                subtopics=subtopics,
-                text_preview=hit["text"][:100].replace("\n", " "),
-            )
+        j = Judgment(
+            chunk_id=chunk_id,
+            doc=hit["doc"],
+            score=score,
+            reason=reason,
+            confidence=confidence,
+            subtopics=subtopics,
+            text_preview=hit["text"][:100].replace("\n", " "),
         )
+        judgments.append(j)
+        if on_chunk_judged:
+            on_chunk_judged(j)
         if on_chunk_done:
             on_chunk_done()
 

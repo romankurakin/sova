@@ -15,7 +15,7 @@ uv run python -m benchmarks --help                  # Full CLI help
 
 ## Methodology
 
-1. **Ground Truth** - LLM (gemma3:27b) scores relevance 0-3 for top chunks per query
+1. **Ground Truth** - LLM (kimi-k2.5:cloud) scores relevance 0-3 for top chunks per query
 2. **Benchmark Run** - Search retrieves results, compared against ground truth
 3. **Metrics** - Standard IR metrics computed, saved to `results/{name}.json`
 
@@ -35,20 +35,20 @@ Compare runs: refactor sova → run benchmark → compare to previous run.
 
 ## Metrics
 
-| Metric | Question | How it works | Target |
-|--------|----------|--------------|--------|
-| **Latency P50** | Typical speed? | Median query time. User is waiting. | < 400ms |
-| **Latency P95** | Worst case? | 95th percentile - slowest 5% | < 800ms |
-| **nDCG** | Best at top? | Rewards highly-relevant results ranked higher | > 0.7 |
-| **MRR** | First good result? | 1 / rank of first relevant result | > 0.7 |
-| **Precision** | How much junk? | (relevant in top-k) / k | > 0.6 |
-| **MAP** | Consistent ranking? | Avg precision at each relevant hit | > 0.5 |
-| **Recall** | Found them all? | (relevant in top-k) / total relevant | Higher |
-| **Hit Rate** | At least one? | 1 if any relevant in top-k, else 0 | > 0.9 |
-| **Doc-Cov** | Multiple sources? | Unique documents in top-k. Shows breadth. | Higher |
-| **S-Recall** | Diverse topics? | Results cover different aspects | Higher |
-| **α-nDCG** | Novel results? | nDCG with redundancy penalty | Higher |
-| **FP Rate** | False positives? | Precision on negative queries (should be 0) | 0.0 |
+| Metric | Question | How it works | Baseline |
+|--------|----------|--------------|----------|
+| **Latency P50** | Typical speed? | Median query time. User is waiting. | 365ms |
+| **Latency P95** | Worst case? | 95th percentile - slowest 5% | 2125ms |
+| **nDCG@10** | Best at top? | Rewards highly-relevant results ranked higher | 0.650 |
+| **MRR@10** | First good result? | 1 / rank of first relevant result | 0.708 |
+| **Precision@10** | How much junk? | (relevant in top-k) / k | 0.538 |
+| **MAP@10** | Consistent ranking? | Avg precision at each relevant hit | 0.455 |
+| **Recall@10** | Found them all? | (relevant in top-k) / total relevant | 0.539 |
+| **Hit Rate@10** | At least one? | 1 if any relevant in top-k, else 0 | 1.000 |
+| **Doc-Cov@10** | Multiple sources? | Unique documents in top-k. Shows breadth. | 0.356 |
+| **S-Recall@10** | Diverse topics? | Results cover different aspects | 0.546 |
+| **α-nDCG@10** | Novel results? | nDCG with redundancy penalty | 0.991 |
+| **FP Rate@10** | False positives? | Precision on negative queries (should be 0) | 0.000 |
 
 ## Relevance Scale
 
