@@ -88,19 +88,25 @@ def _resolve_vector_extension() -> Path:
 
 VECTOR_EXT = _resolve_vector_extension()
 
+# Embedding model used for indexing and query vectors
 EMBEDDING_MODEL = "qwen3-embedding:4b"
+# LLM model used for context answers and analysis
 CONTEXT_MODEL = "gemma3:12b"
+# Vector dimension expected from embedding model
 EMBEDDING_DIM = 2560
-
+# RRF base rank constant controlling how strongly top results are favored
 SEARCH_RRF_K = 20
+# Weight multiplier applied to RRF score in final ranking
 SEARCH_RRF_WEIGHT = 30.0
+# Bonus added when full query phrase appears in chunk text
 SEARCH_EXACT_PHRASE_BONUS = 0.3
+# Bonus multiplier for fraction of query terms found in chunk text
 SEARCH_EXACT_TERM_BONUS = 0.15
+# Penalty applied to index-like chunks to demote boilerplate hits
 SEARCH_INDEX_PENALTY = -0.5
+# Decay factor for diversity reranking across similar documents
 SEARCH_DIVERSITY_DECAY = 0.95
-
-# Number of documents to embed per batch.
+# Number of documents to embed per batch
 BATCH_SIZE = 10
-# Target words per chunk. 512 balances embedding quality (models degrade on
-# very long inputs) against preserving enough context per chunk.
+# Target words per chunk
 CHUNK_SIZE = 512
