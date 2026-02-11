@@ -6,7 +6,15 @@ import re
 import sqlite3
 from array import array
 
-from sova.config import EMBEDDING_DIM
+from sova.config import (
+    EMBEDDING_DIM,
+    SEARCH_DIVERSITY_DECAY,
+    SEARCH_EXACT_PHRASE_BONUS,
+    SEARCH_EXACT_TERM_BONUS,
+    SEARCH_INDEX_PENALTY,
+    SEARCH_RRF_K,
+    SEARCH_RRF_WEIGHT,
+)
 from sova.db import embedding_to_blob
 from sova.diversity import score_decay_diversify
 
@@ -120,12 +128,11 @@ def search_fts(
 
 def rrf_fusion(
     ranked_lists: list[list[tuple[int, float]]],
-    # k=60 is the standard RRF constant from Cormack et al. 2009.
-    # Higher k reduces the influence of top ranks, making fusion more
-    # uniform. 60 is widely used and works well in practice.
-    k: int = 60,
+    # Smaller k increases the influence of top ranks.
+    k: int = SEARCH_RRF_K,
 ) -> dict[int, float]:
     """Reciprocal Rank Fusion to combine multiple ranked lists."""
+    k = max(1, k)
     scores: dict[int, float] = {}
     for ranked_list in ranked_lists:
         for rank, (item_id, _) in enumerate(ranked_list, start=1):
@@ -186,12 +193,14 @@ def _exact_match_bonuses(
     conn: sqlite3.Connection,
     chunk_ids: list[int],
     query: str,
+    phrase_bonus: float,
+    term_bonus: float,
 ) -> dict[int, float]:
     """Score bonus for chunks containing query text verbatim (case-insensitive).
 
     Checks two signals:
-    - Full phrase match (query appears as-is in chunk): +0.3
-    - Per-term match (fraction of query terms found):   +0.15 * fraction
+    - Full phrase match (query appears as-is in chunk): +phrase_bonus
+    - Per-term match (fraction of query terms found):   +term_bonus * fraction
     """
     if not chunk_ids or not query.strip():
         return {}
@@ -221,7 +230,7 @@ def _exact_match_bonuses(
         phrase_hit = row[1]
         term_frac = sum(row[2:]) / len(terms)
 
-        bonus = 0.3 * phrase_hit + 0.15 * term_frac
+        bonus = phrase_bonus * phrase_hit + term_bonus * term_frac
         if bonus > 0:
             bonuses[row[0]] = bonus
 
@@ -238,6 +247,13 @@ def fuse_and_rank(
     if not vector_results:
         return [], 0, 0
 
+    rrf_k = SEARCH_RRF_K
+    rrf_weight = SEARCH_RRF_WEIGHT
+    exact_phrase_bonus = SEARCH_EXACT_PHRASE_BONUS
+    exact_term_bonus = SEARCH_EXACT_TERM_BONUS
+    index_penalty_value = SEARCH_INDEX_PENALTY
+    diversity_decay = SEARCH_DIVERSITY_DECAY
+
     candidates = len(vector_results)
 
     fts_terms = [
@@ -246,7 +262,7 @@ def fuse_and_rank(
     fts_results = search_fts(conn, query_text, candidates)
 
     if fts_results:
-        rrf_scores = rrf_fusion([vector_results, fts_results])
+        rrf_scores = rrf_fusion([vector_results, fts_results], k=rrf_k)
         fused_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
     else:
         fused_ids = [r[0] for r in vector_results]
@@ -261,7 +277,13 @@ def fuse_and_rank(
     fts_id_set = {r[0] for r in fts_results}
 
     # Exact match bonus: boost chunks containing the query verbatim.
-    exact_bonuses = _exact_match_bonuses(conn, top_ids, query_text)
+    exact_bonuses = _exact_match_bonuses(
+        conn,
+        top_ids,
+        query_text,
+        phrase_bonus=exact_phrase_bonus,
+        term_bonus=exact_term_bonus,
+    )
 
     # Fetch only doc name and is_index for ranking and diversification,
     # deferring the heavier text column to after we know the final top-k.
@@ -282,13 +304,13 @@ def fuse_and_rank(
         doc, is_idx = meta[chunk_id]
         rrf_score = rrf_scores.get(chunk_id, 0.0)
         embed_score = vector_score_map.get(chunk_id, 0.0)
-        index_penalty = -0.5 if is_idx else 0.0
+        index_penalty = index_penalty_value if is_idx else 0.0
         exact_bonus = exact_bonuses.get(chunk_id, 0.0)
         scored.append(
             {
                 "chunk_id": chunk_id,
                 "doc": doc,
-                "final_score": rrf_score * 30 + index_penalty + exact_bonus,
+                "final_score": rrf_score * rrf_weight + index_penalty + exact_bonus,
                 "embed_score": embed_score,
                 "rrf_score": rrf_score,
                 "fts_hit": chunk_id in fts_id_set,
@@ -298,7 +320,7 @@ def fuse_and_rank(
         )
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
-    filtered = score_decay_diversify(scored, limit=limit, decay=0.95)
+    filtered = score_decay_diversify(scored, limit=limit, decay=diversity_decay)
 
     if filtered:
         hi, lo = filtered[0]["diversity_score"], filtered[-1]["diversity_score"]

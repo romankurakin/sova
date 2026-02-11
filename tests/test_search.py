@@ -100,6 +100,11 @@ class TestRRFFusion:
         assert scores[2] > scores[1]  # 2 appears in both, 1 only in first
         assert scores[2] > scores[4]  # 2 appears in both, 4 only in second
 
+    def test_non_positive_k_is_clamped(self):
+        ranked = [(1, 0.9)]
+        scores = rrf_fusion([ranked], k=0)
+        assert scores[1] == pytest.approx(0.5)
+
 
 class TestComputeCandidates:
     def test_small_corpus(self):

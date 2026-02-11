@@ -92,6 +92,13 @@ EMBEDDING_MODEL = "qwen3-embedding:4b"
 CONTEXT_MODEL = "gemma3:12b"
 EMBEDDING_DIM = 2560
 
+SEARCH_RRF_K = 20
+SEARCH_RRF_WEIGHT = 30.0
+SEARCH_EXACT_PHRASE_BONUS = 0.3
+SEARCH_EXACT_TERM_BONUS = 0.15
+SEARCH_INDEX_PENALTY = -0.5
+SEARCH_DIVERSITY_DECAY = 0.95
+
 # Number of documents to embed per batch.
 BATCH_SIZE = 10
 # Target words per chunk. 512 balances embedding quality (models degrade on
