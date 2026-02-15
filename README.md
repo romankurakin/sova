@@ -1,13 +1,5 @@
 # sova — Local Document Semantic Search
 
-```text
-   ___
-  (o o)
- (  V  )
-/|  |  |\
-  "   "
-```
-
 *sova* — owl in Slavic languages.
 
 ## Quick Start
@@ -15,6 +7,7 @@
 ```bash
 ln -s /path/to/your/docs docs         # Symlink your documents
 uv run sova                           # Index all PDFs
+uv run sova --list                    # List docs and status
 ```
 
 ## Search
@@ -22,16 +15,13 @@ uv run sova                           # Index all PDFs
 ```bash
 uv run sova -s "your query"           # Semantic search
 uv run sova -s "query" -n 20          # More results
-uv run sova --db /tmp/sova.db -s "query"  # Use custom DB file
 ```
 
 ## Binary + Install
 
-```bash
-# Build one-file macOS binary
-./scripts/build-macos-onefile.sh
-./dist/sova -s "your query"
+Less permission is required to use the globally installed version as an agent tool.
 
+```bash
 # Install globally (recommended for tools/skills)
 uv run sova-install
 sova --list
@@ -39,24 +29,6 @@ sova -s "your query"
 
 # Remove global install
 uv run sova-remove
-```
-
-Defaults after `sova-install`:
-
-- binary: `~/.local/bin/sova`
-- docs: `~/.sova/docs` (symlink to project `docs`)
-- db: `~/.sova/data/indexed.db` (symlink to project `data/indexed.db`)
-
-## Commands
-
-```bash
-uv run sova                        # Index all PDFs
-uv run sova [doc...]               # Index specific docs
-uv run sova --list                 # List docs and status
-uv run sova --reset                # Delete DB and extracted files
-uv run sova --db /tmp/sova.db --list
-uv run sova --clear-cache          # Clear semantic search cache
-uv run sova --reset-context        # Regenerate LLM contexts on next run
 ```
 
 ## Under the Hood
@@ -106,14 +78,6 @@ Models run locally via Ollama: `qwen3-embedding:4b` for embeddings (2560 dims),
 run.
 
 ## Benchmarks
-
-```bash
-uv run python -m benchmarks judge             # Generate ground truth
-uv run python -m benchmarks judge --no-debias # Faster, skip debiasing
-uv run python -m benchmarks run new-feature   # Run benchmark + latency
-uv run python -m benchmarks show              # View results
-uv run python -m benchmarks --help            # Full CLI help
-```
 
 See `benchmarks/README.md` for details.
 
