@@ -8,6 +8,7 @@ from array import array
 
 from sova.config import (
     EMBEDDING_DIM,
+    RERANK_FACTOR,
     SEARCH_DIVERSITY_DECAY,
     SEARCH_EXACT_PHRASE_BONUS,
     SEARCH_EXACT_TERM_BONUS,
@@ -17,6 +18,7 @@ from sova.config import (
 )
 from sova.db import embedding_to_blob
 from sova.diversity import score_decay_diversify
+from sova.llama_client import rerank
 
 
 def search_vector(
@@ -268,7 +270,11 @@ def fuse_and_rank(
         fused_ids = [r[0] for r in vector_results]
         rrf_scores = {r[0]: r[1] for r in vector_results}
 
-    top_ids = fused_ids[:candidates]
+    rerank_count = limit * RERANK_FACTOR
+
+    # Only consider the top rerank_count candidates from fusion for
+    # exact-match bonuses and metadata — the rest won't survive ranking.
+    top_ids = fused_ids[:rerank_count]
     if not top_ids:
         return [], 0, 0
 
@@ -320,6 +326,30 @@ def fuse_and_rank(
         )
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
+
+    # Rerank top candidates via cross-encoder for better precision.
+    rerank_top = scored[:rerank_count]
+    rerank_ids = [r["chunk_id"] for r in rerank_top]
+    if rerank_ids:
+        ph = ",".join("?" * len(rerank_ids))
+        text_rows = {
+            r[0]: r[1]
+            for r in conn.execute(
+                f"SELECT id, text FROM chunks WHERE id IN ({ph})",
+                tuple(rerank_ids),
+            ).fetchall()
+        }
+        texts = [text_rows.get(cid, "") for cid in rerank_ids]
+        rerank_results = rerank(query_text, texts, top_n=len(texts))
+        if rerank_results is not None:
+            for rr in rerank_results:
+                idx = rr["index"]
+                if idx < len(rerank_top):
+                    rerank_top[idx]["rerank_score"] = rr["relevance_score"]
+            scored.sort(
+                key=lambda x: x.get("rerank_score", x["final_score"]), reverse=True
+            )
+
     filtered = score_decay_diversify(scored, limit=limit, decay=diversity_decay)
 
     if filtered:

@@ -1,5 +1,6 @@
 """Configuration constants and paths."""
 
+import json
 import os
 import platform
 import sys
@@ -19,34 +20,56 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _default_home_dir() -> Path:
-    if _is_frozen_binary():
-        return Path.home() / ".sova"
-    return _project_root()
-
-
 def _path_from_env(env_name: str, default: Path) -> Path:
     value = os.environ.get(env_name)
     return Path(value).expanduser() if value else default
 
 
 PROJECT_ROOT = _project_root()
-SOVA_HOME = _path_from_env("SOVA_HOME", _default_home_dir())
+SOVA_HOME = _path_from_env("SOVA_HOME", Path.home() / ".sova")
 DATA_DIR = _path_from_env("SOVA_DATA_DIR", SOVA_HOME / "data")
-DOCS_DIR = _path_from_env("SOVA_DOCS_DIR", SOVA_HOME / "docs")
 DB_PATH = _path_from_env("SOVA_DB_PATH", DATA_DIR / "indexed.db")
-_db_path_override: Path | None = None
+_CONFIG_PATH = SOVA_HOME / "config.json"
 
 
-def set_db_path(path: str | Path | None) -> None:
-    """Override database path for the current process."""
-    global _db_path_override
-    _db_path_override = Path(path).expanduser() if path else None
+def _read_config() -> dict:
+    if _CONFIG_PATH.exists():
+        try:
+            return json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _write_config(data: dict) -> None:
+    _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _CONFIG_PATH.write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def get_docs_dir() -> Path | None:
+    """Return configured PDF source directory, or None if not set."""
+    env = os.environ.get("SOVA_DOCS_DIR")
+    if env:
+        return Path(env).expanduser()
+    cfg = _read_config()
+    if "docs_dir" in cfg:
+        return Path(cfg["docs_dir"]).expanduser()
+    return None
+
+
+def set_docs_dir(path: str | Path) -> None:
+    """Persist the PDF source directory in config.json."""
+    resolved = Path(path).expanduser().resolve()
+    cfg = _read_config()
+    cfg["docs_dir"] = str(resolved)
+    _write_config(cfg)
 
 
 def get_db_path() -> Path:
-    """Return effective database path (CLI override or configured default)."""
-    return _db_path_override or DB_PATH
+    """Return database path."""
+    return DB_PATH
 
 
 def _resolve_vector_extension() -> Path:
@@ -88,12 +111,23 @@ def _resolve_vector_extension() -> Path:
 
 VECTOR_EXT = _resolve_vector_extension()
 
+# llama-server endpoints (one instance per model)
+EMBEDDING_SERVER_URL = "http://localhost:8081"
+RERANKER_SERVER_URL = "http://localhost:8082"
+CONTEXT_SERVER_URL = "http://localhost:8083"
 # Embedding model used for indexing and query vectors
-EMBEDDING_MODEL = "qwen3-embedding:4b"
+EMBEDDING_MODEL = "qwen3-embedding-4b"
 # LLM model used for context answers and analysis
-CONTEXT_MODEL = "gemma3:12b"
+CONTEXT_MODEL = "ministral-3-14b-instruct-2512"
+# Reranker model for second-stage ranking
+RERANKER_MODEL = "qwen3-reranker-0.6b"
 # Vector dimension expected from embedding model
 EMBEDDING_DIM = 2560
+# Number of top RRF results sent to reranker
+# Reranker sees limit * RERANK_FACTOR candidates
+RERANK_FACTOR = 2
+# Reranker timeout in seconds; graceful fallback if exceeded
+RERANK_TIMEOUT = 10.0
 # RRF base rank constant controlling how strongly top results are favored
 SEARCH_RRF_K = 20
 # Weight multiplier applied to RRF score in final ranking

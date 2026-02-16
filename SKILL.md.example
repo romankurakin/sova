@@ -7,7 +7,7 @@ allowed-tools: AskUserQuestion, Bash, Read
 # PDF Search Skill (sova)
 
 Search your indexed PDF documents using semantic search.
-Assumes `sova` is already globally installed and available in `PATH`.
+Assumes `sova` is globally installed and available in `PATH`.
 
 ## When to Use
 
@@ -30,7 +30,7 @@ rg -i "keyword" ~/.sova/data/*.md
 Search returns `~/.../file.md:start-end` plus full chunk text. Use Read tool for extra surrounding context (add ~50 lines buffer):
 
 ```bash
-# Search returns: ~/.../mybook.md:580-650
+# Search returns: ~/.sova/data/mybook.md:580-650
 # Read with context buffer
 ```
 
@@ -43,22 +43,23 @@ Read ~/.sova/data/mybook.md lines 530-700
 If the database doesn't exist or is incomplete:
 
 ```bash
-# Create symlink to PDFs (if not exists)
-ln -s /path/to/docs ~/.sova/docs
+# Point sova at your PDFs (stored in ~/.sova/config.json)
+sova /path/to/your/pdfs
 
 # Check status
 sova --list
 
-# Index all PDFs (models auto-pull on first run)
+# Re-index (uses stored PDF directory)
 sova
 ```
 
-Requires Ollama running. Models are pulled automatically.
+Services (llama-server) start on demand — no manual setup needed.
 
 ## Adding Documents
 
-Drop PDFs in the symlinked directory and re-run indexing:
+Drop PDFs in the configured directory and re-run indexing:
 
 ```bash
-sova new-doc-name
+sova                          # Re-index all
+sova new-doc-name             # Index specific document
 ```

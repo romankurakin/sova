@@ -28,7 +28,7 @@ class TestGetDocStatus:
         conn = self._make_db()
         status = get_doc_status(conn, "nonexistent")
         assert status["extracted"] is False
-        assert status["embedded"] is False
+        assert status["embedded"] == 0
         assert status["complete"] is False
         assert status["chunks"] == 0
         conn.close()
@@ -46,7 +46,7 @@ class TestGetDocStatus:
 
         status = get_doc_status(conn, "doc1")
         assert status["extracted"] is True
-        assert status["embedded"] is False
+        assert status["embedded"] == 0
         assert status["complete"] is False
         assert status["chunks"] == 1
         assert status["expected"] == 2
@@ -67,7 +67,7 @@ class TestGetDocStatus:
 
         status = get_doc_status(conn, "doc1")
         assert status["extracted"] is True
-        assert status["embedded"] is True
+        assert status["embedded"] == 1
         assert status["complete"] is True
         assert status["chunks"] == 1
         assert status["text_size"] > 0
@@ -92,7 +92,7 @@ class TestGetDocStatus:
 
         status = get_doc_status(conn, "doc1")
         assert status["extracted"] is True
-        assert status["embedded"] is True  # at least one has embedding
+        assert status["embedded"] == 1  # one chunk has embedding
         assert status["complete"] is False  # 2 chunks < 3 expected
         assert status["chunks"] == 2
         conn.close()

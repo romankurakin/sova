@@ -126,7 +126,7 @@ class TestFindDocs:
             docs_dir.mkdir()
             data_dir.mkdir()
             with (
-                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.get_docs_dir", return_value=docs_dir),
                 patch("sova.extract.DATA_DIR", data_dir),
             ):
                 docs = find_docs()
@@ -140,7 +140,7 @@ class TestFindDocs:
             data_dir.mkdir()
             (docs_dir / "paper.pdf").write_bytes(b"%PDF-fake")
             with (
-                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.get_docs_dir", return_value=docs_dir),
                 patch("sova.extract.DATA_DIR", data_dir),
             ):
                 docs = find_docs()
@@ -157,7 +157,7 @@ class TestFindDocs:
             data_dir.mkdir()
             (data_dir / "notes.md").write_text("# Notes")
             with (
-                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.get_docs_dir", return_value=docs_dir),
                 patch("sova.extract.DATA_DIR", data_dir),
             ):
                 docs = find_docs()
@@ -175,7 +175,7 @@ class TestFindDocs:
             (docs_dir / "paper.pdf").write_bytes(b"%PDF-fake")
             (data_dir / "paper.md").write_text("# Paper")
             with (
-                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.get_docs_dir", return_value=docs_dir),
                 patch("sova.extract.DATA_DIR", data_dir),
             ):
                 docs = find_docs()
@@ -194,7 +194,7 @@ class TestFindDocs:
             (docs_dir / "small.pdf").write_bytes(b"x")
             (docs_dir / "big.pdf").write_bytes(b"x" * 1000)
             with (
-                patch("sova.extract.DOCS_DIR", docs_dir),
+                patch("sova.extract.get_docs_dir", return_value=docs_dir),
                 patch("sova.extract.DATA_DIR", data_dir),
             ):
                 docs = find_docs()

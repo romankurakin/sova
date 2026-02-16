@@ -32,7 +32,7 @@ class SovaBackend:
         self.conn.close()
 
     def _embed_query(self, text: str) -> list[float]:
-        from sova.ollama_client import get_query_embedding
+        from sova.llama_client import get_query_embedding
 
         return get_query_embedding(text)
 
