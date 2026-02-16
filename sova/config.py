@@ -44,9 +44,7 @@ def _read_config() -> dict:
 def _write_config(data: dict) -> None:
     _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = _CONFIG_PATH.with_suffix(".tmp")
-    tmp.write_text(
-        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.rename(_CONFIG_PATH)
 
 
