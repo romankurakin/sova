@@ -14,16 +14,23 @@ def _mock_urlopen(response_body: dict, status: int = 200):
     return mock_resp
 
 
+def _mock_ensure_server_for(*down_ports: str):
+    """Return a side_effect for _ensure_server that fails for given ports."""
+
+    def side_effect(url, timeout=120.0):
+        for port in down_ports:
+            if port in url:
+                return False
+        return True
+
+    return side_effect
+
+
 class TestCheckServers:
     def test_all_healthy(self):
         from sova.llama_client import check_servers
 
-        def urlopen_side_effect(req, timeout=None):
-            return _mock_urlopen({"status": "ok"})
-
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
-        ):
+        with patch("sova.llama_client._ensure_server", return_value=True):
             ok, msg = check_servers()
             assert ok is True
             assert msg == "ready"
@@ -31,14 +38,9 @@ class TestCheckServers:
     def test_embedding_down(self):
         from sova.llama_client import check_servers
 
-        def urlopen_side_effect(req, timeout=None):
-            url = req.full_url if hasattr(req, "full_url") else str(req)
-            if "8081" in url:
-                raise ConnectionError("refused")
-            return _mock_urlopen({"status": "ok"})
-
         with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+            "sova.llama_client._ensure_server",
+            side_effect=_mock_ensure_server_for("8081"),
         ):
             ok, msg = check_servers()
             assert ok is False
@@ -47,14 +49,9 @@ class TestCheckServers:
     def test_chat_down(self):
         from sova.llama_client import check_servers
 
-        def urlopen_side_effect(req, timeout=None):
-            url = req.full_url if hasattr(req, "full_url") else str(req)
-            if "8083" in url:
-                raise ConnectionError("refused")
-            return _mock_urlopen({"status": "ok"})
-
         with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+            "sova.llama_client._ensure_server",
+            side_effect=_mock_ensure_server_for("8083"),
         ):
             ok, msg = check_servers()
             assert ok is False
@@ -63,14 +60,9 @@ class TestCheckServers:
     def test_reranker_down_is_warning(self):
         from sova.llama_client import check_servers
 
-        def urlopen_side_effect(req, timeout=None):
-            url = req.full_url if hasattr(req, "full_url") else str(req)
-            if "8082" in url:
-                raise ConnectionError("refused")
-            return _mock_urlopen({"status": "ok"})
-
         with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+            "sova.llama_client._ensure_server",
+            side_effect=_mock_ensure_server_for("8082"),
         ):
             ok, msg = check_servers()
             assert ok is True
@@ -87,8 +79,12 @@ class TestGetQueryEmbedding:
             captured["body"] = json.loads(req.data)
             return _mock_urlopen({"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]})
 
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client.urllib.request.urlopen",
+                side_effect=urlopen_side_effect,
+            ),
         ):
             get_query_embedding("test query")
             assert "Instruct:" in captured["body"]["input"]
@@ -100,8 +96,12 @@ class TestGetQueryEmbedding:
         def urlopen_side_effect(req, timeout=None):
             return _mock_urlopen({"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]})
 
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client.urllib.request.urlopen",
+                side_effect=urlopen_side_effect,
+            ),
         ):
             result = get_query_embedding("test")
             assert isinstance(result, list)
@@ -278,8 +278,12 @@ class TestRerank:
                 }
             )
 
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client.urllib.request.urlopen",
+                side_effect=urlopen_side_effect,
+            ),
         ):
             result = rerank("query", ["doc1", "doc2"], top_n=2)
             assert result is not None
@@ -289,12 +293,7 @@ class TestRerank:
     def test_connection_failure_returns_none(self):
         from sova.llama_client import rerank
 
-        def urlopen_side_effect(req, timeout=None):
-            raise ConnectionError("refused")
-
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
-        ):
+        with patch("sova.llama_client._ensure_server", return_value=False):
             result = rerank("query", ["doc1", "doc2"])
             assert result is None
 
@@ -304,8 +303,12 @@ class TestRerank:
         def urlopen_side_effect(req, timeout=None):
             raise TimeoutError("timed out")
 
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client.urllib.request.urlopen",
+                side_effect=urlopen_side_effect,
+            ),
         ):
             result = rerank("query", ["doc1"])
             assert result is None
