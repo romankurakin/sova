@@ -1,8 +1,6 @@
 """LLM-as-Judge for creating ground truth relevance judgments."""
 
-import ast
 import json
-import re
 import time
 import uuid
 from collections.abc import Callable
@@ -15,10 +13,6 @@ from .search_interface import get_backend
 
 class JudgeError(Exception):
     """Raised when the judge model fails permanently (e.g. model not found)."""
-
-
-class JudgeRateLimitError(Exception):
-    """Raised when rate-limited and retries exhausted."""
 
 
 JUDGE_MODEL = "ministral-3-14b-instruct-2512"
@@ -191,48 +185,6 @@ def _is_permanent_error(exc: Exception) -> bool:
     return "not found" in msg or "status code: 404" in msg
 
 
-def _extract_json(text: str) -> str:
-    """Extract first JSON payload from text (fences/thinking/prose tolerated)."""
-    text = text.strip()
-    if not text:
-        return text
-
-    # Prefer fenced payloads if present.
-    for m in re.finditer(r"```(?:json)?\s*(.*?)```", text, re.IGNORECASE | re.DOTALL):
-        candidate = m.group(1).strip()
-        if candidate:
-            return candidate
-
-    # Fall back to scanning for a valid JSON object/array anywhere in the text.
-    decoder = json.JSONDecoder()
-    for i, ch in enumerate(text):
-        if ch not in "{[":
-            continue
-        try:
-            _, end = decoder.raw_decode(text[i:])
-            return text[i : i + end]
-        except json.JSONDecodeError:
-            continue
-
-    return text
-
-
-def _parse_judgment_response(text: str) -> JudgmentResponse:
-    """Parse model output into JudgmentResponse with tolerant fallback formats."""
-    payload = _extract_json(text)
-    try:
-        return JudgmentResponse.model_validate_json(payload)
-    except Exception as json_error:
-        # Some models emit Python dict literals instead of strict JSON.
-        try:
-            parsed = ast.literal_eval(payload)
-        except (SyntaxError, ValueError):
-            raise json_error
-        if not isinstance(parsed, dict):
-            raise json_error
-        return JudgmentResponse.model_validate(parsed)
-
-
 def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
     """POST JSON to llama-server endpoint."""
     import urllib.request
@@ -246,21 +198,12 @@ def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
         return json.loads(resp.read())
 
 
-_JUDGE_JSON_SCHEMA = {
+_JUDGE_RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
         "name": "judgment",
         "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "score": {"type": "integer"},
-                "confidence": {"type": "number"},
-                "subtopics": {"type": "array", "items": {"type": "string"}},
-                "reason": {"type": "string"},
-            },
-            "required": ["score", "confidence", "subtopics", "reason"],
-        },
+        "schema": JudgmentResponse.model_json_schema(),
     },
 }
 
@@ -275,13 +218,13 @@ def _call_judge(prompt: str) -> JudgmentResponse:
             "model": JUDGE_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0,
-            "response_format": _JUDGE_JSON_SCHEMA,
+            "response_format": _JUDGE_RESPONSE_FORMAT,
         },
     )
     content = (resp["choices"][0]["message"]["content"] or "").strip()
     if not content:
         raise ValueError("empty response from model")
-    return _parse_judgment_response(content)
+    return JudgmentResponse.model_validate_json(content)
 
 
 def judge_chunk(

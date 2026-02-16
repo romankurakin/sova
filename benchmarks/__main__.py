@@ -126,7 +126,7 @@ def cmd_judge(use_debiasing: bool = True):
             progress,
         )
 
-    from .judge import JudgeRateLimitError, JudgeError, Judgment as _J
+    from .judge import JudgeError, Judgment as _J
 
     rate_limited = False
     with Live(_display(), console=console, transient=True) as live:
@@ -193,7 +193,7 @@ def cmd_judge(use_debiasing: bool = True):
                     k_per_strategy=k_per_strategy,
                     on_chunk_judged=_on_chunk_judged,
                 )
-            except (JudgeRateLimitError, JudgeError) as e:
+            except JudgeError as e:
                 save_checkpoint()
                 rate_limited = True
                 console.print(f"[yellow]stopped:[/yellow] {e}")
