@@ -319,10 +319,8 @@ def _doc_status_label(status: dict) -> str:
         pct = int(ctx / total * 100)
         return f"[yellow]context {pct}%[/yellow]"
     # Context done, embedding in progress
-    if embedded < total:
-        pct = int(embedded / total * 100)
-        return f"[yellow]embed {pct}%[/yellow]"
-    return "[yellow]partial[/yellow]"
+    pct = int(embedded / total * 100)
+    return f"[yellow]embed {pct}%[/yellow]"
 
 
 def list_docs() -> None:
@@ -504,7 +502,7 @@ def main() -> None:
     if len(args.docs) == 1 and Path(args.docs[0]).expanduser().is_dir():
         docs_path = Path(args.docs[0]).expanduser().resolve()
         config.set_docs_dir(docs_path)
-        report("docs", f"set → {_display_path(docs_path)}")
+        report("docs", f"set -> {_display_path(docs_path)}")
         args.docs = []
     elif not args.docs and not config.get_docs_dir():
         console.print(

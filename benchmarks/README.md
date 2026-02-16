@@ -19,7 +19,7 @@ uv run python -m benchmarks --help                  # Full CLI help
 2. **Benchmark Run** - Search retrieves results, compared against ground truth
 3. **Metrics** - Standard IR metrics computed, saved to `results/{name}.json`
 
-Compare runs: refactor sova → run benchmark → compare to previous run.
+Compare runs: refactor sova -> run benchmark -> compare to previous run.
 
 ## Query Categories
 
