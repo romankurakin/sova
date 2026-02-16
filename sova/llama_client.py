@@ -121,7 +121,13 @@ def cleanup_idle_services() -> None:
         idle = now - label_file.stat().st_mtime
         if idle > _IDLE_TIMEOUT:
             subprocess.run(["launchctl", "stop", label], capture_output=True)
-            label_file.unlink(missing_ok=True)
+            # Re-check mtime before unlinking; the main process may have
+            # touched the file between our stat() and the stop call.
+            try:
+                if now - label_file.stat().st_mtime > _IDLE_TIMEOUT:
+                    label_file.unlink(missing_ok=True)
+            except FileNotFoundError:
+                pass
 
 
 def check_servers() -> tuple[bool, str]:
@@ -157,6 +163,8 @@ def get_query_embedding(query: str) -> list[float]:
 
 def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
     """Embed document chunks - NO instruction prefix."""
+    if not texts:
+        return []
     _ensure_server(EMBEDDING_SERVER_URL)
     resp = _post_json(
         f"{EMBEDDING_SERVER_URL}/v1/embeddings",

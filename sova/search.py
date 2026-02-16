@@ -258,9 +258,6 @@ def fuse_and_rank(
 
     candidates = len(vector_results)
 
-    fts_terms = [
-        term for term in re.findall(r"[a-zA-Z0-9_-]+", query_text) if len(term) >= 2
-    ]
     fts_results = search_fts(conn, query_text, candidates)
 
     if fts_results:
@@ -321,7 +318,6 @@ def fuse_and_rank(
                 "rrf_score": rrf_score,
                 "fts_hit": chunk_id in fts_id_set,
                 "is_idx": is_idx,
-                "fts_terms": fts_terms,
             }
         )
 
