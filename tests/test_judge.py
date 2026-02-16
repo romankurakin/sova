@@ -6,14 +6,11 @@ import pytest
 from benchmarks.judge import (
     Judgment,
     JudgeError,
-    JudgeRateLimitError,
     QuerySpec,
     collect_query_subtopics,
     judge_chunk,
     judge_query,
     _is_permanent_error,
-    _is_rate_limit,
-    _is_cloud_model,
     QUERY_SET,
 )
 
@@ -53,42 +50,17 @@ class TestErrorDetection:
     def test_timeout_is_not_permanent(self):
         assert not _is_permanent_error(Exception("connection timed out"))
 
-    def test_429_is_rate_limit(self):
-        assert _is_rate_limit(Exception("status code: 429"))
-
-    def test_usage_limit_is_rate_limit(self):
-        assert _is_rate_limit(
-            Exception("you've reached your session usage limit, please wait")
-        )
-
-    def test_rate_limit_phrase(self):
-        assert _is_rate_limit(Exception("rate limit exceeded"))
-
-    def test_timeout_is_not_rate_limit(self):
-        assert not _is_rate_limit(Exception("connection timed out"))
-
-    def test_cloud_model_detection(self):
-        assert _is_cloud_model("kimi-k2.5:cloud")
-        assert _is_cloud_model("deepseek-r1:cloud")
-        assert not _is_cloud_model("gemma3:27b")
-        assert not _is_cloud_model("qwen3:30b")
-
 
 class TestJudgeChunkErrorHandling:
     """judge_chunk must raise on errors, never return score 0 for failures."""
 
     def test_model_not_found_raises_judge_error(self):
-        exc = Exception("model 'kimi-k2.5:cloud' not found (status code: 404)")
+        exc = Exception(
+            "model 'ministral-3-14b-instruct-2512' not found (status code: 404)"
+        )
         with patch("benchmarks.judge._call_judge", side_effect=exc):
             with pytest.raises(JudgeError, match="not found"):
                 judge_chunk("test query", "some chunk text")
-
-    def test_rate_limit_raises_after_retries(self):
-        exc = Exception("session usage limit (status code: 429)")
-        with patch("benchmarks.judge._call_judge", side_effect=exc):
-            with patch("benchmarks.judge.time.sleep"):
-                with pytest.raises(JudgeRateLimitError):
-                    judge_chunk("test query", "some text")
 
     def test_transient_error_raises_judge_error(self):
         exc = Exception("connection reset by peer")
@@ -97,35 +69,12 @@ class TestJudgeChunkErrorHandling:
                 with pytest.raises(JudgeError, match="failed after"):
                     judge_chunk("test query", "some text", max_retries=1)
 
-    def test_rate_limit_uses_backoff(self):
-        exc = Exception("status code: 429")
-        with patch("benchmarks.judge._call_judge", side_effect=exc):
-            with patch("benchmarks.judge.time.sleep") as mock_sleep:
-                with pytest.raises(JudgeRateLimitError):
-                    judge_chunk("test query", "some text", max_retries=0)
-                # Should have called sleep with exponential backoff
-                assert mock_sleep.call_count >= 1
-
 
 class TestJudgeQueryPropagatesErrors:
     """judge_query must propagate errors, not skip or swallow them."""
 
     def _make_spec(self):
         return QuerySpec("t01", "test query", "exact_lookup", [])
-
-    def test_rate_limit_propagates(self):
-        with patch(
-            "benchmarks.judge.collect_pool",
-            return_value=[
-                {"chunk_id": 1, "doc": "d", "text": "chunk text", "section_id": None}
-            ],
-        ):
-            with patch(
-                "benchmarks.judge.judge_chunk",
-                side_effect=JudgeRateLimitError("429"),
-            ):
-                with pytest.raises(JudgeRateLimitError):
-                    judge_query(self._make_spec(), k_per_strategy=10)
 
     def test_judge_error_propagates(self):
         with patch(
@@ -176,10 +125,10 @@ class TestJudgeQueryPropagatesErrors:
                 "benchmarks.judge.judge_chunk",
                 side_effect=[
                     (2, "good", 0.9, ["topic"]),
-                    JudgeRateLimitError("429"),
+                    JudgeError("server error"),
                 ],
             ):
-                with pytest.raises(JudgeRateLimitError):
+                with pytest.raises(JudgeError):
                     judge_query(
                         self._make_spec(),
                         k_per_strategy=10,

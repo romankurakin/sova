@@ -5,7 +5,7 @@ Measure search quality against LLM-judged ground truth.
 ## Usage
 
 ```bash
-uv run python -m sova                               # Index docs first
+sova /path/to/pdfs                                  # Index docs first
 uv run python -m benchmarks judge                   # Generate ground truth
 uv run python -m benchmarks judge --debias          # Use debiasing
 uv run python -m benchmarks run my-test             # Run benchmark
@@ -15,7 +15,7 @@ uv run python -m benchmarks --help                  # Full CLI help
 
 ## Methodology
 
-1. **Ground Truth** - LLM (kimi-k2.5:cloud) scores relevance 0-3 for top chunks per query
+1. **Ground Truth** - LLM (`gemma-3-12b-it` via llama-server) scores relevance 0-3 for top chunks per query
 2. **Benchmark Run** - Search retrieves results, compared against ground truth
 3. **Metrics** - Standard IR metrics computed, saved to `results/{name}.json`
 
@@ -37,9 +37,9 @@ Compare runs: refactor sova → run benchmark → compare to previous run.
 
 | Metric | Question | How it works | Baseline |
 |--------|----------|--------------|----------|
-| **Latency P50** | Typical speed? | Median query time. User is waiting. | 365ms |
+| **Latency P50** | Typical speed? | Median query time. User is waiting. | 310ms |
 | **Latency P95** | Worst case? | 95th percentile - slowest 5% | 2125ms |
-| **nDCG@10** | Best at top? | Rewards highly-relevant results ranked higher | 0.650 |
+| **nDCG@10** | Best at top? | Rewards highly-relevant results ranked higher | 0.705 |
 | **MRR@10** | First good result? | 1 / rank of first relevant result | 0.708 |
 | **Precision@10** | How much junk? | (relevant in top-k) / k | 0.538 |
 | **MAP@10** | Consistent ranking? | Avg precision at each relevant hit | 0.455 |
@@ -64,7 +64,7 @@ Compare runs: refactor sova → run benchmark → compare to previous run.
 ```text
 benchmarks/
 ├── search_interface.py   # <== Update this when refactoring sova
-├── judge.py              # LLM judge
+├── judge.py              # LLM judge (gemma-3-12b-it via llama-server)
 ├── evaluate.py           # Metrics computation
 ├── run_benchmark.py      # Search runner
 └── results/              # Output JSONs and reports

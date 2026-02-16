@@ -5,7 +5,7 @@ import re
 import warnings
 from pathlib import Path
 
-from sova.config import CHUNK_SIZE, DATA_DIR, DOCS_DIR
+from sova.config import CHUNK_SIZE, DATA_DIR, get_docs_dir
 
 # pymupdf emits RuntimeWarnings about unsupported PDF features (fonts, etc.)
 # that don't affect extraction quality. Safe to suppress.
@@ -14,7 +14,8 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="pymupdf")
 
 def find_docs() -> list[dict]:
     """Find all documents (PDFs and extracted markdown files)."""
-    pdfs = list(DOCS_DIR.glob("*.pdf")) if DOCS_DIR.exists() else []
+    docs_dir = get_docs_dir()
+    pdfs = list(docs_dir.glob("*.pdf")) if docs_dir and docs_dir.exists() else []
     mds = sorted(
         [m for m in DATA_DIR.glob("*.md")] if DATA_DIR.exists() else [],
         key=lambda p: p.name.lower(),

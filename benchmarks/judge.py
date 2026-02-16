@@ -8,7 +8,6 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-import ollama
 from pydantic import BaseModel
 
 from .search_interface import get_backend
@@ -22,36 +21,11 @@ class JudgeRateLimitError(Exception):
     """Raised when rate-limited and retries exhausted."""
 
 
-JUDGE_MODEL = "kimi-k2.5:cloud"
+JUDGE_MODEL = "ministral-3-14b-instruct-2512"
 
-# Rate limiting for cloud models (avoid getting banned)
-_MIN_INTERVAL = 1.0  # seconds between requests for cloud models
-_last_request_time: float = 0.0
-
-# Retry settings for rate limits (429)
-_RATE_LIMIT_RETRIES = 3
-_RATE_LIMIT_BASE_DELAY = 2.0  # seconds, doubles each retry (max wait ~14s)
-
-
-def _is_cloud_model(model: str) -> bool:
-    return ":cloud" in model
-
-
-def _is_rate_limit(exc: Exception) -> bool:
-    msg = str(exc)
-    return "429" in msg or "rate limit" in msg.lower() or "usage limit" in msg.lower()
-
-
-def _throttle():
-    """Sleep if needed to maintain minimum interval between cloud API calls."""
-    global _last_request_time
-    if not _is_cloud_model(JUDGE_MODEL):
-        return
-    now = time.monotonic()
-    elapsed = now - _last_request_time
-    if elapsed < _MIN_INTERVAL:
-        time.sleep(_MIN_INTERVAL - elapsed)
-    _last_request_time = time.monotonic()
+# Retry settings
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 1.0
 
 
 JUDGE_PROMPT = """You are an information retrieval judge. Rate how well this document chunk satisfies the search query. Imagine a developer searched for this query while building an OS kernel — would this chunk help them?
@@ -212,7 +186,7 @@ QUERY_SET: list[QuerySpec] = [
 
 
 def _is_permanent_error(exc: Exception) -> bool:
-    """Check if an ollama error is permanent (no point retrying)."""
+    """Check if an error is permanent (no point retrying)."""
     msg = str(exc).lower()
     return "not found" in msg or "status code: 404" in msg
 
@@ -259,44 +233,53 @@ def _parse_judgment_response(text: str) -> JudgmentResponse:
         return JudgmentResponse.model_validate(parsed)
 
 
-_REQUEST_TIMEOUT_LOCAL = 30.0  # seconds — local models
-_REQUEST_TIMEOUT_CLOUD = 300.0  # seconds — cloud models are slow with long prompts
+def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
+    """POST JSON to llama-server endpoint."""
+    import urllib.request
+    import urllib.error
 
-_judge_client: ollama.Client | None = None
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read())
 
 
-def _get_judge_client() -> ollama.Client:
-    global _judge_client
-    if _judge_client is None:
-        timeout = (
-            _REQUEST_TIMEOUT_CLOUD
-            if _is_cloud_model(JUDGE_MODEL)
-            else _REQUEST_TIMEOUT_LOCAL
-        )
-        _judge_client = ollama.Client(timeout=timeout)
-    return _judge_client
+_JUDGE_JSON_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "judgment",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "score": {"type": "integer"},
+                "confidence": {"type": "number"},
+                "subtopics": {"type": "array", "items": {"type": "string"}},
+                "reason": {"type": "string"},
+            },
+            "required": ["score", "confidence", "subtopics", "reason"],
+        },
+    },
+}
 
 
 def _call_judge(prompt: str) -> JudgmentResponse:
-    """Call the judge model, extract JSON, return parsed response."""
-    _throttle()
-    client = _get_judge_client()
-    # format= breaks cloud models (hangs or returns non-JSON), skip it
-    if _is_cloud_model(JUDGE_MODEL):
-        response = client.chat(
-            model=JUDGE_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0},
-        )
-    else:
-        response = client.chat(
-            model=JUDGE_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            format=JudgmentResponse.model_json_schema(),
-            options={"temperature": 0},
-        )
-    content = response.message.content or ""
-    if not content.strip():
+    """Call the judge model via llama-server chat completions API."""
+    from sova.config import CONTEXT_SERVER_URL
+
+    resp = _post_json(
+        f"{CONTEXT_SERVER_URL}/v1/chat/completions",
+        {
+            "model": JUDGE_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0,
+            "response_format": _JUDGE_JSON_SCHEMA,
+        },
+    )
+    content = (resp["choices"][0]["message"]["content"] or "").strip()
+    if not content:
         raise ValueError("empty response from model")
     return _parse_judgment_response(content)
 
@@ -306,15 +289,12 @@ def judge_chunk(
 ) -> tuple[int, str, float, list[str]]:
     """Judge relevance of a single chunk. Returns (score, reason, confidence, subtopics).
 
-    Raises JudgeError on permanent failures (e.g. model not found).
-    Raises JudgeRateLimitError when rate-limited after exhausting retries.
-    Cloud models are throttled automatically via _throttle().
+    Raises JudgeError on permanent failures or after exhausting retries.
     """
     prompt = JUDGE_PROMPT.format(query=query, chunk=chunk_text[:1500])
     last_error: Exception | None = None
 
-    total_attempts = max(max_retries + 1, _RATE_LIMIT_RETRIES)
-    for attempt in range(total_attempts):
+    for attempt in range(max_retries + 1):
         try:
             result = _call_judge(prompt)
             return (
@@ -327,17 +307,10 @@ def judge_chunk(
             last_error = e
             if _is_permanent_error(e):
                 raise JudgeError(str(e)) from e
-            if _is_rate_limit(e):
-                if attempt + 1 < _RATE_LIMIT_RETRIES:
-                    delay = _RATE_LIMIT_BASE_DELAY * (2**attempt)
-                    time.sleep(delay)
-                    continue
-                raise JudgeRateLimitError(str(e)) from e
-            if attempt >= max_retries:
-                raise JudgeError(f"failed after {attempt + 1} attempts: {e}") from e
-            time.sleep(0.5)
+            if attempt < max_retries:
+                time.sleep(_RETRY_BASE_DELAY * (2**attempt))
 
-    raise JudgeRateLimitError(str(last_error))
+    raise JudgeError(f"failed after {max_retries + 1} attempts: {last_error}")
 
 
 def judge_chunk_with_debiasing(

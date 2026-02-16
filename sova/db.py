@@ -184,7 +184,7 @@ def get_doc_status(conn, name: str) -> dict:
 
     return {
         "extracted": True,
-        "embedded": embedded > 0,
+        "embedded": embedded,
         "complete": complete,
         "chunks": chunk_count,
         "expected": expected,

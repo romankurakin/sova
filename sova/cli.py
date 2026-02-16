@@ -25,8 +25,8 @@ from sova.extract import (
     find_section,
     parse_sections,
 )
-from sova.ollama_client import (
-    check_ollama,
+from sova.llama_client import (
+    check_servers,
     generate_context,
     get_embeddings_batch,
     get_query_embedding,
@@ -48,30 +48,6 @@ def _display_path(path: Path) -> str:
         return "~" if str(rel) == "." else f"~/{rel}"
     except ValueError:
         return str(path)
-
-
-def _safe_resolve(path: Path) -> Path:
-    try:
-        return path.resolve()
-    except Exception:
-        return path
-
-
-def _display_path_with_target(path: Path) -> str:
-    """Render symlink as source -> target for visibility."""
-    shown = _display_path(path)
-    if path.is_symlink():
-        shown += f" -> {_display_path(_safe_resolve(path))}"
-    return shown
-
-
-def _runtime_paths() -> dict[str, Path]:
-    return {
-        "sova_home": config.SOVA_HOME,
-        "docs_dir": config.DOCS_DIR,
-        "data_dir": config.DATA_DIR,
-        "db_path": config.get_db_path(),
-    }
 
 
 SOVA_ASCII = """\
@@ -327,6 +303,28 @@ def process_doc(
             return
 
 
+def _doc_status_label(status: dict) -> str:
+    """Return a human-readable status label for a document."""
+    chunks = status.get("chunks", 0)
+    if not chunks:
+        return "[dim]pending[/dim]"
+    total = status.get("expected") or chunks
+    ctx = status.get("contextualized", 0)
+    embedded = status.get("embedded", 0)
+    # All done
+    if embedded >= total:
+        return "[green]ready[/green]"
+    # Context generation in progress
+    if ctx < total:
+        pct = int(ctx / total * 100)
+        return f"[yellow]context {pct}%[/yellow]"
+    # Context done, embedding in progress
+    if embedded < total:
+        pct = int(embedded / total * 100)
+        return f"[yellow]embed {pct}%[/yellow]"
+    return "[yellow]partial[/yellow]"
+
+
 def list_docs() -> None:
     """List all documents and their indexing status."""
     docs = find_docs()
@@ -338,87 +336,31 @@ def list_docs() -> None:
 
     table = Table(show_header=True, header_style="dim")
     table.add_column("Name")
-    table.add_column("PDF", justify="right", style="dim")
-    table.add_column("Chunks", justify="right")
-    table.add_column("Context", justify="right")
-    table.add_column("Text", justify="right")
-    table.add_column("Vectors", justify="right")
+    table.add_column("Size", justify="right", style="dim")
+    table.add_column("Status", justify="right")
 
-    total_chunks, total_text, total_embed, total_ctx = 0, 0, 0, 0
-
+    ready_count = 0
     for d in docs:
         status = get_doc_status(conn, d["name"]) if conn else {}
-        chunks = status.get("chunks", 0)
-        text_size = status.get("text_size", 0)
-        embed_size = status.get("embed_size", 0)
-        ctx_count = status.get("contextualized", 0)
-
-        total_chunks += chunks
-        total_text += text_size
-        total_embed += embed_size
-        total_ctx += ctx_count
-
-        pdf_col = fmt_size(d["size"])
-        if chunks:
-            expected = status.get("expected")
-            if expected and chunks < expected:
-                chunks_col = f"[yellow]{chunks}/{expected}[/yellow]"
-            else:
-                chunks_col = str(chunks)
-        else:
-            chunks_col = "-"
-        if ctx_count:
-            if chunks and ctx_count < chunks:
-                ctx_col = f"[yellow]{ctx_count}/{chunks}[/yellow]"
-            else:
-                ctx_col = str(ctx_count)
-        else:
-            ctx_col = "-"
-        text_col = fmt_size(text_size, dim_zero=True)
-        embed_col = fmt_size(embed_size, dim_zero=True)
-
-        table.add_row(d["name"], pdf_col, chunks_col, ctx_col, text_col, embed_col)
-
-    if total_chunks > 0:
-        table.add_section()
-        table.add_row(
-            "Total",
-            "",
-            f"{total_chunks}",
-            f"{total_ctx}",
-            f"{fmt_size(total_text)}",
-            f"{fmt_size(total_embed)}",
-        )
+        label = _doc_status_label(status)
+        if "ready" in label:
+            ready_count += 1
+        table.add_row(d["name"], fmt_size(d["size"]), label)
 
     if conn:
         conn.close()
+
     console.print(table)
+    console.print(f"\n[dim]{ready_count}/{len(docs)} indexed[/dim]")
 
 
 def show_stats() -> None:
-    """Show database statistics."""
-    paths = _runtime_paths()
-    db_path = paths["db_path"]
-
-    console.print(f"\nHome: {_display_path(paths['sova_home'])}")
-    console.print(f"Docs: {_display_path_with_target(paths['docs_dir'])}")
-    console.print(f"Data: {_display_path(paths['data_dir'])}")
-
-    db_path = config.get_db_path()
-    if db_path.exists() or db_path.is_symlink():
-        if db_path.exists():
-            console.print(
-                f"Database: {_display_path_with_target(db_path)} ({fmt_size(db_path.stat().st_size)})"
-            )
-        else:
-            console.print(f"Database: {_display_path_with_target(db_path)} [missing]")
-
-    if db_path.exists():
-        cache = get_cache()
-        conn = connect_readonly()
-        count = conn.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0]
-        conn.close()
-        console.print(f"Cache: {count} entries (max {cache.max_size})")
+    """Show document directory."""
+    docs_dir = config.get_docs_dir()
+    if docs_dir:
+        console.print(f"\nDocs: {_display_path(docs_dir)}")
+    else:
+        console.print("\nDocs: [dim]not configured[/dim]")
 
 
 def search_semantic(
@@ -484,9 +426,15 @@ def search_semantic(
             if r.get("is_idx"):
                 tags.append("idx")
             tag_str = "  ".join(tags)
+            rerank_str = (
+                f"  [dim]rerank[/dim] {r['rerank_score']:.2f}"
+                if "rerank_score" in r
+                else ""
+            )
             console.print(
                 f"  [dim]vec[/dim] {r['embed_score']:.2f}"
                 f". [dim]rrf[/dim] {r['rrf_score']:.4f}"
+                f"{rerank_str}"
                 f"  {tag_str}"
             )
         body = r["text"]
@@ -501,7 +449,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="sova - Local document semantic search"
     )
-    parser.add_argument("docs", nargs="*", help="Specific documents to index")
+    parser.add_argument(
+        "docs",
+        nargs="*",
+        help="Path to PDF directory (stored for future runs) or document names to index",
+    )
     parser.add_argument(
         "-l", "--list", action="store_true", help="List documents and status"
     )
@@ -510,28 +462,19 @@ def main() -> None:
         "-n", "--limit", type=int, default=10, help="Max results (default: 10)"
     )
     parser.add_argument(
-        "--db",
-        metavar="PATH",
-        help="Path to SQLite database file (default: indexed.db under data dir)",
-    )
-    parser.add_argument(
         "--reset", action="store_true", help="Delete DB and extracted files"
-    )
-    parser.add_argument(
-        "--clear-cache", action="store_true", help="Clear semantic search cache"
-    )
-    parser.add_argument(
-        "--reset-context",
-        action="store_true",
-        help="Delete generated contexts; next run regenerates them",
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Show pipeline scores"
     )
+    parser.add_argument("--_watchdog", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    if args.db:
-        config.set_db_path(args.db)
+    if args._watchdog:
+        from sova.llama_client import cleanup_idle_services
+
+        cleanup_idle_services()
+        return
 
     console.print(SOVA_ASCII)
 
@@ -548,25 +491,8 @@ def main() -> None:
             for md in config.DATA_DIR.glob("*.md"):
                 md.unlink()
                 console.print(f"deleted: {md.name}")
+        get_cache().clear()
         console.print("reset complete")
-        return
-
-    if args.clear_cache:
-        cache = get_cache()
-        cache.clear()
-        console.print("cache cleared")
-        return
-
-    if args.reset_context:
-        if not config.get_db_path().exists():
-            console.print("no database")
-            return
-        conn = init_db()
-        deleted = conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
-        conn.execute("DELETE FROM chunk_contexts")
-        conn.commit()
-        conn.close()
-        console.print(f"deleted {deleted} contexts; embeddings kept")
         return
 
     if args.list:
@@ -574,11 +500,23 @@ def main() -> None:
         show_stats()
         return
 
-    ok, msg = check_ollama()
-    if not ok:
-        report("ollama", f"[red]{msg}[/red]")
+    # If a single positional arg is a directory, treat it as the docs source.
+    if len(args.docs) == 1 and Path(args.docs[0]).expanduser().is_dir():
+        docs_path = Path(args.docs[0]).expanduser().resolve()
+        config.set_docs_dir(docs_path)
+        report("docs", f"set → {_display_path(docs_path)}")
+        args.docs = []
+    elif not args.docs and not config.get_docs_dir():
+        console.print(
+            "[red]error:[/red] no docs directory configured\n  run: sova /path/to/pdfs"
+        )
         sys.exit(1)
-    report("ollama", msg)
+
+    ok, msg = check_servers()
+    if not ok:
+        report("server", f"[red]{msg}[/red]")
+        sys.exit(1)
+    report("server", msg)
 
     try:
         conn = init_db()

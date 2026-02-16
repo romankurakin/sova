@@ -5,31 +5,34 @@
 ## Quick Start
 
 ```bash
-ln -s /path/to/your/docs docs         # Symlink your documents
-uv run sova                           # Index all PDFs
-uv run sova --list                    # List docs and status
+sova-install                          # Build binary + set up llama-server services
+sova /path/to/your/pdfs               # Point at your PDFs (stored in ~/.sova)
+sova -s "your query"                  # Search
 ```
 
-## Search
+## Usage
 
 ```bash
-uv run sova -s "your query"           # Semantic search
-uv run sova -s "query" -n 20          # More results
+sova /path/to/pdfs                    # First run: set PDF source directory
+sova                                  # Index (uses stored dir)
+sova -s "your query"                  # Semantic search
+sova -s "query" -n 20                 # More results
+sova --list                           # List docs and status
+sova --reset                          # Delete DB and extracted files
 ```
 
-## Binary + Install
-
-Less permission is required to use the globally installed version as an agent tool.
+## Install / Remove
 
 ```bash
-# Install globally (recommended for tools/skills)
+# Install: build binary, set up llama-server launchd services
 uv run sova-install
-sova --list
-sova -s "your query"
 
-# Remove global install
+# Remove: stop services, delete binary
 uv run sova-remove
+uv run sova-remove --purge-data       # Also delete ~/.sova/data
 ```
+
+Services start on demand — no memory used until you run a search or index.
 
 ## Under the Hood
 
@@ -37,14 +40,16 @@ uv run sova-remove
 flowchart LR
     PDF --> Markdown --> Chunks
     Chunks --> Classify{ToC?}
-    Classify --> Embeddings[(Vector)]
+    Chunks --> Context([LLM Context])
+    Context --> Embeddings[(Vector)]
+    Classify --> Embeddings
     Classify --> BM25[(FTS)]
 ```
 
 PDFs get converted to Markdown, split at header boundaries, and indexed two
 ways.
 
-**Contextual embeddings** — at index time, a local LLM (`gemma3:12b`) generates a
+**Contextual embeddings** — at index time, a local LLM (`ministral-3-14b-instruct-2512`) generates a
 one-sentence summary situating each chunk within its document and section. This
 context is prepended to the chunk text before embedding, so vectors capture
 meaning beyond the raw text [1]. The format is
@@ -63,19 +68,21 @@ flowchart LR
     Query --> BM25[(FTS)]
     Vector --> RRF{RRF}
     BM25 --> RRF
-    RRF --> Diverse[Diversify] --> Results
+    RRF --> Rerank[Rerank] --> Diverse[Diversify] --> Results
 ```
 
-At search time, both results merge via RRF [3]. Flagged ToC pages are
-down-ranked so content chunks win. Results are diversified per document so you
-see multiple sources.
+At search time, both results merge via RRF [3]. Top candidates are reranked
+by a cross-encoder (`qwen3-reranker-0.6b`). Flagged ToC pages are down-ranked
+so content chunks win. Results are diversified per document so you see multiple
+sources.
 
 **Semantic cache** returns cached results for similar queries (cosine > 0.92),
 avoiding redundant embedding calls.
 
-Models run locally via Ollama: `qwen3-embedding:4b` for embeddings (2560 dims),
-`gemma3:12b` for contextual summaries. Both are pulled automatically on first
-run.
+Models run locally via llama-server (llama.cpp): `qwen3-embedding-4b` for
+embeddings (2560 dims), `ministral-3-14b-instruct-2512` for contextual summaries,
+`qwen3-reranker-0.6b` for reranking. Services are managed as launchd agents
+and start on demand.
 
 ## Benchmarks
 
@@ -92,7 +99,7 @@ See `benchmarks/README.md` for details.
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/) — Python package manager
-- [Ollama](https://ollama.ai) — running locally (models pulled automatically)
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) — `llama-server` in PATH
 
 ## License
 
