@@ -5,6 +5,7 @@ import subprocess
 import time
 import urllib.request
 import urllib.error
+from pathlib import Path
 
 from sova.config import (
     CONTEXT_MODEL,
@@ -16,21 +17,21 @@ from sova.config import (
     SOVA_HOME,
 )
 
-# Map server URLs to launchd service labels for on-demand startup.
+# Map server URLs to launchd service labels for on-demand startup
 _SERVICE_LABELS = {
     EMBEDDING_SERVER_URL: "com.sova.embedding",
     RERANKER_SERVER_URL: "com.sova.reranker",
     CONTEXT_SERVER_URL: "com.sova.chat",
 }
 
-# Idle timeout in seconds — services stop after this much inactivity.
+# Idle timeout in seconds; services stop after this much inactivity
 _IDLE_TIMEOUT = 3600  # 1 hour
 
 _ACTIVITY_DIR = SOVA_HOME / "activity"
 
-# Asymmetric retrieval: queries get this instruction prefix, chunks don't.
+# Asymmetric retrieval: queries get this instruction prefix, chunks don't
 # This tells the model to optimize for query-passage matching rather than
-# generic similarity, which measurably improves recall on retrieval tasks.
+# generic similarity, which measurably improves recall on retrieval tasks
 QUERY_TASK = "Given a search query, retrieve relevant passages that answer the query"
 
 CONTEXT_PROMPT = """\
@@ -60,16 +61,22 @@ def _post_json(url: str, payload: dict, timeout: float = 30.0) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read())
-    except urllib.error.URLError as e:
-        raise ServerError(f"server not reachable at {url} ({e.reason})") from e
     except urllib.error.HTTPError as e:
         raise ServerError(f"server error {e.code} from {url}") from e
+    except urllib.error.URLError as e:
+        raise ServerError(f"server not reachable at {url} ({e.reason})") from e
 
 
 def _touch_activity(label: str) -> None:
     """Record that a service was just used."""
     _ACTIVITY_DIR.mkdir(parents=True, exist_ok=True)
     (_ACTIVITY_DIR / label).write_bytes(b"")
+
+
+def _plist_exists(label: str) -> bool:
+    """Check if a launchd plist is installed for the given label."""
+    plist = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
+    return plist.exists()
 
 
 def _ensure_server(url: str, timeout: float = 120.0) -> bool:
@@ -86,7 +93,7 @@ def _ensure_server(url: str, timeout: float = 120.0) -> bool:
     except Exception:
         pass
 
-    if not label:
+    if not label or not _plist_exists(label):
         return False
 
     subprocess.run(["launchctl", "start", label], capture_output=True)
@@ -130,7 +137,7 @@ def check_servers() -> tuple[bool, str]:
         if not _ensure_server(url):
             return False, f"{name} server not reachable at {url}"
 
-    # Reranker is optional — warn but don't fail.
+    # Reranker is optional; warn but don't fail.
     if not _ensure_server(RERANKER_SERVER_URL, timeout=30.0):
         return True, "ready (reranker unavailable)"
 
@@ -150,6 +157,7 @@ def get_query_embedding(query: str) -> list[float]:
 
 def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
     """Embed document chunks - NO instruction prefix."""
+    _ensure_server(EMBEDDING_SERVER_URL)
     resp = _post_json(
         f"{EMBEDDING_SERVER_URL}/v1/embeddings",
         {"model": EMBEDDING_MODEL, "input": texts},

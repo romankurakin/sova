@@ -139,7 +139,7 @@ def get_doc_status(conn, name: str) -> dict:
     """Get indexing status for a document."""
     empty = {
         "extracted": False,
-        "embedded": False,
+        "embedded": 0,
         "complete": False,
         "chunks": 0,
         "expected": None,

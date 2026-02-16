@@ -169,7 +169,6 @@ def _generate_plist(service: dict[str, Any], llama_server_path: str) -> dict[str
 
 
 _WATCHDOG_LABEL = "com.sova.watchdog"
-_IDLE_TIMEOUT = 3600  # 1 hour
 
 
 def _generate_watchdog_plist(binary_path: Path) -> dict[str, Any]:
@@ -295,7 +294,7 @@ def install_main() -> None:
         service_paths = _install_services(llama_server, binary_path, allow_replace)
     else:
         print(
-            "warning: llama-server not found in PATH — skipping service install\n"
+            "warning: llama-server not found in PATH, skipping service install\n"
             "  install llama.cpp and re-run sova-install to enable services"
         )
 

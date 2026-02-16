@@ -122,8 +122,12 @@ class TestGetEmbeddingsBatch:
                 }
             )
 
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client.urllib.request.urlopen",
+                side_effect=urlopen_side_effect,
+            ),
         ):
             result = get_embeddings_batch(["text1", "text2"])
             assert len(result) == 2
@@ -138,8 +142,12 @@ class TestGetEmbeddingsBatch:
             captured["body"] = json.loads(req.data)
             return _mock_urlopen({"data": [{"index": 0, "embedding": [0.1, 0.2]}]})
 
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client.urllib.request.urlopen",
+                side_effect=urlopen_side_effect,
+            ),
         ):
             get_embeddings_batch(["test text"])
             assert "Instruct:" not in str(captured["body"]["input"])
@@ -158,8 +166,12 @@ class TestGetEmbeddingsBatch:
                 }
             )
 
-        with patch(
-            "sova.llama_client.urllib.request.urlopen", side_effect=urlopen_side_effect
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client.urllib.request.urlopen",
+                side_effect=urlopen_side_effect,
+            ),
         ):
             result = get_embeddings_batch(["text1", "text2"])
             assert result[0] == [0.1, 0.2]

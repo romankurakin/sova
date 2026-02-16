@@ -273,7 +273,7 @@ def fuse_and_rank(
     rerank_count = limit * RERANK_FACTOR
 
     # Only consider the top rerank_count candidates from fusion for
-    # exact-match bonuses and metadata — the rest won't survive ranking.
+    # exact-match bonuses and metadata, the rest won't survive ranking.
     top_ids = fused_ids[:rerank_count]
     if not top_ids:
         return [], 0, 0
@@ -346,9 +346,12 @@ def fuse_and_rank(
                 idx = rr["index"]
                 if idx < len(rerank_top):
                     rerank_top[idx]["rerank_score"] = rr["relevance_score"]
-            scored.sort(
-                key=lambda x: x.get("rerank_score", x["final_score"]), reverse=True
-            )
+            # Re-sort only the reranked portion by rerank_score, then append
+            # the rest (which keep their original final_score order).
+            reranked = [r for r in scored if "rerank_score" in r]
+            unreanked = [r for r in scored if "rerank_score" not in r]
+            reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
+            scored = reranked + unreanked
 
     filtered = score_decay_diversify(scored, limit=limit, decay=diversity_decay)
 
