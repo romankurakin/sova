@@ -11,7 +11,7 @@ from sova.config import EMBEDDING_DIM, VECTOR_EXT
 
 def init_db() -> sqlite3.Connection:
     """Initialize database with tables and indexes."""
-    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    config.get_data_dir().mkdir(parents=True, exist_ok=True)
     db_path = config.get_db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)

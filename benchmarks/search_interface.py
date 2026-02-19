@@ -19,9 +19,9 @@ class SovaBackend:
     """Adapter for sova. Update when refactoring."""
 
     def __init__(self):
-        from sova.config import DB_PATH
+        from sova import config
 
-        if not DB_PATH.exists():
+        if not config.get_db_path().exists():
             raise FileNotFoundError("No database. Run sova indexing first.")
 
         from sova.db import connect_readonly

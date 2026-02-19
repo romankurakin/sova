@@ -5,12 +5,12 @@ Measure search quality against LLM-judged ground truth.
 ## Usage
 
 ```bash
-sova /path/to/pdfs                                  # Index docs first
-uv run python -m benchmarks judge                   # Generate ground truth
-uv run python -m benchmarks judge --debias          # Use debiasing
-uv run python -m benchmarks run my-test             # Run benchmark
-uv run python -m benchmarks show                    # View results
-uv run python -m benchmarks --help                  # Full CLI help
+sova index /path/to/pdfs                                  # Index docs first
+sova projects                                             # Find project id
+uv run python -m benchmarks judge <project-id>            # Generate ground truth
+uv run python -m benchmarks run <project-id> my-test      # Run benchmark
+uv run python -m benchmarks show <project-id>             # View results
+uv run python -m benchmarks --help                        # Full CLI help
 ```
 
 ## Methodology

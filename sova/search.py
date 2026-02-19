@@ -267,11 +267,11 @@ def fuse_and_rank(
         fused_ids = [r[0] for r in vector_results]
         rrf_scores = {r[0]: r[1] for r in vector_results}
 
-    rerank_count = limit * RERANK_FACTOR
+    candidate_count = limit * RERANK_FACTOR
 
-    # Only consider the top rerank_count candidates from fusion for
-    # exact-match bonuses and metadata, the rest won't survive ranking.
-    top_ids = fused_ids[:rerank_count]
+    # Keep a wider candidate pool for fusion/diversity, then rerank a smaller
+    # target subset for latency and memory stability
+    top_ids = fused_ids[:candidate_count]
     if not top_ids:
         return [], 0, 0
 
@@ -323,7 +323,9 @@ def fuse_and_rank(
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
 
-    # Rerank top candidates via cross-encoder for better precision.
+    # Quality-first default: rerank more than final output to let cross-encoder
+    # rescue relevant chunks that were just below the first-stage cutoff
+    rerank_count = min(len(scored), candidate_count)
     rerank_top = scored[:rerank_count]
     rerank_ids = [r["chunk_id"] for r in rerank_top]
     if rerank_ids:
@@ -337,17 +339,16 @@ def fuse_and_rank(
         }
         texts = [text_rows.get(cid, "") for cid in rerank_ids]
         rerank_results = rerank(query_text, texts, top_n=len(texts))
-        if rerank_results is not None:
-            for rr in rerank_results:
-                idx = rr["index"]
-                if idx < len(rerank_top):
-                    rerank_top[idx]["rerank_score"] = rr["relevance_score"]
-            # Re-sort only the reranked portion by rerank_score, then append
-            # the rest (which keep their original final_score order).
-            reranked = [r for r in scored if "rerank_score" in r]
-            unreanked = [r for r in scored if "rerank_score" not in r]
-            reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
-            scored = reranked + unreanked
+        for rr in rerank_results:
+            idx = rr["index"]
+            if idx < len(rerank_top):
+                rerank_top[idx]["rerank_score"] = rr["relevance_score"]
+        # Re-sort only the reranked portion by rerank_score, then append
+        # the rest (which keep their original final_score order).
+        reranked = [r for r in scored if "rerank_score" in r]
+        unreanked = [r for r in scored if "rerank_score" not in r]
+        reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
+        scored = reranked + unreanked
 
     filtered = score_decay_diversify(scored, limit=limit, decay=diversity_decay)
 

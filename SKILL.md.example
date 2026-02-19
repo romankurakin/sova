@@ -1,65 +1,66 @@
 ---
 name: pdf-search
-description: Search indexed PDF documents. Use when looking up information in your reference library.
+description: Search indexed PDF documents with sova. Use when looking up information in a local reference library.
 allowed-tools: AskUserQuestion, Bash, Read
 ---
 
 # PDF Search Skill (sova)
 
-Search your indexed PDF documents using semantic search.
-Assumes `sova` is globally installed and available in `PATH`.
+Use `sova` to search indexed PDF projects.
 
 ## When to Use
 
-- Looking up information in reference documents
-- Finding relevant sections across multiple PDFs
-- Verifying facts or quotes from source materials
+- Looking up details in reference PDFs.
+- Finding relevant sections across multiple documents.
+- Verifying facts and quotes from source material.
 
-## Search
-
-```bash
-# Semantic search
-sova -s "your search query"
-sova -s "query" -n 5        # Fewer results
-sova -s "query" -n 20       # More results
-
-# Text search (exact matches)
-rg -i "keyword" ~/.sova/data/*.md
-```
-
-Search returns `~/.../file.md:start-end` plus full chunk text. Use Read tool for extra surrounding context (add ~50 lines buffer):
+## Quick Start
 
 ```bash
-# Search returns: ~/.sova/data/mybook.md:580-650
-# Read with context buffer
+# First-time setup
+uv run sova-install
+
+# Register + index a docs folder
+sova index /path/to/pdfs
+
+# Show project ids
+sova projects
+
+# Search (default mode)
+sova <project-id> "your search query"
 ```
 
-```
-Read ~/.sova/data/mybook.md lines 530-700
-```
-
-## Setup
-
-If the database doesn't exist or is incomplete:
+## Common Commands
 
 ```bash
-# Point sova at your PDFs (stored in ~/.sova/config.json)
-sova /path/to/your/pdfs
+# Search
+sova <project-id> "query"
+sova <project-id> "query" -n 20
 
-# Check status
-sova --list
+# Status / indexing
+sova list <project-id>
+sova index <project-id>
+sova index /path/to/pdfs
 
-# Re-index (uses stored PDF directory)
-sova
+# Reset / remove project
+sova reset <project-id>
+sova remove <project-id>
+sova remove <project-id> --keep-data
 ```
 
-Services (llama-server) start on demand — no manual setup needed.
+## Notes
 
-## Adding Documents
+- There is no default project; always pass `<project-id>`.
+- Search output includes `path:start-end` and chunk text.
+- Use `Read` with a line buffer around returned ranges for extra context.
 
-Drop PDFs in the configured directory and re-run indexing:
+## Troubleshooting
 
 ```bash
-sova                          # Re-index all
-sova new-doc-name             # Index specific document
+# Reinstall runtime/services
+uv run sova-remove
+uv run sova-install
+
+# Full cleanup including ~/.sova
+uv run sova-remove --purge-data
 ```

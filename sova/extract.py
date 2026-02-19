@@ -5,7 +5,23 @@ import re
 import warnings
 from pathlib import Path
 
-from sova.config import CHUNK_SIZE, DATA_DIR, get_docs_dir
+from sova import config
+
+# Backward-compatible aliases used by older tests/patches. Runtime path
+# resolution still goes through active project config unless explicitly patched.
+DATA_DIR = config.DATA_DIR
+
+
+def get_docs_dir() -> Path | None:
+    return config.get_docs_dir()
+
+
+def get_data_dir() -> Path:
+    override = DATA_DIR
+    if isinstance(override, Path) and override != config.DATA_DIR:
+        return override
+    return config.get_data_dir()
+
 
 # pymupdf emits RuntimeWarnings about unsupported PDF features (fonts, etc.)
 # that don't affect extraction quality. Safe to suppress.
@@ -15,16 +31,17 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="pymupdf")
 def find_docs() -> list[dict]:
     """Find all documents (PDFs and extracted markdown files)."""
     docs_dir = get_docs_dir()
+    data_dir = get_data_dir()
     pdfs = list(docs_dir.glob("*.pdf")) if docs_dir and docs_dir.exists() else []
     mds = sorted(
-        [m for m in DATA_DIR.glob("*.md")] if DATA_DIR.exists() else [],
+        [m for m in data_dir.glob("*.md")] if data_dir.exists() else [],
         key=lambda p: p.name.lower(),
     )
     pdf_names = {p.stem for p in pdfs}
 
     docs = []
     for pdf in pdfs:
-        md = DATA_DIR / f"{pdf.stem}.md"
+        md = data_dir / f"{pdf.stem}.md"
         docs.append(
             {
                 "name": pdf.stem,
@@ -73,7 +90,7 @@ def parse_sections(lines: list[str]) -> list[dict]:
     return sections
 
 
-def chunk_text(lines: list[str], target_words: int = CHUNK_SIZE) -> list[dict]:
+def chunk_text(lines: list[str], target_words: int = config.CHUNK_SIZE) -> list[dict]:
     """Split text into chunks of approximately target_words."""
     chunks = []
     current_lines, current_words, chunk_start = [], 0, 1

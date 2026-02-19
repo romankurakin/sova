@@ -1,9 +1,13 @@
 """Tests for search module."""
 
+import sqlite3
+from unittest.mock import patch
+
 import pytest
 
 from sova.search import (
     compute_candidates,
+    fuse_and_rank,
     is_index_like,
     rrf_fusion,
     search_fts,
@@ -171,3 +175,112 @@ class TestSearchFtsSingleChar:
         results = search_fts(conn, "", 5)
         assert results == []
         conn.close()
+
+
+class TestFuseAndRankReranker:
+    @staticmethod
+    def _make_db(n_chunks: int = 2):
+        conn = sqlite3.connect(":memory:")
+        conn.executescript("""
+            CREATE TABLE documents (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                path TEXT
+            );
+            CREATE TABLE chunks (
+                id INTEGER PRIMARY KEY,
+                doc_id INTEGER NOT NULL,
+                section_id INTEGER,
+                start_line INTEGER,
+                end_line INTEGER,
+                text TEXT NOT NULL,
+                is_index INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                text, content='chunks', content_rowid='id',
+                tokenize='porter unicode61'
+            );
+            INSERT INTO documents (id, name, path) VALUES
+                (1, 'doc-a', '/tmp/doc-a.md');
+        """)
+        chunk_rows = [
+            (
+                i,
+                1,
+                i,
+                i * 10,
+                i * 10 + 5,
+                f"timer chunk {i} kernel scheduling",
+                0,
+            )
+            for i in range(1, n_chunks + 1)
+        ]
+        conn.executemany(
+            "INSERT INTO chunks (id, doc_id, section_id, start_line, end_line, text, is_index)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            chunk_rows,
+        )
+        conn.executemany(
+            "INSERT INTO chunks_fts (rowid, text) VALUES (?, ?)",
+            [(row[0], row[5]) for row in chunk_rows],
+        )
+        conn.commit()
+        return conn
+
+    def test_calls_rerank_in_search_pipeline(self):
+        conn = self._make_db()
+        try:
+            with patch(
+                "sova.search.rerank",
+                return_value=[
+                    {"index": 0, "relevance_score": 0.9},
+                    {"index": 1, "relevance_score": 0.4},
+                ],
+            ) as rerank_mock:
+                results, _, _ = fuse_and_rank(
+                    conn,
+                    vector_results=[(1, 0.9), (2, 0.8)],
+                    query_text="timer",
+                    limit=2,
+                )
+            assert rerank_mock.call_count == 1
+            assert len(results) == 2
+            assert "rerank_score" in results[0]
+        finally:
+            conn.close()
+
+    def test_propagates_rerank_errors(self):
+        from sova.llama_client import ServerError
+
+        conn = self._make_db()
+        try:
+            with patch("sova.search.rerank", side_effect=ServerError("server error 500")):
+                with pytest.raises(ServerError, match="server error 500"):
+                    fuse_and_rank(
+                        conn,
+                        vector_results=[(1, 0.9), (2, 0.8)],
+                        query_text="timer",
+                        limit=2,
+                    )
+        finally:
+            conn.close()
+
+    def test_reranks_expanded_subset_for_limit_10(self):
+        conn = self._make_db(n_chunks=20)
+        try:
+            with patch(
+                "sova.search.rerank",
+                return_value=[{"index": i, "relevance_score": 1.0 - i * 0.01} for i in range(20)],
+            ) as rerank_mock:
+                fuse_and_rank(
+                    conn,
+                    vector_results=[(i, 1.0 / i) for i in range(1, 21)],
+                    query_text="timer",
+                    limit=10,
+                )
+            assert rerank_mock.call_count == 1
+            _, kwargs = rerank_mock.call_args
+            assert kwargs["top_n"] == 20
+            assert len(rerank_mock.call_args.args[1]) == 20
+        finally:
+            conn.close()
