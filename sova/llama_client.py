@@ -1,6 +1,7 @@
 """llama-server API client for embeddings, reranking, and context generation."""
 
 import json
+import math
 import plistlib
 import subprocess
 import time
@@ -62,6 +63,7 @@ _EMBED_TIMEOUT_CEIL = 180.0
 # pool and fail early if the embedding server is unstable (llama.cpp #18568).
 _EMBED_CANARY_REQUESTS = 24
 _EMBED_CANARY_TEXT = "sova embedding canary"
+_DOWNLOAD_PROGRESS_STEP_GIB = 0.5
 
 # Required-model admission is estimate-based; allow a small mode-specific
 # slack to avoid false negatives on machines where real RSS is lower than
@@ -72,12 +74,6 @@ _REQUIRED_SOFT_MARGIN_GIB = {
 }
 
 _MODE_SERVERS = {
-    # Legacy mode: kept for compatibility, but index workflow should prefer
-    # index_context then index_embed.
-    "index": [
-        ("embedding", EMBEDDING_SERVER_URL, True),
-        ("chat", CONTEXT_SERVER_URL, True),
-    ],
     "index_context": [
         ("chat", CONTEXT_SERVER_URL, True),
     ],
@@ -225,7 +221,9 @@ def _server_status(label: str) -> str:
     if dl_path.exists():
         try:
             size_gb = dl_path.stat().st_size / (1024**3)
-            return f"downloading ({size_gb:.1f} GB)"
+            # Coarsen progress to avoid noisy status spam during long downloads.
+            bucketed = math.floor(size_gb / _DOWNLOAD_PROGRESS_STEP_GIB) * _DOWNLOAD_PROGRESS_STEP_GIB
+            return f"downloading ({bucketed:.1f} GB)"
         except OSError:
             return "downloading"
     if not cached_path.exists():
@@ -346,14 +344,6 @@ def cleanup_idle_services() -> None:
                         label_path.unlink(missing_ok=True)
                     except FileNotFoundError:
                         pass
-
-    # Fallback for older activity state that lacks a shared search marker.
-    elif search_file is None and all(label in label_files for label in _SEARCH_PAIR_LABELS):
-        emb_path = label_files["com.sova.embedding"]
-        rr_path = label_files["com.sova.reranker"]
-        if _is_file_idle(emb_path, now) and _is_file_idle(rr_path, now):
-            _stop_and_unlink_if_still_idle("com.sova.embedding", emb_path, now)
-            _stop_and_unlink_if_still_idle("com.sova.reranker", rr_path, now)
 
     for label, label_file in label_files.items():
         if label == _SEARCH_ACTIVITY_LABEL or label in _SEARCH_PAIR_LABELS:
@@ -508,7 +498,7 @@ def get_services_runtime_status() -> list[dict[str, str | int | float | bool | N
 
 def check_servers(
     on_status: Callable[[str], None] | None = None,
-    mode: str = "index",
+    mode: str = "search",
 ) -> tuple[bool, str]:
     """Probe /health on needed llama-server instances, starting them if needed.
 
@@ -517,11 +507,12 @@ def check_servers(
       - "index_context": chat only
       - "index_embed": embedding only
       - "search": embedding + reranker (chat skipped)
-      - "index": embedding + chat
     ``on_status`` is called with a human-readable status string on each poll.
     """
     timeout = 300.0
-    all_servers = _MODE_SERVERS.get(mode, _MODE_SERVERS["index"])
+    all_servers = _MODE_SERVERS.get(mode)
+    if all_servers is None:
+        raise ValueError(f"unknown server mode: {mode}")
     all_servers, admission_note = _admit_services_for_mode(mode, all_servers)
     if not all_servers and admission_note:
         return False, admission_note

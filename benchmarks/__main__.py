@@ -836,14 +836,14 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     p_judge = sub.add_parser("judge", help="Generate ground truth judgments")
-    p_judge.add_argument("project", help="Project id/name/path")
+    p_judge.add_argument("project", help="Project id/path")
 
     p_run = sub.add_parser("run", help="Run benchmark against ground truth")
-    p_run.add_argument("project", help="Project id/name/path")
+    p_run.add_argument("project", help="Project id/path")
     p_run.add_argument("name", help="Benchmark run name (e.g. 'baseline-v2')")
 
     p_show = sub.add_parser("show", help="Display benchmark results")
-    p_show.add_argument("project", help="Project id/name/path")
+    p_show.add_argument("project", help="Project id/path")
     p_show.add_argument(
         "name", nargs="?", default=None, help="Run name (omit to list all)"
     )

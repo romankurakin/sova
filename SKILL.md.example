@@ -33,6 +33,9 @@ sova <project-id> "your search query"
 ## Common Commands
 
 ```bash
+# Help
+sova help
+
 # Search
 sova <project-id> "query"
 sova <project-id> "query" -n 20
@@ -43,7 +46,6 @@ sova index <project-id>
 sova index /path/to/pdfs
 
 # Reset / remove project
-sova reset <project-id>
 sova remove <project-id>
 sova remove <project-id> --keep-data
 ```

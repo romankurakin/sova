@@ -31,7 +31,7 @@ retrieval artifacts: a vector store and an FTS index.
 (`ministral-3-14b-instruct-2512`) generates a one-sentence summary situating
 each chunk within its document and section. This context is prepended to the
 chunk text before embedding, so vectors capture meaning beyond the raw text [1].
-The format is `[doc | section]\n\n{chunk_context}\n\n{chunk_text}`.
+Format: `[doc | section]\n\n{chunk_context}\n\n{chunk_text}`.
 
 **Embedding + vector store** — contextualized chunk text is embedded with
 `qwen3-embedding-4b` and stored for semantic retrieval.
@@ -71,13 +71,13 @@ and start on demand.
 ## Usage
 
 ```bash
+sova help                             # Show unified help
 sova projects                         # List projects
 sova index /path/to/pdfs              # Add project and index
 sova index <project-id>               # Re-index existing project
 sova <project-id> "your query"        # Semantic search (default mode)
 sova <project-id> "query" -n 20       # More results
 sova list <project-id>                # List docs and indexing status
-sova reset <project-id>               # Delete DB and extracted files for project
 sova remove <project-id>              # Remove project + local project data
 sova remove <project-id> --keep-data  # Remove from registry, keep project data(md,db)
 ```

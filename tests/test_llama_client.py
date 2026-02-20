@@ -33,7 +33,7 @@ def _mock_urlopen_for_health(*up_ports: str):
 
 
 class TestCheckServers:
-    def _run_check(self, *up_ports: str, mode: str = "index"):
+    def _run_check(self, *up_ports: str, mode: str = "search"):
         from sova.llama_client import check_servers
 
         with (
@@ -47,8 +47,13 @@ class TestCheckServers:
         ):
             return check_servers(mode=mode)
 
-    def test_index_all_healthy(self):
-        ok, msg = self._run_check("8081", "8083", mode="index")
+    def test_index_context_healthy(self):
+        ok, msg = self._run_check("8083", mode="index_context")
+        assert ok is True
+        assert msg == "ready"
+
+    def test_index_embed_healthy(self):
+        ok, msg = self._run_check("8081", mode="index_embed")
         assert ok is True
         assert msg == "ready"
 
@@ -57,13 +62,19 @@ class TestCheckServers:
         assert ok is True
         assert msg == "ready"
 
+    def test_unknown_mode_raises(self):
+        from sova.llama_client import check_servers
+
+        with pytest.raises(ValueError, match="unknown server mode"):
+            check_servers(mode="index")
+
     def test_chat_down(self):
-        ok, msg = self._run_check("8081", mode="index")
+        ok, msg = self._run_check(mode="index_context")
         assert ok is False
         assert "chat" in msg
 
     def test_embedding_down_for_index(self):
-        ok, msg = self._run_check("8083", mode="index")
+        ok, msg = self._run_check(mode="index_embed")
         assert ok is False
         assert "embedding" in msg
 
@@ -286,6 +297,25 @@ class TestGetQueryEmbedding:
             result = get_query_embedding("test")
             assert isinstance(result, list)
             assert all(isinstance(v, float) for v in result)
+
+
+def test_server_status_download_progress_is_bucketed(tmp_path, monkeypatch):
+    from sova import llama_client
+
+    monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path)
+    monkeypatch.setitem(llama_client._CACHE_FILES, "com.sova.chat", "chat.gguf")
+    dl_path = tmp_path / "chat.gguf.downloadInProgress"
+    dl_path.touch()
+
+    # 1.64 GiB should be shown as 1.5 GiB (0.5 GiB step).
+    with dl_path.open("wb") as f:
+        f.truncate(int(1.64 * (1024**3)))
+    assert llama_client._server_status("com.sova.chat") == "downloading (1.5 GB)"
+
+    # 2.01 GiB should step up to 2.0 GiB.
+    with dl_path.open("wb") as f:
+        f.truncate(int(2.01 * (1024**3)))
+    assert llama_client._server_status("com.sova.chat") == "downloading (2.0 GB)"
 
 
 class TestGetEmbeddingsBatch:
@@ -774,35 +804,6 @@ class TestCleanupIdleServices:
         assert search.exists()
         assert embedding.exists()
         assert reranker.exists()
-
-    def test_stops_search_pair_together_without_shared_activity_fallback(self, tmp_path):
-        from sova.llama_client import cleanup_idle_services
-
-        now = 10_000.0
-        labels = ["com.sova.embedding", "com.sova.reranker"]
-        for label in labels:
-            path = tmp_path / label
-            path.write_bytes(b"")
-            os.utime(path, (now - 1_000.0, now - 1_000.0))
-
-        with (
-            patch("sova.llama_client._ACTIVITY_DIR", tmp_path),
-            patch("sova.llama_client._IDLE_TIMEOUT", 900),
-            patch("sova.llama_client.time.time", return_value=now),
-            patch("sova.llama_client.subprocess.run") as mock_run,
-        ):
-            cleanup_idle_services()
-
-        stopped = {
-            call.args[0][2]
-            for call in mock_run.call_args_list
-            if len(call.args) == 1 and len(call.args[0]) >= 3
-        }
-        assert "com.sova.embedding" in stopped
-        assert "com.sova.reranker" in stopped
-        for label in labels:
-            assert not (tmp_path / label).exists()
-
 
 class TestRunEmbeddingCanary:
     def test_sends_canary_requests(self):

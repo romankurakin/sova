@@ -7,19 +7,11 @@ from pathlib import Path
 
 from sova import config
 
-# Backward-compatible aliases used by older tests/patches. Runtime path
-# resolution still goes through active project config unless explicitly patched.
-DATA_DIR = config.DATA_DIR
-
-
 def get_docs_dir() -> Path | None:
     return config.get_docs_dir()
 
 
 def get_data_dir() -> Path:
-    override = DATA_DIR
-    if isinstance(override, Path) and override != config.DATA_DIR:
-        return override
     return config.get_data_dir()
 
 

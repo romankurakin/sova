@@ -127,7 +127,7 @@ class TestFindDocs:
             data_dir.mkdir()
             with (
                 patch("sova.extract.get_docs_dir", return_value=docs_dir),
-                patch("sova.extract.DATA_DIR", data_dir),
+                patch("sova.extract.get_data_dir", return_value=data_dir),
             ):
                 docs = find_docs()
                 assert docs == []
@@ -141,7 +141,7 @@ class TestFindDocs:
             (docs_dir / "paper.pdf").write_bytes(b"%PDF-fake")
             with (
                 patch("sova.extract.get_docs_dir", return_value=docs_dir),
-                patch("sova.extract.DATA_DIR", data_dir),
+                patch("sova.extract.get_data_dir", return_value=data_dir),
             ):
                 docs = find_docs()
                 assert len(docs) == 1
@@ -158,7 +158,7 @@ class TestFindDocs:
             (data_dir / "notes.md").write_text("# Notes")
             with (
                 patch("sova.extract.get_docs_dir", return_value=docs_dir),
-                patch("sova.extract.DATA_DIR", data_dir),
+                patch("sova.extract.get_data_dir", return_value=data_dir),
             ):
                 docs = find_docs()
                 assert len(docs) == 1
@@ -176,7 +176,7 @@ class TestFindDocs:
             (data_dir / "paper.md").write_text("# Paper")
             with (
                 patch("sova.extract.get_docs_dir", return_value=docs_dir),
-                patch("sova.extract.DATA_DIR", data_dir),
+                patch("sova.extract.get_data_dir", return_value=data_dir),
             ):
                 docs = find_docs()
                 # PDF and its extracted MD should merge into one entry
@@ -195,7 +195,7 @@ class TestFindDocs:
             (docs_dir / "big.pdf").write_bytes(b"x" * 1000)
             with (
                 patch("sova.extract.get_docs_dir", return_value=docs_dir),
-                patch("sova.extract.DATA_DIR", data_dir),
+                patch("sova.extract.get_data_dir", return_value=data_dir),
             ):
                 docs = find_docs()
                 assert len(docs) == 2

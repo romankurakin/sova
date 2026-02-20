@@ -1,6 +1,7 @@
 """Tests for cli module."""
 
 import sys
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -162,6 +163,55 @@ class TestInterruptHandling:
             True,
         ) in stops
 
+    def test_search_uses_live_server_status_without_log_spam(self, monkeypatch):
+        from sova import cli
+
+        reports: list[tuple[str, str]] = []
+        live_updates: list[str] = []
+
+        class DummyProject:
+            project_id = "proj"
+
+        class DummyLive:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def update(self, renderable):
+                live_updates.append(str(renderable))
+
+        def fake_check_servers(on_status=None, mode="search"):
+            if on_status:
+                on_status("embedding: downloading (0.5 GB)")
+                on_status("embedding: loading")
+            return True, "ready"
+
+        monkeypatch.setattr(sys, "argv", ["sova", "proj", "q"])
+        monkeypatch.setattr(
+            cli,
+            "_activate_project_from_ref",
+            lambda _ref, allow_create_from_dir=False: DummyProject(),
+        )
+        monkeypatch.setattr(cli, "Live", DummyLive)
+        monkeypatch.setattr(cli, "check_servers", fake_check_servers)
+        monkeypatch.setattr(cli, "search_semantic", lambda *args, **kwargs: None)
+        monkeypatch.setattr(cli, "report", lambda name, msg: reports.append((name, msg)))
+
+        cli.main()
+
+        # Intermediate server states should go through live update, not report().
+        assert any("downloading" in u for u in live_updates)
+        assert any("loading" in u for u in live_updates)
+        assert ("server", "ready") in reports
+        assert not any(
+            n == "server" and ("downloading" in m or "loading" in m) for n, m in reports
+        )
+
 
 def test_index_reserved_token_fails_before_project_lookup(monkeypatch):
     from sova import cli
@@ -183,6 +233,59 @@ def test_index_reserved_token_fails_before_project_lookup(monkeypatch):
     assert exc.value.code == 2
     assert captured["summary"] == "project name is reserved"
     assert "conflicts with a CLI command" in captured["cause"]
+
+
+def test_help_command_prints_global_help(monkeypatch, capsys):
+    from sova import cli
+
+    monkeypatch.setattr(sys, "argv", ["sova", "help"])
+    cli.main()
+
+    out = capsys.readouterr().out
+    assert "usage: sova" in out
+    assert "{help,projects,remove,list,index}" in out
+
+
+def test_help_flag_is_unknown_option(monkeypatch):
+    from sova import cli
+
+    captured: dict[str, str] = {}
+    monkeypatch.setattr(sys, "argv", ["sova", "--help"])
+    monkeypatch.setattr(
+        cli,
+        "_report_error_block",
+        lambda summary, **kw: captured.update(
+            {"summary": summary, "cause": kw.get("cause", ""), "action": kw.get("action", "")}
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 2
+    assert captured["summary"] == "unknown option"
+    assert captured["action"] == "use: sova help"
+
+
+def test_subcommand_help_flag_is_unknown_option(monkeypatch):
+    from sova import cli
+
+    captured: dict[str, str] = {}
+    monkeypatch.setattr(sys, "argv", ["sova", "projects", "--help"])
+    monkeypatch.setattr(
+        cli,
+        "_report_error_block",
+        lambda summary, **kw: captured.update(
+            {"summary": summary, "cause": kw.get("cause", ""), "action": kw.get("action", "")}
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 2
+    assert captured["summary"] == "unknown option"
+    assert captured["action"] == "use: sova help"
 
 
 class TestRuntimeReporting:
@@ -268,3 +371,98 @@ class TestIndexLiveView:
         assert len(events) == 2
         assert events[0].endswith("arm_profile_architecture_reference_manual")
         assert events[1].endswith("36/15,531 chunks")
+
+    def test_replaces_server_status_line_in_place(self):
+        from sova import cli
+
+        view = cli._IndexLiveView()
+        view.emit("event", "starting services")
+        view.emit("server", "chat: downloading (1.5 GB)")
+        view.emit("server", "chat: downloading (2.0 GB)")
+        view.emit("server", "chat: loading")
+
+        events = list(view._events)
+        assert len(events) == 2
+        assert events[0].endswith("starting services")
+        assert events[1].endswith("chat: loading")
+
+
+def test_generate_contexts_is_idempotent_on_duplicate_chunk_start_lines(monkeypatch):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            start_line INTEGER NOT NULL,
+            embedding BLOB
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        """
+    )
+    conn.execute("INSERT INTO chunks (id, doc_id, start_line) VALUES (1, 1, 10)")
+    conn.commit()
+
+    chunks = [
+        {"start_line": 10, "text": "first"},
+        {"start_line": 10, "text": "first duplicate"},
+    ]
+    sections: list[dict] = []
+
+    monkeypatch.setattr(cli, "generate_context", lambda *args, **kwargs: "ctx")
+    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
+
+    cli._generate_contexts("doc", 1, chunks, sections, conn)
+    count = conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
+    assert count == 1
+
+    # Retry should not fail and should keep a single row.
+    cli._generate_contexts("doc", 1, chunks, sections, conn)
+    count_after = conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
+    assert count_after == 1
+
+    conn.close()
+
+
+def test_list_mode_reports_structured_error_on_sqlite_operational_error(monkeypatch):
+    from sova import cli
+
+    lines: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(cli, "find_docs", lambda: [])
+    monkeypatch.setattr(
+        cli,
+        "list_docs",
+        lambda _docs: (_ for _ in ()).throw(sqlite3.OperationalError("")),
+    )
+    monkeypatch.setattr(cli, "report", lambda name, msg: lines.append((name, msg)))
+
+    with pytest.raises(SystemExit) as exc:
+        cli._run_list_mode()
+
+    assert exc.value.code == 1
+    assert any(name == "error" and "database extension unavailable" in msg for name, msg in lines)
+    assert any(name == "action" and "sova-install" in msg for name, msg in lines)
+
+
+def test_reset_is_not_a_command_and_fails_as_unknown_project(monkeypatch):
+    from sova import cli
+
+    monkeypatch.setattr(sys, "argv", ["sova", "reset", "proj"])
+    monkeypatch.setattr(
+        cli,
+        "_activate_project_from_ref",
+        lambda _ref, allow_create_from_dir=False: (_ for _ in ()).throw(SystemExit(1)),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 1

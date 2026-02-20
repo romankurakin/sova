@@ -131,9 +131,9 @@ class _IndexLiveView:
             self._refresh()
             return
         line = format_line(name, msg)
-        # Keep progress lines stable: update the latest context/embed line
+        # Keep progress lines stable: update the latest context/embed/server line
         # in place instead of appending a new event every tick.
-        if name in {"context", "embed"} and self._events:
+        if name in {"context", "embed", "server"} and self._events:
             prefix = format_line(name, "")
             if self._events[-1].startswith(prefix):
                 self._events[-1] = line
@@ -529,12 +529,17 @@ def _generate_contexts(
         ).fetchall()
     )
     chunks_needing_context = []
+    # Protect against duplicate start_line entries in chunk lists. This keeps
+    # context generation idempotent across interrupted/retried runs.
+    planned_chunk_ids = set(existing_contexts)
     for i, chunk in enumerate(chunks):
         chunk_id = chunk_id_by_start.get(chunk["start_line"])
         if chunk_id is None:
             continue
-        if chunk_id not in existing_contexts:
-            chunks_needing_context.append((i, chunk, chunk_id))
+        if chunk_id in planned_chunk_ids:
+            continue
+        chunks_needing_context.append((i, chunk, chunk_id))
+        planned_chunk_ids.add(chunk_id)
 
     if not chunks_needing_context:
         count = len(chunks)
@@ -563,7 +568,12 @@ def _generate_contexts(
                 )
 
                 conn.execute(
-                    "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (?, ?, ?)",
+                    """
+                    INSERT INTO chunk_contexts (chunk_id, context, model)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(chunk_id)
+                    DO UPDATE SET context = excluded.context, model = excluded.model
+                    """,
                     (chunk_id, ctx, config.CONTEXT_MODEL),
                 )
                 conn.execute(
@@ -902,7 +912,7 @@ def _activate_project_from_ref(
                 "project name is reserved",
                 cause=(
                     f"'{raw_ref}' conflicts with a CLI command "
-                    "(projects, remove, list, index, reset)"
+                    "(projects, remove, list, index)"
                 ),
                 action="rename the docs folder and retry indexing",
             )
@@ -943,9 +953,15 @@ def _activate_project_from_ref(
 def _run_search_mode(query: str, limit: int) -> None:
     report("mode", f'search | "{_preview(query)}"')
     try:
-        with console.status("", spinner="dots") as status:
+        with Live(
+            Text(format_line("server", "checking")),
+            console=console,
+            screen=False,
+            transient=True,
+            refresh_per_second=4,
+        ) as live:
             ok, msg = check_servers(
-                on_status=lambda s: status.update(f"server:  {s}"),
+                on_status=lambda s: live.update(Text(format_line("server", s))),
                 mode="search",
             )
     except KeyboardInterrupt:
@@ -967,25 +983,23 @@ def _run_search_mode(query: str, limit: int) -> None:
         sys.exit(1)
 
 
-def _run_reset_mode() -> None:
-    db_path = config.get_db_path()
-    if db_path.exists():
-        db_path.unlink()
-        report("deleted", str(db_path))
-    data_dir = config.get_data_dir()
-    if data_dir.exists():
-        for md in data_dir.glob("*.md"):
-            md.unlink()
-            report("deleted", md.name)
-    get_cache().clear()
-    report("status", "reset complete")
-
-
 def _run_list_mode() -> None:
     docs = find_docs()
     report("mode", f"list | {len(docs)} docs")
-    list_docs(docs)
-    show_stats(mode="list")
+    try:
+        list_docs(docs)
+        show_stats(mode="list")
+    except sqlite3.OperationalError as e:
+        cause = str(e).strip() or "sqlite extension failed to initialize"
+        _report_error_block(
+            "database extension unavailable",
+            cause=cause,
+            action="reinstall and retry: sova-install",
+        )
+        sys.exit(1)
+    except Exception as e:
+        _report_error(e)
+        sys.exit(1)
 
 
 def _run_index_mode() -> None:
@@ -1135,6 +1149,7 @@ def _run_index_mode() -> None:
 
 
 def _run_projects_mode() -> None:
+    report("mode", "projects")
     rows = projects.list_projects()
     if not rows:
         report("projects", "none")
@@ -1153,13 +1168,15 @@ def _run_projects_mode() -> None:
 
 def _build_command_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="sova project CLI (default search: sova <project> <query>)"
+        description="sova project CLI (default search: sova <project> <query>)",
+        add_help=False,
     )
     sub = parser.add_subparsers(dest="command")
 
-    sub.add_parser("projects", help="List configured projects")
+    sub.add_parser("help", help="Show help", add_help=False)
+    sub.add_parser("projects", help="List configured projects", add_help=False)
 
-    p_remove = sub.add_parser("remove", help="Remove project from Sova")
+    p_remove = sub.add_parser("remove", help="Remove project from Sova", add_help=False)
     p_remove.add_argument("project", help="Project id/path")
     p_remove.add_argument(
         "--keep-data",
@@ -1167,34 +1184,35 @@ def _build_command_parser() -> argparse.ArgumentParser:
         help="Keep local project data under ~/.sova/projects/<id>",
     )
 
-    p_list = sub.add_parser("list", help="List docs and indexing status")
+    p_list = sub.add_parser("list", help="List docs and indexing status", add_help=False)
     p_list.add_argument("project", help="Project id/path")
 
-    p_index = sub.add_parser("index", help="Index project docs")
+    p_index = sub.add_parser("index", help="Index project docs", add_help=False)
     p_index.add_argument("project", help="Project id/path")
-
-    p_reset = sub.add_parser("reset", help="Reset project index data")
-    p_reset.add_argument("project", help="Project id/path")
     return parser
 
 
 def _run_command_cli(argv: list[str]) -> bool:
     commands = {
+        "help",
         "projects",
         "remove",
         "list",
         "index",
-        "reset",
     }
     if not argv or argv[0] not in commands:
         return False
     parser = _build_command_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "help":
+        _build_command_parser().print_help()
+        return True
     if args.command == "projects":
         _run_projects_mode()
         return True
     if args.command == "remove":
+        report("mode", "remove")
         try:
             removed = projects.remove_project(args.project, keep_data=args.keep_data)
         except ValueError as e:
@@ -1222,9 +1240,6 @@ def _run_command_cli(argv: list[str]) -> bool:
     if args.command == "index":
         _run_index_mode()
         return True
-    if args.command == "reset":
-        _run_reset_mode()
-        return True
     return True
 
 
@@ -1239,22 +1254,22 @@ def main() -> None:
 
                 cleanup_idle_services()
                 return
-            if argv and argv[0] in {"add", "use", "search"}:
+            if any(arg in {"-h", "--help"} for arg in argv):
                 _report_error_block(
-                    "command removed",
-                    cause=f"sova {argv[0]}",
-                    action="use: sova <project> <query> or sova index /path/to/pdfs",
+                    "unknown option",
+                    cause=f"sova {' '.join(argv)}".rstrip(),
+                    action="use: sova help",
                 )
                 sys.exit(2)
-            if argv and argv[0] in {"list", "index", "reset", "remove"} and len(argv) == 1:
+            if argv and argv[0] in {"list", "index", "remove"} and len(argv) == 1:
                 _report_error_block(
                     "project is required",
                     cause=f"sova {argv[0]}",
                     action=f"use: sova {argv[0]} <project>",
                 )
                 sys.exit(2)
-            known_commands = {"projects", "remove", "list", "index", "reset"}
-            if len(argv) == 1 and argv[0] not in {"-h", "--help"} and argv[0] not in known_commands:
+            known_commands = {"help", "projects", "remove", "list", "index"}
+            if len(argv) == 1 and argv[0] not in known_commands:
                 only = Path(argv[0]).expanduser()
                 if only.exists() and only.is_dir():
                     _report_error_block(
@@ -1278,7 +1293,7 @@ def main() -> None:
                 sys.exit(2)
             if _run_command_cli(argv):
                 return
-            if argv and argv[0] not in {"-h", "--help"}:
+            if argv:
                 parser = argparse.ArgumentParser(
                     prog="sova",
                     description="Default search mode",
@@ -1299,9 +1314,14 @@ def main() -> None:
                 return
             parser = _build_command_parser()
             parser.print_help()
-            if argv and argv[0] in {"-h", "--help"}:
-                return
             sys.exit(2)
+        except projects.RegistryError as e:
+            _report_error_block(
+                "project registry is invalid",
+                cause=str(e),
+                action="fix ~/.sova/projects/registry.json or re-create it via indexing",
+            )
+            sys.exit(1)
         except KeyboardInterrupt:
             report("status", "interrupt received, stopping services")
             stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)

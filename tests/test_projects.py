@@ -65,6 +65,37 @@ def test_legacy_name_field_is_ignored_and_id_kept(monkeypatch, tmp_path):
     assert saved["projects"][0]["name"] == "legacy-name"
 
 
+def test_registry_raises_on_reserved_id(monkeypatch, tmp_path):
+    _isolate_registry(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir(parents=True)
+    reg = {"projects": [{"id": "list", "docs_dir": str(docs)}]}
+    projects._REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    projects._REGISTRY_PATH.write_text(json.dumps(reg), encoding="utf-8")
+
+    with pytest.raises(projects.RegistryError, match="reserved project id in registry"):
+        projects.list_projects()
+
+
+def test_registry_raises_on_duplicate_id(monkeypatch, tmp_path):
+    _isolate_registry(monkeypatch, tmp_path)
+    docs1 = tmp_path / "a"
+    docs2 = tmp_path / "b"
+    docs1.mkdir(parents=True)
+    docs2.mkdir(parents=True)
+    reg = {
+        "projects": [
+            {"id": "dup", "docs_dir": str(docs1)},
+            {"id": "dup", "docs_dir": str(docs2)},
+        ]
+    }
+    projects._REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    projects._REGISTRY_PATH.write_text(json.dumps(reg), encoding="utf-8")
+
+    with pytest.raises(projects.RegistryError, match="duplicate project id in registry"):
+        projects.list_projects()
+
+
 def test_remove_project_deletes_local_data_by_default(monkeypatch, tmp_path):
     _isolate_registry(monkeypatch, tmp_path)
     docs = tmp_path / "docs"

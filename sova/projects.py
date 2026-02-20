@@ -12,16 +12,16 @@ from sova import config
 _PROJECTS_ROOT = config.SOVA_HOME / "projects"
 _REGISTRY_PATH = _PROJECTS_ROOT / "registry.json"
 _RESERVED_PROJECT_IDS = {
+    "help",
     "projects",
     "remove",
     "list",
     "index",
-    "reset",
-    "add",
-    "use",
-    "search",
-    "help",
 }
+
+
+class RegistryError(ValueError):
+    """Raised when project registry format/content is invalid."""
 
 
 def is_reserved_project_id(value: str) -> bool:
@@ -71,25 +71,26 @@ def _load_registry() -> dict:
 
     try:
         raw = json.loads(_REGISTRY_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return _default_registry()
+    except Exception as e:
+        raise RegistryError(f"failed to parse registry JSON: {e}") from e
 
     if not isinstance(raw, dict):
-        return _default_registry()
+        raise RegistryError("registry root must be a JSON object")
 
     raw_projects = raw.get("projects")
     if not isinstance(raw_projects, list):
-        raw_projects = []
+        raise RegistryError("registry.projects must be a list")
 
     projects_list: list[dict] = []
+    seen_ids: set[str] = set()
 
     for entry in raw_projects:
         if not isinstance(entry, dict):
-            continue
+            raise RegistryError("each registry.projects entry must be a JSON object")
 
         raw_docs = entry.get("docs_dir")
         if not isinstance(raw_docs, str):
-            continue
+            raise RegistryError("each project entry must include string docs_dir")
 
         docs_dir = str(_normalize(Path(raw_docs)))
         raw_id = entry.get("id")
@@ -97,6 +98,11 @@ def _load_registry() -> dict:
             project_id = raw_id.strip()
         else:
             project_id = Path(docs_dir).name.strip() or "project"
+        if is_reserved_project_id(project_id):
+            raise RegistryError(f"reserved project id in registry: {project_id}")
+        if project_id in seen_ids:
+            raise RegistryError(f"duplicate project id in registry: {project_id}")
+        seen_ids.add(project_id)
         projects_list.append({"id": project_id, "docs_dir": docs_dir})
 
     return {"projects": projects_list}
