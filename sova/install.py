@@ -25,6 +25,8 @@ SERVICES: list[dict[str, Any]] = [
             "--embedding",
             "--pooling",
             "last",
+            "--flash-attn",
+            "off",
             "--ctx-size",
             "4096",
             "--parallel",
@@ -34,7 +36,10 @@ SERVICES: list[dict[str, Any]] = [
             "--sleep-idle-seconds",
             "600",
         ],
-        "env": {"MallocNanoZone": "0"},
+        "env": {
+            "MallocNanoZone": "0",
+            "GGML_METAL_NO_RESIDENCY": "1",
+        },
         "keep_alive": False,
     },
     {

@@ -863,6 +863,7 @@ def main():
                 action="run: sova projects",
             )
             sys.exit(1)
+        assert project is not None
         sova_projects.activate(project)
         report("project", project.project_id)
 

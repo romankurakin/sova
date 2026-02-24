@@ -92,7 +92,9 @@ class TestInterruptHandling:
         monkeypatch.setattr(
             cli,
             "stop_server",
-            lambda url, suppress_interrupt=False: stops.append((url, suppress_interrupt)),
+            lambda url, suppress_interrupt=False: stops.append(
+                (url, suppress_interrupt)
+            ),
         )
 
         with pytest.raises(SystemExit) as exc:
@@ -129,6 +131,11 @@ class TestInterruptHandling:
         monkeypatch.setattr(cli, "init_db", lambda: DummyConn())
         monkeypatch.setattr(
             cli,
+            "_sync_index_signatures",
+            lambda conn: cli._IndexSignatureState(False, False, "c", "e", "k"),
+        )
+        monkeypatch.setattr(
+            cli,
             "find_docs",
             lambda: [{"name": "doc1", "pdf": None, "md": Path("/tmp/doc1.md")}],
         )
@@ -147,7 +154,9 @@ class TestInterruptHandling:
         monkeypatch.setattr(
             cli,
             "stop_server",
-            lambda url, suppress_interrupt=False: stops.append((url, suppress_interrupt)),
+            lambda url, suppress_interrupt=False: stops.append(
+                (url, suppress_interrupt)
+            ),
         )
 
         with pytest.raises(SystemExit) as exc:
@@ -200,7 +209,9 @@ class TestInterruptHandling:
         monkeypatch.setattr(cli, "Live", DummyLive)
         monkeypatch.setattr(cli, "check_servers", fake_check_servers)
         monkeypatch.setattr(cli, "search_semantic", lambda *args, **kwargs: None)
-        monkeypatch.setattr(cli, "report", lambda name, msg: reports.append((name, msg)))
+        monkeypatch.setattr(
+            cli, "report", lambda name, msg: reports.append((name, msg))
+        )
 
         cli.main()
 
@@ -223,7 +234,11 @@ def test_index_reserved_token_fails_before_project_lookup(monkeypatch):
         cli,
         "_report_error_block",
         lambda summary, **kw: captured.update(
-            {"summary": summary, "cause": kw.get("cause", ""), "action": kw.get("action", "")}
+            {
+                "summary": summary,
+                "cause": kw.get("cause", ""),
+                "action": kw.get("action", ""),
+            }
         ),
     )
 
@@ -255,7 +270,11 @@ def test_help_flag_is_unknown_option(monkeypatch):
         cli,
         "_report_error_block",
         lambda summary, **kw: captured.update(
-            {"summary": summary, "cause": kw.get("cause", ""), "action": kw.get("action", "")}
+            {
+                "summary": summary,
+                "cause": kw.get("cause", ""),
+                "action": kw.get("action", ""),
+            }
         ),
     )
 
@@ -276,7 +295,11 @@ def test_subcommand_help_flag_is_unknown_option(monkeypatch):
         cli,
         "_report_error_block",
         lambda summary, **kw: captured.update(
-            {"summary": summary, "cause": kw.get("cause", ""), "action": kw.get("action", "")}
+            {
+                "summary": summary,
+                "cause": kw.get("cause", ""),
+                "action": kw.get("action", ""),
+            }
         ),
     )
 
@@ -431,6 +454,340 @@ def test_generate_contexts_is_idempotent_on_duplicate_chunk_start_lines(monkeypa
     conn.close()
 
 
+def test_prepare_doc_updates_changed_chunk_text_and_clears_context_and_embedding(
+    monkeypatch, tmp_path
+):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            path TEXT NOT NULL,
+            line_count INTEGER,
+            expected_chunks INTEGER
+        );
+        CREATE TABLE sections (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            level INTEGER NOT NULL,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER
+        );
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            section_id INTEGER,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            word_count INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            embedding BLOB,
+            is_index INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        """
+    )
+    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
+
+    md = tmp_path / "doc.md"
+    md.write_text("\n".join(["alpha"] * 12) + "\n", encoding="utf-8")
+    prepared = cli._prepare_doc("doc", None, md, conn)
+    assert prepared is not None
+    doc_id, chunks, _ = prepared
+    assert doc_id == 1
+    assert len(chunks) == 1
+    chunk_id = conn.execute("SELECT id FROM chunks WHERE doc_id = 1").fetchone()[0]
+
+    conn.execute(
+        "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (?, ?, ?)",
+        (chunk_id, "old context", "model-v1"),
+    )
+    conn.execute("UPDATE chunks SET embedding = ? WHERE id = ?", (b"old-emb", chunk_id))
+    conn.commit()
+
+    md.write_text("\n".join(["changed"] * 12) + "\n", encoding="utf-8")
+    cli._prepare_doc("doc", None, md, conn)
+
+    row = conn.execute(
+        "SELECT text, embedding FROM chunks WHERE id = ?", (chunk_id,)
+    ).fetchone()
+    assert row[0].startswith("changed")
+    assert row[1] is None
+    ctx_count = conn.execute(
+        "SELECT COUNT(*) FROM chunk_contexts WHERE chunk_id = ?", (chunk_id,)
+    ).fetchone()[0]
+    assert ctx_count == 0
+    conn.close()
+
+
+def test_prepare_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
+    monkeypatch, tmp_path
+):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            path TEXT NOT NULL,
+            line_count INTEGER,
+            expected_chunks INTEGER
+        );
+        CREATE TABLE sections (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            level INTEGER NOT NULL,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER
+        );
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            section_id INTEGER,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            word_count INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            embedding BLOB,
+            is_index INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        """
+    )
+    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
+
+    md = tmp_path / "doc.md"
+    first_lines = ["# H"] + ["w"] * 520 + [""] + ["tail"] * 20
+    md.write_text("\n".join(first_lines) + "\n", encoding="utf-8")
+    cli._prepare_doc("doc", None, md, conn)
+    starts_before = [
+        r[0]
+        for r in conn.execute(
+            "SELECT start_line FROM chunks ORDER BY start_line"
+        ).fetchall()
+    ]
+    assert starts_before == [1, 523]
+
+    second_lines = ["intro"] * 30 + first_lines
+    md.write_text("\n".join(second_lines) + "\n", encoding="utf-8")
+    prepared = cli._prepare_doc("doc", None, md, conn)
+    assert prepared is not None
+    _, parsed_chunks, _ = prepared
+    starts_after = [
+        r[0]
+        for r in conn.execute(
+            "SELECT start_line FROM chunks ORDER BY start_line"
+        ).fetchall()
+    ]
+    assert starts_after == [1, 553]
+    expected = conn.execute(
+        "SELECT expected_chunks FROM documents WHERE name = 'doc'"
+    ).fetchone()[0]
+    assert expected == len(parsed_chunks)
+    conn.close()
+
+
+def test_prepare_doc_keeps_context_and_embedding_when_only_section_ids_reorder(
+    monkeypatch, tmp_path
+):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            path TEXT NOT NULL,
+            line_count INTEGER,
+            expected_chunks INTEGER
+        );
+        CREATE TABLE sections (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            level INTEGER NOT NULL,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER
+        );
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            section_id INTEGER,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            word_count INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            embedding BLOB,
+            is_index INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        """
+    )
+    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
+
+    md1 = tmp_path / "doc1.md"
+    md2 = tmp_path / "doc2.md"
+    md1.write_text("# A\n\n" + "\n".join(["x"] * 20) + "\n", encoding="utf-8")
+    md2.write_text("# B\n\n" + "\n".join(["y"] * 20) + "\n", encoding="utf-8")
+
+    cli._prepare_doc("doc1", None, md1, conn)
+    cli._prepare_doc("doc2", None, md2, conn)
+
+    row = conn.execute(
+        "SELECT id FROM chunks WHERE doc_id = (SELECT id FROM documents WHERE name = 'doc1')"
+    ).fetchone()
+    chunk_id = row[0]
+    conn.execute("UPDATE chunks SET embedding = ? WHERE id = ?", (b"emb", chunk_id))
+    conn.execute(
+        "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (?, ?, ?)",
+        (chunk_id, "ctx", "m"),
+    )
+    conn.commit()
+
+    cli._prepare_doc("doc1", None, md1, conn)
+
+    chunk = conn.execute(
+        "SELECT embedding FROM chunks WHERE id = ?", (chunk_id,)
+    ).fetchone()
+    assert chunk[0] == b"emb"
+    ctx_count = conn.execute(
+        "SELECT COUNT(*) FROM chunk_contexts WHERE chunk_id = ?", (chunk_id,)
+    ).fetchone()[0]
+    assert ctx_count == 1
+    conn.close()
+
+
+def test_generate_contexts_retries_on_empty_response(monkeypatch):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            start_line INTEGER NOT NULL,
+            embedding BLOB
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        """
+    )
+    conn.execute("INSERT INTO chunks (id, doc_id, start_line) VALUES (1, 1, 10)")
+    conn.commit()
+
+    chunks = [{"start_line": 10, "text": "first"}]
+    sections: list[dict] = []
+
+    responses = iter(["   ", "ctx after retry"])
+    stops: list[str] = []
+    monkeypatch.setattr(
+        cli, "generate_context", lambda *args, **kwargs: next(responses)
+    )
+    monkeypatch.setattr(cli, "stop_server", lambda url, **kwargs: stops.append(url))
+    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
+
+    cli._generate_contexts("doc", 1, chunks, sections, conn)
+
+    row = conn.execute(
+        "SELECT context FROM chunk_contexts WHERE chunk_id = 1"
+    ).fetchone()
+    assert row == ("ctx after retry",)
+    assert len(stops) == 1
+    conn.close()
+
+
+def test_sync_index_signatures_marks_rebuild_without_immediate_data_clear(monkeypatch):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            embedding BLOB
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        CREATE TABLE index_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
+    conn.execute("INSERT INTO chunks (id, embedding) VALUES (1, ?)", (b"emb",))
+    conn.execute(
+        "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (1, 'ctx', 'm1')"
+    )
+    conn.execute(
+        "INSERT INTO index_meta (key, value) VALUES (?, ?)",
+        ("pipeline.context.signature", "old"),
+    )
+    conn.execute(
+        "INSERT INTO index_meta (key, value) VALUES (?, ?)",
+        ("pipeline.embedding.signature", "same-embed"),
+    )
+    conn.execute(
+        "INSERT INTO index_meta (key, value) VALUES (?, ?)",
+        ("pipeline.chunk.signature", "same-chunk"),
+    )
+    conn.commit()
+
+    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "_context_pipeline_signature", lambda: "new-context")
+    monkeypatch.setattr(cli, "_embedding_pipeline_signature", lambda: "same-embed")
+    monkeypatch.setattr(cli, "_chunk_pipeline_signature", lambda: "same-chunk")
+
+    state = cli._sync_index_signatures(conn)
+
+    embedding = conn.execute("SELECT embedding FROM chunks WHERE id = 1").fetchone()[0]
+    assert embedding == b"emb"
+    ctx_count = conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
+    assert ctx_count == 1
+    assert state.force_rebuild_context is True
+    assert state.force_rebuild_embed is True
+
+    stored = conn.execute(
+        "SELECT value FROM index_meta WHERE key = 'pipeline.context.signature'"
+    ).fetchone()[0]
+    assert stored == "old"
+
+    cli._commit_index_signatures(conn, state)
+    stored = conn.execute(
+        "SELECT value FROM index_meta WHERE key = 'pipeline.context.signature'"
+    ).fetchone()[0]
+    assert stored == "new-context"
+    conn.close()
+
+
 def test_list_mode_reports_structured_error_on_sqlite_operational_error(monkeypatch):
     from sova import cli
 
@@ -448,7 +805,10 @@ def test_list_mode_reports_structured_error_on_sqlite_operational_error(monkeypa
         cli._run_list_mode()
 
     assert exc.value.code == 1
-    assert any(name == "error" and "database extension unavailable" in msg for name, msg in lines)
+    assert any(
+        name == "error" and "database extension unavailable" in msg
+        for name, msg in lines
+    )
     assert any(name == "action" and "sova-install" in msg for name, msg in lines)
 
 
@@ -466,3 +826,209 @@ def test_reset_is_not_a_command_and_fails_as_unknown_project(monkeypatch):
         cli.main()
 
     assert exc.value.code == 1
+
+
+def test_embed_doc_persists_partial_window_progress_on_failure(monkeypatch):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            section_id INTEGER,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            word_count INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            embedding BLOB,
+            is_index INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        """
+    )
+    for line in range(1, 21):
+        conn.execute(
+            """
+            INSERT INTO chunks
+                (id, doc_id, section_id, start_line, end_line, word_count, text, embedding, is_index)
+            VALUES (?, 1, NULL, ?, ?, ?, ?, NULL, 0)
+            """,
+            (line, line, line, 1, f"chunk {line}"),
+        )
+    conn.commit()
+
+    chunks = [{"start_line": line, "text": f"chunk {line}"} for line in range(1, 21)]
+    attempts = {"count": 0}
+
+    def fake_get_embeddings_batch(texts, on_batch=None):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            batch = [[1.0, 0.0] for _ in range(12)]
+            if on_batch:
+                on_batch(
+                    list(range(12)),
+                    batch,
+                    {"batch_size": 12, "workers": 1, "duration_s": 0.01},
+                )
+        raise RuntimeError("Remote end closed connection without response")
+
+    monkeypatch.setattr(cli, "get_embeddings_batch", fake_get_embeddings_batch)
+    monkeypatch.setattr(cli, "embedding_to_blob", lambda _emb: b"emb")
+    monkeypatch.setattr(cli, "stop_server", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "run_embedding_canary", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
+
+    with pytest.raises(RuntimeError, match="embedding failed for doc"):
+        cli._embed_doc("doc", 1, chunks, [], conn)
+
+    embedded = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE doc_id = 1 AND embedding IS NOT NULL"
+    ).fetchone()[0]
+    assert embedded == 12
+    conn.close()
+
+
+def test_embed_doc_retry_only_embeds_unfinished_tail(monkeypatch):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            section_id INTEGER,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            word_count INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            embedding BLOB,
+            is_index INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        """
+    )
+    for line in range(1, 21):
+        conn.execute(
+            """
+            INSERT INTO chunks
+                (id, doc_id, section_id, start_line, end_line, word_count, text, embedding, is_index)
+            VALUES (?, 1, NULL, ?, ?, ?, ?, NULL, 0)
+            """,
+            (line, line, line, 1, f"chunk {line}"),
+        )
+    conn.commit()
+
+    chunks = [{"start_line": line, "text": f"chunk {line}"} for line in range(1, 21)]
+    seen_lengths: list[int] = []
+    calls = {"count": 0}
+
+    def fake_get_embeddings_batch(texts, on_batch=None):
+        calls["count"] += 1
+        seen_lengths.append(len(texts))
+        if calls["count"] == 1:
+            first_batch = [[1.0, 0.0] for _ in range(12)]
+            if on_batch:
+                on_batch(
+                    list(range(12)),
+                    first_batch,
+                    {"batch_size": 12, "workers": 1, "duration_s": 0.01},
+                )
+            raise RuntimeError("Remote end closed connection without response")
+        full_batch = [[2.0, 0.0] for _ in texts]
+        if on_batch:
+            on_batch(
+                list(range(len(texts))),
+                full_batch,
+                {"batch_size": len(texts), "workers": 1, "duration_s": 0.01},
+            )
+        return full_batch
+
+    monkeypatch.setattr(cli, "get_embeddings_batch", fake_get_embeddings_batch)
+    monkeypatch.setattr(cli, "embedding_to_blob", lambda _emb: b"emb")
+    monkeypatch.setattr(cli, "stop_server", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "run_embedding_canary", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
+
+    cli._embed_doc("doc", 1, chunks, [], conn)
+
+    assert seen_lengths == [20, 8]
+    embedded = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE doc_id = 1 AND embedding IS NOT NULL"
+    ).fetchone()[0]
+    assert embedded == 20
+    conn.close()
+
+
+def test_embed_doc_reports_absolute_progress(monkeypatch):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL,
+            section_id INTEGER,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            word_count INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            embedding BLOB,
+            is_index INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY,
+            context TEXT NOT NULL,
+            model TEXT NOT NULL
+        );
+        """
+    )
+    for line in range(1, 21):
+        embedding = b"old" if line <= 10 else None
+        conn.execute(
+            """
+            INSERT INTO chunks
+                (id, doc_id, section_id, start_line, end_line, word_count, text, embedding, is_index)
+            VALUES (?, 1, NULL, ?, ?, ?, ?, ?, 0)
+            """,
+            (line, line, line, 1, f"chunk {line}", embedding),
+        )
+    conn.commit()
+
+    chunks = [{"start_line": line, "text": f"chunk {line}"} for line in range(1, 21)]
+    reports: list[tuple[str, str]] = []
+
+    def fake_get_embeddings_batch(texts, on_batch=None):
+        batch = [[1.0, 0.0] for _ in texts]
+        if on_batch:
+            on_batch(
+                list(range(len(texts))),
+                batch,
+                {"batch_size": len(texts), "workers": 1, "duration_s": 0.01},
+            )
+        return batch
+
+    monkeypatch.setattr(cli, "get_embeddings_batch", fake_get_embeddings_batch)
+    monkeypatch.setattr(cli, "embedding_to_blob", lambda _emb: b"emb")
+    monkeypatch.setattr(cli, "report", lambda name, msg: reports.append((name, msg)))
+    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
+
+    cli._embed_doc("doc", 1, chunks, [], conn)
+
+    assert any(name == "embed" and "20/20 chunks" in msg.replace(",", "") for name, msg in reports)
+    conn.close()

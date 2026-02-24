@@ -3,7 +3,10 @@
 import sqlite3
 import struct
 
-from sova.db import get_doc_status
+import pytest
+
+from sova.config import EMBEDDING_DIM
+from sova.db import embedding_to_blob, get_doc_status, get_meta, set_meta
 
 
 class TestGetDocStatus:
@@ -172,4 +175,34 @@ class TestChunkContextsTable:
             "SELECT context FROM chunk_contexts WHERE chunk_id = 999"
         ).fetchone()
         assert row is None
+        conn.close()
+
+
+class TestEmbeddingToBlob:
+    def test_rejects_wrong_dimension(self):
+        with pytest.raises(ValueError, match="dimension mismatch"):
+            embedding_to_blob([0.1, 0.2])
+
+    def test_accepts_expected_dimension(self):
+        emb = [0.0] * EMBEDDING_DIM
+        blob = embedding_to_blob(emb)
+        assert isinstance(blob, bytes)
+        assert len(blob) == EMBEDDING_DIM * 4
+
+
+class TestIndexMeta:
+    def test_round_trip_meta(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            """
+            CREATE TABLE index_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        set_meta(conn, "k1", "v1")
+        conn.commit()
+        assert get_meta(conn, "k1") == "v1"
         conn.close()

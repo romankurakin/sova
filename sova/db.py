@@ -1,5 +1,6 @@
 """Database initialization and connection management."""
 
+import math
 import sqlite3
 import struct
 from contextlib import contextmanager
@@ -51,6 +52,11 @@ def init_db() -> sqlite3.Connection:
             model TEXT NOT NULL,
             FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS index_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
         CREATE INDEX IF NOT EXISTS idx_query_cache_created ON query_cache(created_at);
         PRAGMA foreign_keys = ON;
@@ -70,7 +76,8 @@ def init_db() -> sqlite3.Connection:
         CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
             INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES('delete', old.id, old.text);
         END;
-        CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+        DROP TRIGGER IF EXISTS chunks_au;
+        CREATE TRIGGER chunks_au AFTER UPDATE OF text ON chunks BEGIN
             INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES('delete', old.id, old.text);
             INSERT INTO chunks_fts(rowid, text) VALUES (new.id, new.text);
         END;
@@ -108,21 +115,63 @@ def connect_readonly() -> sqlite3.Connection:
 
 def quantize_vectors(conn: sqlite3.Connection) -> None:
     """Quantize vectors for fast native search."""
+    expected_bytes = EMBEDDING_DIM * 4
+    mismatched = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL AND LENGTH(embedding) != ?",
+        (expected_bytes,),
+    ).fetchone()[0]
+    if mismatched:
+        raise RuntimeError(
+            "found embeddings with unexpected dimension: "
+            f"{mismatched} row(s) are not {EMBEDDING_DIM}-dim float32 vectors"
+        )
     try:
         conn.execute("SELECT vector_quantize('chunks', 'embedding')")
         conn.commit()
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as e:
+        raise RuntimeError(f"vector quantization failed: {e}") from e
 
 
 def embedding_to_blob(emb: list[float]) -> bytes:
     """Convert embedding list to binary blob."""
+    if len(emb) != EMBEDDING_DIM:
+        raise ValueError(
+            f"embedding dimension mismatch: expected {EMBEDDING_DIM}, got {len(emb)}"
+        )
+    for v in emb:
+        if not math.isfinite(v):
+            raise ValueError("embedding contains non-finite value")
     return struct.pack(f"{len(emb)}f", *emb)
 
 
 def blob_to_embedding(blob: bytes) -> list[float]:
     """Convert binary blob to embedding list."""
+    if len(blob) % 4 != 0:
+        raise ValueError("invalid embedding blob length")
     return list(struct.unpack(f"{len(blob) // 4}f", blob))
+
+
+def get_meta(conn: sqlite3.Connection, key: str) -> str | None:
+    """Read metadata value by key."""
+    row = conn.execute("SELECT value FROM index_meta WHERE key = ?", (key,)).fetchone()
+    if not row:
+        return None
+    value = row[0]
+    return value if isinstance(value, str) else str(value)
+
+
+def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
+    """Upsert metadata key/value."""
+    conn.execute(
+        """
+        INSERT INTO index_meta (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+            value = excluded.value,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (key, value),
+    )
 
 
 @contextmanager

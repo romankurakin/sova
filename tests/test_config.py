@@ -78,7 +78,9 @@ def test_get_memory_reserve_env_override(monkeypatch, isolated_config):
 def test_probe_metal_ceiling_parses_llama_output(monkeypatch):
     output = "ggml_metal_device_init: recommendedMaxWorkingSetSize  = 26800.60 MB"
     monkeypatch.setattr(config.sys, "platform", "darwin")
-    monkeypatch.setattr(config.shutil, "which", lambda _cmd: "/usr/local/bin/llama-server")
+    monkeypatch.setattr(
+        config.shutil, "which", lambda _cmd: "/usr/local/bin/llama-server"
+    )
 
     class Result:
         stdout = ""

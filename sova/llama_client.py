@@ -15,6 +15,7 @@ from pathlib import Path
 from sova.config import (
     CONTEXT_MODEL,
     CONTEXT_SERVER_URL,
+    EMBEDDING_DIM,
     EMBEDDING_MODEL,
     EMBEDDING_SERVER_URL,
     RERANK_TIMEOUT,
@@ -56,8 +57,18 @@ _SEARCH_PAIR_LABELS = frozenset({"com.sova.embedding", "com.sova.reranker"})
 
 # Fixed embedding batch size. Concurrency is controlled by llama-server slots.
 _EMBED_BATCH_SIZE = 12
-_EMBED_TIMEOUT_FLOOR = 45.0
-_EMBED_TIMEOUT_CEIL = 180.0
+_EMBED_TIMEOUT_FLOOR = 75.0
+_EMBED_TIMEOUT_CEIL = 420.0
+_EMBED_TOKEN_SAFETY_MARGIN_RATIO = 0.02
+_EMBED_TOKEN_SAFETY_MARGIN_MIN = 128
+_EMBED_TOKEN_SAFETY_MARGIN_MAX = 256
+_EMBED_STABLE_TOKEN_BUDGET = 4096
+_EMBED_TOKENIZE_TIMEOUT_S = 20.0
+_EMBED_HEADER_KEEP_TAIL_PARTS = 2
+_EMBED_RECOVERY_TOKEN_BUDGET_STEPS = (512, 256, 192)
+_EMBED_RECOVERY_MAX_ATTEMPTS = 6
+_EMBED_RECOVERY_RESTART_PAUSE_S = 1.0
+_EMBED_RECOVERY_CANARY_REQUESTS = 2
 
 # Startup probe: send sequential requests to warm up the Metal autorelease
 # pool and fail early if the embedding server is unstable (llama.cpp #18568).
@@ -95,9 +106,14 @@ CONTEXT_SYSTEM_PROMPT = (
     "Return exactly one plain-text sentence for technical retrieval. "
     "No markdown formatting: do not use backticks, emphasis markers, headings, "
     "table pipes, or list markers. "
-    "Never start with 'This', 'This chunk', 'This section', or 'This document'. "
-    "Start with concrete technical terms from the chunk. "
-    "Keep technical tokens raw and never wrap them."
+    "Do not start with demonstratives or meta intros: never begin with "
+    "'This', 'This chunk', 'This section', 'This document', "
+    "'These', 'In this chunk', 'In this section', 'The chunk', "
+    "'The section', 'The document', 'Here', or similar lead-ins. "
+    "Begin directly with concrete technical terms copied from <chunk>. "
+    "Keep technical tokens raw and never wrap them. "
+    "Bad: 'This chunk describes PLIC priorities.' "
+    "Good: 'PLIC priorities are encoded in ...'."
 )
 
 CONTEXT_USER_PROMPT = """\
@@ -211,6 +227,25 @@ def _configured_ubatch_size(label: str) -> int | None:
     return None
 
 
+def _configured_ctx_size(label: str) -> int | None:
+    """Read configured --ctx-size from launchd plist ProgramArguments."""
+    plist = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
+    try:
+        data = plistlib.loads(plist.read_bytes())
+    except Exception:
+        return None
+    args = data.get("ProgramArguments")
+    if not isinstance(args, list):
+        return None
+    for i, arg in enumerate(args):
+        if arg in {"--ctx-size", "-c"} and (i + 1) < len(args):
+            try:
+                return int(str(args[i + 1]))
+            except ValueError:
+                return None
+    return None
+
+
 def _server_status(label: str) -> str:
     """Return human-readable status for a service: downloading, loading, or waiting."""
     cache_file = _CACHE_FILES.get(label)
@@ -222,7 +257,10 @@ def _server_status(label: str) -> str:
         try:
             size_gb = dl_path.stat().st_size / (1024**3)
             # Coarsen progress to avoid noisy status spam during long downloads.
-            bucketed = math.floor(size_gb / _DOWNLOAD_PROGRESS_STEP_GIB) * _DOWNLOAD_PROGRESS_STEP_GIB
+            bucketed = (
+                math.floor(size_gb / _DOWNLOAD_PROGRESS_STEP_GIB)
+                * _DOWNLOAD_PROGRESS_STEP_GIB
+            )
             return f"downloading ({bucketed:.1f} GB)"
         except OSError:
             return "downloading"
@@ -375,10 +413,7 @@ def _admit_services_for_mode(
     for name, url, required in services:
         estimate = _service_memory_estimate_gib(name)
         projected = used_gib + estimate
-        if required and (
-            mode in {"index_context", "index_embed"}
-            or mode == "search"
-        ):
+        if required and (mode in {"index_context", "index_embed"} or mode == "search"):
             # Index phases run exactly one required model at a time.
             # Search required services should also skip estimate-only preflight.
             # Rely on real server startup/health for
@@ -611,8 +646,166 @@ def get_query_embedding(query: str) -> list[float]:
 def _embedding_timeout_for_batch(texts: list[str]) -> float:
     """Timeout scales with total text size in a batch."""
     total_chars = sum(len(t) for t in texts)
-    estimate = 30.0 + (total_chars / 5000.0)
+    estimate = 60.0 + (total_chars / 1200.0)
     return max(_EMBED_TIMEOUT_FLOOR, min(_EMBED_TIMEOUT_CEIL, estimate))
+
+
+def _is_recoverable_embedding_error(reason: str) -> bool:
+    markers = (
+        "remote end closed connection",
+        "server not reachable",
+        "connection reset",
+        "broken pipe",
+        "server timeout",
+        "timed out",
+        "timeout",
+        "exceeds the available context size",
+    )
+    low = reason.lower()
+    return any(marker in low for marker in markers)
+
+
+def _embedding_token_budget() -> int:
+    """Token budget per embedding input with context and stability margins."""
+    ctx_size = _configured_ctx_size("com.sova.embedding") or 4096
+    margin = int(math.ceil(ctx_size * _EMBED_TOKEN_SAFETY_MARGIN_RATIO))
+    margin = max(_EMBED_TOKEN_SAFETY_MARGIN_MIN, margin)
+    margin = min(_EMBED_TOKEN_SAFETY_MARGIN_MAX, margin)
+    return min(_EMBED_STABLE_TOKEN_BUDGET, max(512, ctx_size - margin))
+
+
+def _token_count_via_server(text: str) -> int:
+    """Count tokens for a text using llama-server /tokenize."""
+    resp = _post_json(
+        f"{EMBEDDING_SERVER_URL}/tokenize",
+        {"content": text},
+        timeout=_EMBED_TOKENIZE_TIMEOUT_S,
+    )
+    tokens = resp.get("tokens")
+    if not isinstance(tokens, list):
+        raise ServerError("invalid tokenize response: missing tokens")
+    return len(tokens)
+
+
+def _fit_text_to_token_budget(text: str, token_budget: int) -> str:
+    """Shrink text by tail-trimming until tokenized length fits token_budget.
+
+    Tail-trimming preserves the beginning where document/section semantics live.
+    """
+    if token_budget <= 0:
+        return ""
+
+    cache: dict[int, int] = {}
+
+    def token_len(char_count: int) -> int:
+        key = max(0, min(len(text), char_count))
+        if key not in cache:
+            cache[key] = _token_count_via_server(text[:key])
+        return cache[key]
+
+    total_chars = len(text)
+    if token_len(total_chars) <= token_budget:
+        return text
+
+    lo = 1
+    hi = total_chars
+    best = 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if token_len(mid) <= token_budget:
+            best = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+
+    if best <= 0:
+        return text[:1]
+    return text[:best].rstrip()
+
+
+def _split_embedding_head_body(text: str) -> tuple[str, str]:
+    """Split embedding text into a semantic head and body at first blank line."""
+    marker = text.find("\n\n")
+    if marker < 0:
+        return text.strip(), ""
+    head = text[:marker].strip()
+    body = text[marker + 2 :].lstrip("\n")
+    return head, body
+
+
+def _compact_header_line(header: str) -> str:
+    """Compact a bracketed header path while keeping doc and nearest sections."""
+    text = header.strip()
+    if not (text.startswith("[") and text.endswith("]")):
+        return text
+    parts = [part.strip() for part in text[1:-1].split("|") if part.strip()]
+    if len(parts) <= 1:
+        return text
+    doc = parts[0]
+    tail = parts[-_EMBED_HEADER_KEEP_TAIL_PARTS :]
+    compact: list[str] = [doc]
+    for part in tail:
+        if part != doc:
+            compact.append(part)
+    return "[" + " | ".join(compact) + "]"
+
+
+def _fit_body_with_prefix_to_budget(prefix: str, body: str, token_budget: int) -> str:
+    """Tail-trim body text while keeping prefix fully intact."""
+    cache: dict[int, int] = {}
+
+    def token_len(char_count: int) -> int:
+        key = max(0, min(len(body), char_count))
+        if key not in cache:
+            cache[key] = _token_count_via_server(prefix + body[:key])
+        return cache[key]
+
+    if token_len(len(body)) <= token_budget:
+        return body
+
+    lo = 0
+    hi = len(body)
+    best = 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if token_len(mid) <= token_budget:
+            best = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+
+    return body[:best].rstrip()
+
+
+def _prepare_embedding_text(
+    text: str,
+    *,
+    token_budget: int | None = None,
+) -> str:
+    """Token-first normalization and budget enforcement for embeddings."""
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    budget = _embedding_token_budget() if token_budget is None else token_budget
+    if _token_count_via_server(normalized) <= budget:
+        return normalized
+
+    head, body = _split_embedding_head_body(normalized)
+    if not body:
+        return _fit_text_to_token_budget(normalized, budget)
+
+    compacted_head = _compact_header_line(head)
+    if _token_count_via_server(head) > budget or _token_count_via_server(
+        f"{head}\n\n"
+    ) > budget:
+        head = compacted_head
+        if _token_count_via_server(head) > budget:
+            return _fit_text_to_token_budget(head, budget)
+
+    prefix = f"{head}\n\n"
+    if _token_count_via_server(prefix) > budget:
+        return _fit_text_to_token_budget(prefix, budget)
+
+    body = _fit_body_with_prefix_to_budget(prefix, body, budget)
+    return (prefix + body).rstrip()
 
 
 def _parse_embeddings_response(resp: dict, expected: int) -> list[list[float]]:
@@ -635,6 +828,11 @@ def _parse_embeddings_response(resp: dict, expected: int) -> list[list[float]]:
             ordered[idx] = [float(v) for v in emb]
         except (TypeError, ValueError) as e:
             raise ServerError("invalid embedding response: non-numeric value") from e
+        if len(ordered[idx]) != EMBEDDING_DIM:
+            raise ServerError(
+                "invalid embedding response: dimension mismatch "
+                f"(expected={EMBEDDING_DIM}, got={len(ordered[idx])})"
+            )
 
     if any(v is None for v in ordered):
         raise ServerError("invalid embedding response: incomplete data")
@@ -727,7 +925,9 @@ def get_service_diagnostics(url: str) -> str:
     if not label:
         return ""
     state = "stopped"
-    status = subprocess.run(["launchctl", "list", label], capture_output=True, text=True)
+    status = subprocess.run(
+        ["launchctl", "list", label], capture_output=True, text=True
+    )
     if status.returncode == 0 and status.stdout.strip():
         first = status.stdout.splitlines()[0].split()
         if first and first[0].isdigit() and int(first[0]) > 0:
@@ -761,11 +961,24 @@ def get_embeddings_batch(
     if not _ensure_server(EMBEDDING_SERVER_URL):
         raise ServerError(f"embedding server not reachable at {EMBEDDING_SERVER_URL}")
 
+    token_budget = _embedding_token_budget()
     total = len(texts)
     results: list[list[float]] = []
     for start in range(0, total, _EMBED_BATCH_SIZE):
         end = min(total, start + _EMBED_BATCH_SIZE)
-        batch_texts = texts[start:end]
+        raw_batch = texts[start:end]
+        try:
+            batch_texts = [
+                _prepare_embedding_text(text, token_budget=token_budget)
+                for text in raw_batch
+            ]
+        except Exception as e:
+            reason = str(e).strip() or e.__class__.__name__
+            raise ServerError(
+                "embedding preflight failed "
+                f"(completed={start}/{total}, batch_size={len(raw_batch)}, workers=1): "
+                f"{reason}"
+            ) from e
         started = time.monotonic()
         try:
             batch_embeddings = _embed_inputs_via_server(
@@ -774,11 +987,91 @@ def get_embeddings_batch(
             )
         except Exception as e:
             reason = str(e).strip() or e.__class__.__name__
-            raise ServerError(
-                "embedding server failed "
-                f"(completed={start}/{total}, batch_size={len(batch_texts)}, workers=1): "
-                f"{reason}"
-            ) from e
+            can_recover = _is_recoverable_embedding_error(reason)
+            if not can_recover:
+                raise ServerError(
+                    "embedding server failed "
+                    f"(completed={start}/{total}, batch_size={len(batch_texts)}, workers=1): "
+                    f"{reason}"
+                ) from e
+
+            try:
+                batch_embeddings = []
+                for idx, text in enumerate(batch_texts):
+                    raw_text = raw_batch[idx]
+                    if not _ensure_server(EMBEDDING_SERVER_URL):
+                        raise ServerError(
+                            f"embedding server not reachable at {EMBEDDING_SERVER_URL}"
+                        )
+                    candidates: list[str] = [text]
+                    for budget_step in _EMBED_RECOVERY_TOKEN_BUDGET_STEPS:
+                        if budget_step >= token_budget:
+                            continue
+                        try:
+                            reduced = _prepare_embedding_text(
+                                raw_text,
+                                token_budget=budget_step,
+                            )
+                        except Exception:
+                            continue
+                        if reduced != candidates[-1]:
+                            candidates.append(reduced)
+
+                    last_reason = ""
+                    embedded_vector: list[float] | None = None
+                    for attempt in range(_EMBED_RECOVERY_MAX_ATTEMPTS):
+                        candidate = candidates[min(attempt, len(candidates) - 1)]
+                        if not _ensure_server(EMBEDDING_SERVER_URL):
+                            raise ServerError(
+                                f"embedding server not reachable at {EMBEDDING_SERVER_URL}"
+                            )
+                        try:
+                            embedded = _embed_inputs_via_server(
+                                [candidate],
+                                _embedding_timeout_for_batch([candidate]),
+                            )
+                            if len(embedded) != 1:
+                                raise ServerError(
+                                    "embedding server returned incomplete recovery batch "
+                                    f"(expected=1, got={len(embedded)})"
+                                )
+                            embedded_vector = embedded[0]
+                            break
+                        except Exception as single_exc:
+                            single_reason = (
+                                str(single_exc).strip() or single_exc.__class__.__name__
+                            )
+                            last_reason = single_reason
+                            if (
+                                attempt >= (_EMBED_RECOVERY_MAX_ATTEMPTS - 1)
+                                or not _is_recoverable_embedding_error(single_reason)
+                            ):
+                                raise
+                            stop_server(
+                                EMBEDDING_SERVER_URL,
+                                suppress_interrupt=True,
+                            )
+                            time.sleep(_EMBED_RECOVERY_RESTART_PAUSE_S)
+                            try:
+                                run_embedding_canary(
+                                    requests=_EMBED_RECOVERY_CANARY_REQUESTS
+                                )
+                            except Exception:
+                                pass
+
+                    if embedded_vector is None:
+                        raise ServerError(
+                            "embedding recovery exhausted attempts "
+                            f"(attempts={_EMBED_RECOVERY_MAX_ATTEMPTS}): {last_reason}"
+                        )
+                    batch_embeddings.append(embedded_vector)
+            except Exception as recover_exc:
+                recover_reason = str(recover_exc).strip() or recover_exc.__class__.__name__
+                raise ServerError(
+                    "embedding server failed "
+                    f"(completed={start}/{total}, batch_size={len(batch_texts)}, workers=1): "
+                    f"{reason} | recovery failed: {recover_reason}"
+                ) from recover_exc
 
         if len(batch_embeddings) != len(batch_texts):
             raise ServerError(

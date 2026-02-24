@@ -158,8 +158,13 @@ def _env_float(name: str) -> float | None:
 
 
 def _parse_float(value: object, default: float) -> float:
+    if isinstance(value, str | bytes | bytearray | memoryview | int | float):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
     try:
-        return float(value)
+        return float(str(value))
     except (TypeError, ValueError):
         return default
 
@@ -206,7 +211,9 @@ def _probe_available_ram_gib() -> float:
                     if ":" not in line:
                         continue
                     key, raw_value = line.split(":", 1)
-                    clean = raw_value.strip().rstrip(".").replace(".", "").replace(",", "")
+                    clean = (
+                        raw_value.strip().rstrip(".").replace(".", "").replace(",", "")
+                    )
                     if not clean.isdigit():
                         continue
                     page_counts[key.strip().lower()] = int(clean)
@@ -336,7 +343,9 @@ def get_memory_reserve_gib(mode: str) -> float:
     if mode_key == "search":
         return max(
             0.0,
-            _parse_float(settings.get("reserve_search_gib"), _DEFAULT_RESERVE_SEARCH_GIB),
+            _parse_float(
+                settings.get("reserve_search_gib"), _DEFAULT_RESERVE_SEARCH_GIB
+            ),
         )
     return max(
         0.0,

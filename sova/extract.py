@@ -7,6 +7,7 @@ from pathlib import Path
 
 from sova import config
 
+
 def get_docs_dir() -> Path | None:
     return config.get_docs_dir()
 

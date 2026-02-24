@@ -3,6 +3,7 @@
 import io
 import json
 import os
+from email.message import Message
 import pytest
 import urllib.error
 from unittest.mock import MagicMock, patch
@@ -271,6 +272,7 @@ class TestGetQueryEmbedding:
 
         with (
             patch("sova.llama_client._ensure_server", return_value=True),
+            patch("sova.llama_client.EMBEDDING_DIM", 3),
             patch(
                 "sova.llama_client.urllib.request.urlopen",
                 side_effect=urlopen_side_effect,
@@ -289,6 +291,7 @@ class TestGetQueryEmbedding:
 
         with (
             patch("sova.llama_client._ensure_server", return_value=True),
+            patch("sova.llama_client.EMBEDDING_DIM", 3),
             patch(
                 "sova.llama_client.urllib.request.urlopen",
                 side_effect=urlopen_side_effect,
@@ -318,6 +321,22 @@ def test_server_status_download_progress_is_bucketed(tmp_path, monkeypatch):
     assert llama_client._server_status("com.sova.chat") == "downloading (2.0 GB)"
 
 
+def test_embedding_token_budget_uses_dynamic_margin():
+    from sova.llama_client import _embedding_token_budget
+
+    with patch("sova.llama_client._configured_ctx_size", return_value=4096):
+        # 2% would be 82, but margin has a 128-token minimum.
+        assert _embedding_token_budget() == 3968
+
+    with patch("sova.llama_client._configured_ctx_size", return_value=12288):
+        # Computed value is capped by stable embedding budget.
+        assert _embedding_token_budget() == 4096
+
+    with patch("sova.llama_client._configured_ctx_size", return_value=20000):
+        # Computed value is capped by stable embedding budget.
+        assert _embedding_token_budget() == 4096
+
+
 class TestGetEmbeddingsBatch:
     def test_returns_list_of_embeddings(self):
         from sova.llama_client import get_embeddings_batch
@@ -327,6 +346,10 @@ class TestGetEmbeddingsBatch:
 
         with (
             patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client._prepare_embedding_text",
+                side_effect=lambda text, token_budget=None: text,
+            ),
             patch(
                 "sova.llama_client._embed_inputs_via_server",
                 side_effect=embed_side_effect,
@@ -354,6 +377,10 @@ class TestGetEmbeddingsBatch:
         with (
             patch("sova.llama_client._ensure_server", return_value=True),
             patch(
+                "sova.llama_client._prepare_embedding_text",
+                side_effect=lambda text, token_budget=None: text,
+            ),
+            patch(
                 "sova.llama_client._embed_inputs_via_server",
                 side_effect=embed_side_effect,
             ),
@@ -373,6 +400,10 @@ class TestGetEmbeddingsBatch:
 
         with (
             patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client._prepare_embedding_text",
+                side_effect=lambda text, token_budget=None: text,
+            ),
             patch(
                 "sova.llama_client._embed_inputs_via_server",
                 side_effect=embed_side_effect,
@@ -396,6 +427,10 @@ class TestGetEmbeddingsBatch:
         with (
             patch("sova.llama_client._ensure_server", return_value=True),
             patch(
+                "sova.llama_client._prepare_embedding_text",
+                side_effect=lambda text, token_budget=None: text,
+            ),
+            patch(
                 "sova.llama_client._embed_inputs_via_server",
                 side_effect=embed_side_effect,
             ),
@@ -405,6 +440,99 @@ class TestGetEmbeddingsBatch:
 
         flattened = [idx for batch_indices, _ in seen for idx in batch_indices]
         assert sorted(flattened) == [0, 1, 2, 3]
+
+    def test_token_budget_trims_body_and_keeps_header(self):
+        from sova.llama_client import get_embeddings_batch
+
+        captured_batches: list[list[str]] = []
+
+        def embed_side_effect(batch, timeout=None):
+            captured_batches.append(list(batch))
+            return [[0.1] for _ in batch]
+
+        long_text = "[doc | section]\n\n" + ("abcdefghij " * 20)
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch("sova.llama_client._embedding_token_budget", return_value=48),
+            patch(
+                "sova.llama_client._token_count_via_server",
+                side_effect=lambda text: len(text),
+            ),
+            patch(
+                "sova.llama_client._embed_inputs_via_server",
+                side_effect=embed_side_effect,
+            ),
+        ):
+            get_embeddings_batch(["short", long_text])
+
+        assert captured_batches
+        sent = captured_batches[0][1]
+        assert sent.startswith("[doc | section]\n\n")
+        assert len(sent) <= 48
+
+    def test_recovers_remote_close_with_single_requests(self):
+        from sova.llama_client import get_embeddings_batch
+
+        seen_batches: list[list[str]] = []
+
+        def embed_side_effect(batch, timeout=None):
+            seen_batches.append(list(batch))
+            if len(batch) > 1:
+                raise RuntimeError("Remote end closed connection without response")
+            return [[float(len(batch[0]))]]
+
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client._prepare_embedding_text",
+                side_effect=lambda text, token_budget=None: text,
+            ),
+            patch(
+                "sova.llama_client._embed_inputs_via_server",
+                side_effect=embed_side_effect,
+            ),
+            patch("sova.llama_client._EMBED_BATCH_SIZE", 3),
+        ):
+            result = get_embeddings_batch(["a", "bb", "ccc"])
+
+        assert [len(batch) for batch in seen_batches] == [3, 1, 1, 1]
+        assert len(result) == 3
+
+    def test_fails_fast_on_preflight_prepare_error(self):
+        from sova.llama_client import ServerError, get_embeddings_batch
+
+        def prepare_side_effect(text, token_budget=None):
+            if text == "boom":
+                raise RuntimeError("tokenize down")
+            return text
+
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client._prepare_embedding_text",
+                side_effect=prepare_side_effect,
+            ),
+            patch(
+                "sova.llama_client._embed_inputs_via_server",
+                side_effect=lambda batch, timeout=None: [[0.1] for _ in batch],
+            ),
+            patch("sova.llama_client._EMBED_BATCH_SIZE", 2),
+        ):
+            with pytest.raises(ServerError, match="embedding preflight failed"):
+                get_embeddings_batch(["ok1", "ok2", "boom", "ok3"])
+
+    def test_compacts_long_header_path_when_needed(self):
+        from sova.llama_client import _prepare_embedding_text
+
+        text = "[doc | alpha | beta | gamma]\n\nbody body body"
+        with patch(
+            "sova.llama_client._token_count_via_server",
+            side_effect=lambda content: len(content),
+        ):
+            prepared = _prepare_embedding_text(text, token_budget=28)
+
+        assert prepared.startswith("[doc | beta | gamma]\n\n")
+        assert len(prepared) <= 28
 
 
 class TestGenerateContext:
@@ -525,7 +653,7 @@ class TestGenerateContext:
                     url=url,
                     code=500,
                     msg="Internal Server Error",
-                    hdrs=None,
+                    hdrs=Message(),
                     fp=io.BytesIO(
                         b'{"error":{"code":500,"message":"Failed to parse input at pos 0","type":"server_error"}}'
                     ),
@@ -642,7 +770,9 @@ class TestRerank:
                 ),
             ),
         ):
-            with pytest.raises(ServerError, match="increase com.sova.reranker --ubatch-size"):
+            with pytest.raises(
+                ServerError, match="increase com.sova.reranker --ubatch-size"
+            ):
                 rerank("query", ["doc1"], top_n=1)
 
 
@@ -716,7 +846,9 @@ class TestStopServer:
         mock_run = MagicMock()
         mock_run.side_effect = [
             MagicMock(),  # launchctl stop
-            MagicMock(returncode=0, stdout="- 0\tcom.sova.embedding"),  # already stopped
+            MagicMock(
+                returncode=0, stdout="- 0\tcom.sova.embedding"
+            ),  # already stopped
         ]
 
         with (
@@ -735,7 +867,9 @@ class TestStopServer:
         mock_run = MagicMock()
         mock_run.side_effect = [
             MagicMock(),  # launchctl stop
-            MagicMock(returncode=0, stdout="- 0\tcom.sova.embedding"),  # already stopped
+            MagicMock(
+                returncode=0, stdout="- 0\tcom.sova.embedding"
+            ),  # already stopped
         ]
 
         with (
@@ -804,6 +938,7 @@ class TestCleanupIdleServices:
         assert search.exists()
         assert embedding.exists()
         assert reranker.exists()
+
 
 class TestRunEmbeddingCanary:
     def test_sends_canary_requests(self):

@@ -92,7 +92,9 @@ def test_registry_raises_on_duplicate_id(monkeypatch, tmp_path):
     projects._REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
     projects._REGISTRY_PATH.write_text(json.dumps(reg), encoding="utf-8")
 
-    with pytest.raises(projects.RegistryError, match="duplicate project id in registry"):
+    with pytest.raises(
+        projects.RegistryError, match="duplicate project id in registry"
+    ):
         projects.list_projects()
 
 

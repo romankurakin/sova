@@ -1,6 +1,7 @@
 """Command-line interface and Rich UI."""
 
 import argparse
+import hashlib
 import re
 import sqlite3
 import sys
@@ -8,6 +9,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from contextlib import nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Group
@@ -20,9 +22,11 @@ from sova import projects
 from sova.db import (
     connect_readonly,
     embedding_to_blob,
+    get_meta,
     get_doc_status,
     init_db,
     quantize_vectors,
+    set_meta,
 )
 from sova.extract import (
     chunk_text,
@@ -32,6 +36,9 @@ from sova.extract import (
     parse_sections,
 )
 from sova.llama_client import (
+    CONTEXT_SYSTEM_PROMPT,
+    CONTEXT_USER_PROMPT,
+    QUERY_TASK,
     check_servers,
     generate_context,
     get_service_diagnostics,
@@ -81,9 +88,25 @@ _EMBED_WINDOW_CHUNKS = 256
 _EMBED_RECYCLE_CHUNKS = 1800
 _EMBED_RECYCLE_PAUSE_S = 2.0
 _EMBED_RECYCLE_CANARY_REQUESTS = 4
+_EMBED_PREFIX_VERSION = "chunk-prefix.v1"
+_CONTEXT_RETRY_ATTEMPTS = 2
+_CONTEXT_RECYCLE_PAUSE_S = 2.0
 _RUNTIME_REFRESH_S = 20.0
 _LIVE_PROGRESS_PCT_STEP = 2
 _LIVE_PROGRESS_REFRESH_S = 6.0
+
+_META_CONTEXT_SIG = "pipeline.context.signature"
+_META_EMBED_SIG = "pipeline.embedding.signature"
+_META_CHUNK_SIG = "pipeline.chunk.signature"
+
+
+@dataclass(frozen=True)
+class _IndexSignatureState:
+    force_rebuild_context: bool
+    force_rebuild_embed: bool
+    context_sig: str
+    embed_sig: str
+    chunk_sig: str
 
 
 def _preview(text: str, max_chars: int = 48) -> str:
@@ -153,7 +176,9 @@ class _IndexLiveView:
             format_line("runtime", self._runtime),
             "",
         ]
-        events = list(self._events) if self._events else [format_line("event", "waiting")]
+        events = (
+            list(self._events) if self._events else [format_line("event", "waiting")]
+        )
         return Group(*header, *events)
 
 
@@ -447,64 +472,266 @@ def _prepare_doc(
     if row:
         doc_id = row[0]
         conn.execute(
-            "UPDATE documents SET expected_chunks = ? WHERE id = ? AND expected_chunks IS NULL",
-            (len(chunks), doc_id),
+            "UPDATE documents SET path = ?, line_count = ?, expected_chunks = ? WHERE id = ?",
+            (str(md_path), len(lines), len(chunks), doc_id),
         )
-        conn.commit()
     else:
-        doc_id = None
-
-    if doc_id is None:
         cursor = conn.execute(
             "INSERT INTO documents (name, path, line_count, expected_chunks) VALUES (?, ?, ?, ?)",
             (name, str(md_path), len(lines), len(chunks)),
         )
         doc_id = cursor.lastrowid
         assert doc_id is not None
-        for s in sections:
+
+    # Sync sections by start_line to keep section IDs stable across re-runs.
+    existing_section_rows = conn.execute(
+        """
+        SELECT id, start_line, end_line, title, level
+        FROM sections
+        WHERE doc_id = ?
+        ORDER BY id
+        """,
+        (doc_id,),
+    ).fetchall()
+    existing_sections_by_start: dict[int, tuple[int, int | None, str, int]] = {}
+    stale_section_ids: list[int] = []
+    for row_data in existing_section_rows:
+        section_id, start_line, end_line, title, level = row_data
+        if start_line in existing_sections_by_start:
+            stale_section_ids.append(section_id)
+            continue
+        existing_sections_by_start[start_line] = (section_id, end_line, title, level)
+
+    planned_section_starts: set[int] = set()
+    for s in sections:
+        start_line = s["start_line"]
+        if start_line in planned_section_starts:
+            continue
+        planned_section_starts.add(start_line)
+        existing_section = existing_sections_by_start.get(start_line)
+        if existing_section is None:
             conn.execute(
-                "INSERT INTO sections (doc_id, title, level, start_line, end_line) VALUES (?, ?, ?, ?, ?)",
-                (doc_id, s["title"], s["level"], s["start_line"], s["end_line"]),
+                """
+                INSERT INTO sections (doc_id, title, level, start_line, end_line)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (doc_id, s["title"], s["level"], start_line, s["end_line"]),
             )
-        conn.commit()
+            continue
+        section_id, end_line, title, level = existing_section
+        if end_line != s["end_line"] or title != s["title"] or level != s["level"]:
+            conn.execute(
+                """
+                UPDATE sections
+                SET title = ?, level = ?, end_line = ?
+                WHERE id = ?
+                """,
+                (s["title"], s["level"], s["end_line"], section_id),
+            )
+
+    stale_section_ids.extend(
+        section_id
+        for start_line, (
+            section_id,
+            _end,
+            _title,
+            _level,
+        ) in existing_sections_by_start.items()
+        if start_line not in planned_section_starts
+    )
+    if stale_section_ids:
+        placeholders = ",".join("?" * len(stale_section_ids))
+        conn.execute(
+            f"DELETE FROM sections WHERE id IN ({placeholders})",
+            tuple(stale_section_ids),
+        )
 
     section_rows = conn.execute(
         "SELECT id, start_line FROM sections WHERE doc_id = ?", (doc_id,)
     ).fetchall()
     section_ids = {r[1]: r[0] for r in section_rows}
 
-    # Insert any new chunks that don't exist in DB yet.
-    existing_starts = set(
-        r[0]
-        for r in conn.execute(
-            "SELECT start_line FROM chunks WHERE doc_id = ?", (doc_id,)
-        ).fetchall()
-    )
-    new_chunks = []
+    existing_rows = conn.execute(
+        """
+        SELECT id, start_line, end_line, word_count, text, section_id, is_index
+        FROM chunks
+        WHERE doc_id = ?
+        ORDER BY id
+        """,
+        (doc_id,),
+    ).fetchall()
+    existing_by_start: dict[int, tuple[int, int, int, str, int | None, int]] = {}
+    duplicate_ids: list[int] = []
+    for row_data in existing_rows:
+        chunk_id, start_line, end_line, word_count, text_value, section_id, is_idx = (
+            row_data
+        )
+        if start_line in existing_by_start:
+            duplicate_ids.append(chunk_id)
+            continue
+        existing_by_start[start_line] = (
+            chunk_id,
+            end_line,
+            word_count,
+            text_value,
+            section_id,
+            is_idx,
+        )
+
+    planned_starts: set[int] = set()
+    changed_chunk_ids: list[int] = []
     for chunk in chunks:
-        if chunk["start_line"] not in existing_starts:
-            sec_idx = find_section(sections, chunk["start_line"])
-            sec_line = sections[sec_idx]["start_line"] if sec_idx is not None else None
-            sec_id = section_ids.get(sec_line)
-            new_chunks.append(
+        start_line = chunk["start_line"]
+        if start_line in planned_starts:
+            continue
+        planned_starts.add(start_line)
+        sec_idx = find_section(sections, start_line)
+        sec_line = sections[sec_idx]["start_line"] if sec_idx is not None else None
+        sec_id = section_ids.get(sec_line)
+        is_idx = 1 if is_index_like(chunk["text"]) else 0
+
+        existing = existing_by_start.get(start_line)
+        if existing is None:
+            conn.execute(
+                """
+                INSERT INTO chunks (doc_id, section_id, start_line, end_line, word_count, text, is_index)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
                 (
                     doc_id,
                     sec_id,
-                    chunk["start_line"],
+                    start_line,
                     chunk["end_line"],
                     chunk["word_count"],
                     chunk["text"],
-                    1 if is_index_like(chunk["text"]) else 0,
-                )
+                    is_idx,
+                ),
             )
-    if new_chunks:
-        conn.executemany(
-            "INSERT INTO chunks (doc_id, section_id, start_line, end_line, word_count, text, is_index) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            new_chunks,
+            continue
+
+        chunk_id, end_line, word_count, text_value, old_section_id, old_is_idx = (
+            existing
         )
+        content_changed = (
+            end_line != chunk["end_line"]
+            or word_count != chunk["word_count"]
+            or text_value != chunk["text"]
+            or old_is_idx != is_idx
+        )
+        if content_changed:
+            conn.execute(
+                """
+                UPDATE chunks
+                SET section_id = ?, end_line = ?, word_count = ?, text = ?, is_index = ?, embedding = NULL
+                WHERE id = ?
+                """,
+                (
+                    sec_id,
+                    chunk["end_line"],
+                    chunk["word_count"],
+                    chunk["text"],
+                    is_idx,
+                    chunk_id,
+                ),
+            )
+            changed_chunk_ids.append(chunk_id)
+        elif old_section_id != sec_id:
+            conn.execute(
+                "UPDATE chunks SET section_id = ? WHERE id = ?",
+                (sec_id, chunk_id),
+            )
+
+    stale_ids = [
+        row[0]
+        for start_line, row in existing_by_start.items()
+        if start_line not in planned_starts
+    ]
+    stale_ids.extend(duplicate_ids)
+    if stale_ids:
+        placeholders = ",".join("?" * len(stale_ids))
+        conn.execute(
+            f"DELETE FROM chunks WHERE id IN ({placeholders})", tuple(stale_ids)
+        )
+
+    if changed_chunk_ids:
+        placeholders = ",".join("?" * len(changed_chunk_ids))
+        conn.execute(
+            f"DELETE FROM chunk_contexts WHERE chunk_id IN ({placeholders})",
+            tuple(changed_chunk_ids),
+        )
+
     conn.commit()
 
     return doc_id, chunks, sections
+
+
+def _signature(parts: list[str]) -> str:
+    raw = "\n".join(parts).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:16]
+
+
+def _context_pipeline_signature() -> str:
+    return _signature(
+        [
+            config.CONTEXT_MODEL,
+            CONTEXT_SYSTEM_PROMPT,
+            CONTEXT_USER_PROMPT,
+        ]
+    )
+
+
+def _embedding_pipeline_signature() -> str:
+    return _signature(
+        [
+            config.EMBEDDING_MODEL,
+            str(config.EMBEDDING_DIM),
+            QUERY_TASK,
+            _EMBED_PREFIX_VERSION,
+        ]
+    )
+
+
+def _chunk_pipeline_signature() -> str:
+    return _signature([str(config.CHUNK_SIZE), "chunk-text.v1"])
+
+
+def _sync_index_signatures(conn: sqlite3.Connection) -> _IndexSignatureState:
+    current_context = _context_pipeline_signature()
+    current_embed = _embedding_pipeline_signature()
+    current_chunk = _chunk_pipeline_signature()
+
+    stored_context = get_meta(conn, _META_CONTEXT_SIG)
+    stored_embed = get_meta(conn, _META_EMBED_SIG)
+    stored_chunk = get_meta(conn, _META_CHUNK_SIG)
+
+    context_changed = stored_context is not None and stored_context != current_context
+    embed_changed = stored_embed is not None and stored_embed != current_embed
+    chunk_changed = stored_chunk is not None and stored_chunk != current_chunk
+
+    if context_changed:
+        report("event", "context pipeline changed; refreshing contexts and embeddings")
+    elif embed_changed:
+        report("event", "embedding pipeline changed; refreshing embeddings")
+
+    if chunk_changed:
+        report("event", "chunking settings changed; syncing chunk rows during prepare")
+
+    return _IndexSignatureState(
+        force_rebuild_context=context_changed,
+        force_rebuild_embed=(embed_changed or context_changed),
+        context_sig=current_context,
+        embed_sig=current_embed,
+        chunk_sig=current_chunk,
+    )
+
+
+def _commit_index_signatures(
+    conn: sqlite3.Connection, signature_state: _IndexSignatureState
+) -> None:
+    set_meta(conn, _META_CONTEXT_SIG, signature_state.context_sig)
+    set_meta(conn, _META_EMBED_SIG, signature_state.embed_sig)
+    set_meta(conn, _META_CHUNK_SIG, signature_state.chunk_sig)
+    conn.commit()
 
 
 def _generate_contexts(
@@ -513,6 +740,7 @@ def _generate_contexts(
     chunks: list[dict],
     sections: list[dict],
     conn: sqlite3.Connection,
+    force_rebuild_context: bool = False,
     runtime_tick: Callable[[bool], None] | None = None,
 ) -> None:
     """Generate context summaries for chunks that don't have them yet."""
@@ -521,13 +749,21 @@ def _generate_contexts(
     ).fetchall()
     chunk_id_by_start = {r[1]: r[0] for r in chunk_rows}
 
-    existing_contexts = set(
-        r[0]
-        for r in conn.execute(
-            "SELECT chunk_id FROM chunk_contexts WHERE chunk_id IN (SELECT id FROM chunks WHERE doc_id = ?)",
-            (doc_id,),
-        ).fetchall()
-    )
+    if force_rebuild_context:
+        existing_contexts: set[int] = set()
+    else:
+        existing_contexts = set(
+            r[0]
+            for r in conn.execute(
+                """
+                SELECT chunk_id
+                FROM chunk_contexts
+                WHERE chunk_id IN (SELECT id FROM chunks WHERE doc_id = ?)
+                  AND TRIM(context) <> ''
+                """,
+                (doc_id,),
+            ).fetchall()
+        )
     chunks_needing_context = []
     # Protect against duplicate start_line entries in chunk lists. This keeps
     # context generation idempotent across interrupted/retried runs.
@@ -556,16 +792,33 @@ def _generate_contexts(
         last_report_ts = 0.0
 
         with progress_cm as progress:
-            task = progress.add_task("", total=total) if use_progress_bar else None
+            task = None
+            if use_progress_bar:
+                assert progress is not None
+                task = progress.add_task("", total=total)
             for i, chunk, chunk_id in chunks_needing_context:
                 sec_idx = find_section(sections, chunk["start_line"])
                 sec_title = sections[sec_idx]["title"] if sec_idx is not None else None
                 prev_text = chunks[i - 1]["text"] if i > 0 else ""
                 next_text = chunks[i + 1]["text"] if i + 1 < len(chunks) else ""
 
-                ctx = generate_context(
-                    name, sec_title, chunk["text"], prev_text, next_text
-                )
+                ctx = ""
+                for attempt in range(_CONTEXT_RETRY_ATTEMPTS):
+                    try:
+                        candidate = generate_context(
+                            name, sec_title, chunk["text"], prev_text, next_text
+                        )
+                        ctx = " ".join(candidate.split())
+                        if not ctx:
+                            raise RuntimeError("context model returned empty content")
+                        break
+                    except Exception:
+                        if attempt == (_CONTEXT_RETRY_ATTEMPTS - 1):
+                            raise
+                        stop_server(config.CONTEXT_SERVER_URL)
+                        time.sleep(_CONTEXT_RECYCLE_PAUSE_S)
+
+                assert ctx
 
                 conn.execute(
                     """
@@ -583,6 +836,7 @@ def _generate_contexts(
                 conn.commit()
                 done += 1
                 if use_progress_bar and task is not None:
+                    assert progress is not None
                     progress.update(task, advance=1)
                 else:
                     pct = _progress_pct(done, total)
@@ -611,6 +865,7 @@ def _embed_doc(
     chunks: list[dict],
     sections: list[dict],
     conn: sqlite3.Connection,
+    force_rebuild_embed: bool = False,
     runtime_tick: Callable[[bool], None] | None = None,
 ) -> None:
     """Embed all chunks that are missing embeddings."""
@@ -627,12 +882,16 @@ def _embed_doc(
         ).fetchall()
     }
 
-    embedded_ids = set(
-        r[0]
-        for r in conn.execute(
-            "SELECT id FROM chunks WHERE doc_id = ? AND embedding IS NOT NULL",
-            (doc_id,),
-        ).fetchall()
+    embedded_ids = (
+        set()
+        if force_rebuild_embed
+        else set(
+            r[0]
+            for r in conn.execute(
+                "SELECT id FROM chunks WHERE doc_id = ? AND embedding IS NOT NULL",
+                (doc_id,),
+            ).fetchall()
+        )
     )
     pending_embed = []
     for i, chunk in enumerate(chunks):
@@ -648,6 +907,8 @@ def _embed_doc(
     try:
         start = time.time()
         total = len(pending_embed)
+        absolute_total = len(chunks)
+        absolute_done_base = len(embedded_ids)
         use_progress_bar = _ACTIVE_INDEX_VIEW is None
         progress_cm = report_progress("embed") if use_progress_bar else nullcontext()
         done = 0
@@ -655,69 +916,102 @@ def _embed_doc(
         last_report_ts = 0.0
 
         with progress_cm as progress:
-            task = progress.add_task("", total=total) if use_progress_bar else None
+            task = None
+            if use_progress_bar:
+                assert progress is not None
+                task = progress.add_task("", total=total)
             embedded_since_recycle = 0
 
             for window_start in range(0, total, _EMBED_WINDOW_CHUNKS):
-                window = pending_embed[window_start : window_start + _EMBED_WINDOW_CHUNKS]
+                window = pending_embed[
+                    window_start : window_start + _EMBED_WINDOW_CHUNKS
+                ]
                 window_texts: list[str] = []
                 window_chunk_ids: list[int] = []
 
                 for i, chunk, chunk_id in window:
                     sec_idx = find_section(sections, chunk["start_line"])
-                    sec_title = sections[sec_idx]["title"] if sec_idx is not None else None
+                    sec_title = (
+                        sections[sec_idx]["title"] if sec_idx is not None else None
+                    )
                     prefix = f"[{name}"
                     if sec_title:
                         prefix += f" | {sec_title}"
                     prefix += "]\n\n"
 
                     llm_ctx = context_map.get(chunk_id)
-                    if llm_ctx:
-                        prefix += llm_ctx + "\n\n"
+                    if llm_ctx and llm_ctx.strip():
+                        prefix += llm_ctx.strip() + "\n\n"
 
                     window_texts.append(prefix + chunk["text"])
                     window_chunk_ids.append(chunk_id)
 
-                window_embeddings: list[list[float]] | None = None
+                remaining_texts = list(window_texts)
+                remaining_chunk_ids = list(window_chunk_ids)
+                window_done = 0
+
                 for attempt in range(2):
+                    attempt_done = 0
+
+                    def _persist_batch(
+                        batch_indices: list[int],
+                        batch_embeddings: list[list[float]],
+                        _stats: dict[str, float | int],
+                    ) -> None:
+                        nonlocal attempt_done, window_done, done
+                        nonlocal last_reported_pct, last_report_ts
+                        rows = [
+                            (
+                                embedding_to_blob(emb),
+                                remaining_chunk_ids[batch_idx],
+                            )
+                            for batch_idx, emb in zip(batch_indices, batch_embeddings)
+                        ]
+                        conn.executemany(
+                            "UPDATE chunks SET embedding = ? WHERE id = ?",
+                            rows,
+                        )
+                        conn.commit()
+
+                        batch_count = len(rows)
+                        attempt_done += batch_count
+                        window_done += batch_count
+                        done += batch_count
+
+                        if use_progress_bar and task is not None:
+                            assert progress is not None
+                            progress.update(task, advance=batch_count)
+                        else:
+                            pct = _progress_pct(done, total)
+                            now = time.monotonic()
+                            if (
+                                done == total
+                                or pct >= (last_reported_pct + _LIVE_PROGRESS_PCT_STEP)
+                                or (now - last_report_ts) >= _LIVE_PROGRESS_REFRESH_S
+                            ):
+                                report(
+                                    "embed",
+                                    f"{(absolute_done_base + done):>9,}/{absolute_total:,} chunks",
+                                )
+                                last_reported_pct = pct
+                                last_report_ts = now
+                        if runtime_tick:
+                            runtime_tick(False)
+
                     try:
-                        window_embeddings = get_embeddings_batch(window_texts)
+                        get_embeddings_batch(remaining_texts, on_batch=_persist_batch)
                         break
                     except Exception:
+                        if attempt_done > 0:
+                            remaining_texts = remaining_texts[attempt_done:]
+                            remaining_chunk_ids = remaining_chunk_ids[attempt_done:]
                         if attempt == 1:
                             raise
                         stop_server(config.EMBEDDING_SERVER_URL)
                         time.sleep(_EMBED_RECYCLE_PAUSE_S)
                         run_embedding_canary(requests=_EMBED_RECYCLE_CANARY_REQUESTS)
 
-                assert window_embeddings is not None
-                rows = [
-                    (embedding_to_blob(emb), chunk_id)
-                    for emb, chunk_id in zip(window_embeddings, window_chunk_ids)
-                ]
-                conn.executemany(
-                    "UPDATE chunks SET embedding = ? WHERE id = ?",
-                    rows,
-                )
-                conn.commit()
-                done += len(window)
-                if use_progress_bar and task is not None:
-                    progress.update(task, advance=len(window))
-                else:
-                    pct = _progress_pct(done, total)
-                    now = time.monotonic()
-                    if (
-                        done == total
-                        or pct >= (last_reported_pct + _LIVE_PROGRESS_PCT_STEP)
-                        or (now - last_report_ts) >= _LIVE_PROGRESS_REFRESH_S
-                    ):
-                        report("embed", f"{done:>9,}/{total:,} chunks")
-                        last_reported_pct = pct
-                        last_report_ts = now
-                if runtime_tick:
-                    runtime_tick(False)
-
-                embedded_since_recycle += len(window)
+                embedded_since_recycle += window_done
 
                 has_more = (window_start + len(window)) < total
                 if has_more and embedded_since_recycle >= _EMBED_RECYCLE_CHUNKS:
@@ -810,7 +1104,9 @@ def show_stats(mode: str = "list") -> None:
         try:
             cap_index = config.get_memory_hard_cap_gib("index")
             effective = config.get_effective_available_gib()
-            report("index", f"cap {_fmt_gib(cap_index)} | effective {_fmt_gib(effective)}")
+            report(
+                "index", f"cap {_fmt_gib(cap_index)} | effective {_fmt_gib(effective)}"
+            )
         except Exception:
             pass
 
@@ -841,11 +1137,16 @@ def search_semantic(
         cached_vectors = cache.get(query_emb, min_candidates)
         if cached_vectors:
             report("cache", "hit")
-            results, n_vector, n_fts = fuse_and_rank(conn, cached_vectors, query, limit)
+            vector_results = cached_vectors
         else:
-            vector_results = get_vector_candidates(conn, query_emb, limit)
+            vector_results = get_vector_candidates(
+                conn,
+                query_emb,
+                limit,
+                candidates=min_candidates,
+            )
             cache.put(query_emb, vector_results)
-            results, n_vector, n_fts = fuse_and_rank(conn, vector_results, query, limit)
+        results, n_vector, n_fts = fuse_and_rank(conn, vector_results, query, limit)
     finally:
         conn.close()
 
@@ -946,6 +1247,7 @@ def _activate_project_from_ref(
             action="run: sova projects",
         )
         sys.exit(1)
+    assert project is not None
     projects.activate(project)
     return project
 
@@ -1019,6 +1321,15 @@ def _run_index_mode() -> None:
         _report_error_block("failed to initialize database", cause=str(e))
         sys.exit(1)
     report("database", "ready")
+    try:
+        signature_state = _sync_index_signatures(conn)
+    except Exception as e:
+        _report_error_block(
+            "failed to synchronize index metadata",
+            cause=str(e),
+            action="retry indexing or inspect local database state",
+        )
+        sys.exit(1)
 
     docs = find_docs()
 
@@ -1063,6 +1374,7 @@ def _run_index_mode() -> None:
                         chunks,
                         sections,
                         conn,
+                        force_rebuild_context=signature_state.force_rebuild_context,
                         runtime_tick=context_runtime_tick,
                     )
                     prepared.append((doc["name"], doc_id, chunks, sections))
@@ -1106,6 +1418,7 @@ def _run_index_mode() -> None:
                             chunks,
                             sections,
                             conn,
+                            force_rebuild_embed=signature_state.force_rebuild_embed,
                             runtime_tick=embed_runtime_tick,
                         )
                 except KeyboardInterrupt:
@@ -1122,6 +1435,15 @@ def _run_index_mode() -> None:
         if not interrupted and not failed:
             report("quantize", "building index")
             quantize_vectors(conn)
+            try:
+                _commit_index_signatures(conn, signature_state)
+            except Exception as e:
+                failed = True
+                _report_error_block(
+                    "failed to finalize index metadata",
+                    cause=str(e),
+                    action="retry indexing",
+                )
 
         get_cache().clear()
         if interrupted:
@@ -1184,7 +1506,9 @@ def _build_command_parser() -> argparse.ArgumentParser:
         help="Keep local project data under ~/.sova/projects/<id>",
     )
 
-    p_list = sub.add_parser("list", help="List docs and indexing status", add_help=False)
+    p_list = sub.add_parser(
+        "list", help="List docs and indexing status", add_help=False
+    )
     p_list.add_argument("project", help="Project id/path")
 
     p_index = sub.add_parser("index", help="Index project docs", add_help=False)

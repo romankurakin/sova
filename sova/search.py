@@ -177,10 +177,12 @@ def get_vector_candidates(
     conn: sqlite3.Connection,
     query_emb: list[float],
     limit: int,
+    candidates: int | None = None,
 ) -> list[tuple[int, float]]:
     """Get vector search candidates (cacheable). Returns list of (chunk_id, score)."""
-    total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    candidates = compute_candidates(total_chunks, limit)
+    if candidates is None:
+        total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        candidates = compute_candidates(total_chunks, limit)
 
     query_blob = embedding_to_blob(query_emb)
 
@@ -346,9 +348,9 @@ def fuse_and_rank(
         # Re-sort only the reranked portion by rerank_score, then append
         # the rest (which keep their original final_score order).
         reranked = [r for r in scored if "rerank_score" in r]
-        unreanked = [r for r in scored if "rerank_score" not in r]
+        unreranked = [r for r in scored if "rerank_score" not in r]
         reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
-        scored = reranked + unreanked
+        scored = reranked + unreranked
 
     filtered = score_decay_diversify(scored, limit=limit, decay=diversity_decay)
 

@@ -46,7 +46,9 @@ def make_table(
     return Table(title=title, show_header=show_header, header_style=header_style)
 
 
-def render_table(table: Table, *, gap_before: bool = False, gap_after: bool = False) -> None:
+def render_table(
+    table: Table, *, gap_before: bool = False, gap_after: bool = False
+) -> None:
     """Render a table with optional spacing around it."""
     if gap_before:
         print_gap()

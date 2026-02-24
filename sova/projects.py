@@ -60,7 +60,9 @@ def _validate_project_id(project_id: str, taken: set[str]) -> None:
     if not project_id:
         raise ValueError("invalid project id")
     if project_id.lower() in _RESERVED_PROJECT_IDS:
-        raise ValueError(f"reserved project id: {project_id} (rename docs folder and retry)")
+        raise ValueError(
+            f"reserved project id: {project_id} (rename docs folder and retry)"
+        )
     if project_id in taken:
         raise ValueError(f"project id already exists: {project_id}")
 

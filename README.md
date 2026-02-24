@@ -63,7 +63,7 @@ ToC and index pages are flagged so they can be down-ranked at retrieval time.
 avoiding redundant embedding calls.
 
 Models run locally via llama-server (llama.cpp): `qwen3-embedding-4b` for
-embeddings (2560 dims), `ministral-3-14b-instruct-2512` for contextual summaries,
+embeddings (2560 dims), `ministral-3-14b-instruct` for contextual summaries,
 `qwen3-reranker-0.6b` for reranking. Services are managed as launchd agents
 and start on demand.
 
