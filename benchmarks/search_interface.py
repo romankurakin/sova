@@ -37,13 +37,23 @@ class SovaBackend:
         return get_query_embedding(text)
 
     def search(
-        self, query: str, limit: int = 10, embedding: list[float] | None = None
+        self,
+        query: str,
+        limit: int = 10,
+        embedding: list[float] | None = None,
+        use_reranker: bool | None = None,
     ) -> list[SearchResult]:
         from sova.search import hybrid_search
 
         if embedding is None:
             embedding = self._embed_query(query)
-        hits, _, _ = hybrid_search(self.conn, embedding, query, limit)
+        hits, _, _ = hybrid_search(
+            self.conn,
+            embedding,
+            query,
+            limit,
+            use_reranker=use_reranker,
+        )
 
         return [
             SearchResult(
@@ -133,7 +143,7 @@ def close_backend():
         _backend = None
 
 
-def measure_latency(queries: list[str]) -> dict:
+def measure_latency(queries: list[str], *, use_reranker: bool | None = None) -> dict:
     """Returns embed_times, search_times, total_times (ms)."""
     import time
 
@@ -144,7 +154,7 @@ def measure_latency(queries: list[str]) -> dict:
         t0 = time.perf_counter()
         emb = backend._embed_query(q)
         t1 = time.perf_counter()
-        backend.search(q, limit=10, embedding=emb)
+        backend.search(q, limit=10, embedding=emb, use_reranker=use_reranker)
         t2 = time.perf_counter()
 
         embed_times.append((t1 - t0) * 1000)

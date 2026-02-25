@@ -4,6 +4,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
 from rich.console import Group
 from rich.live import Live
@@ -86,6 +87,12 @@ def _classify_error(message: str) -> tuple[str, str | None, str | None]:
         )
     if "ground truth is missing" in low:
         return ("ground truth is missing", message, "run judge first")
+    if "ground truth contains unjudged chunks" in low:
+        return (
+            "ground truth has unjudged chunks",
+            message,
+            "rerun judge first, or run benchmark with --autofill",
+        )
     if "memory hard-cap exceeded" in low:
         return (
             "model does not fit current memory budget",
@@ -167,9 +174,21 @@ def _load_ground_truth(path: Path) -> dict | None:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text())
+        loaded = json.loads(path.read_text())
     except Exception:
         return None
+    return _normalize_ground_truth(loaded)
+
+
+def _normalize_ground_truth(raw: object) -> dict | None:
+    """Normalize old/new ground truth envelopes to a stable in-memory schema."""
+    if not isinstance(raw, dict):
+        return None
+    raw_dict = cast(dict[str, object], raw)
+    queries = raw_dict.get("queries")
+    if not isinstance(queries, list):
+        return None
+    return {"queries": queries}
 
 
 def _save_ground_truth(path: Path, gt: dict):
@@ -182,24 +201,20 @@ def _save_ground_truth(path: Path, gt: dict):
 
 def _build_ground_truth(
     queries_list: list[dict],
-    k_per_strategy: int,
-    judge_model: str,
 ) -> dict:
-    """Build v2.0 ground truth envelope."""
-    return {
-        "version": "2.0",
-        "created": time.strftime("%Y-%m-%d"),
-        "pooling": ["hybrid", "fts", "vector"],
-        "k_per_strategy": k_per_strategy,
-        "judge_model": judge_model,
-        "use_debiasing": True,
-        "queries": queries_list,
-    }
+    """Build compact ground truth envelope."""
+    return {"queries": queries_list}
 
 
 def cmd_judge():
     """Generate ground truth judgments with multi-source pooling."""
-    from .judge import QUERY_SET, judge_query, JUDGE_MODEL, collect_query_subtopics
+    from .judge import (
+        QUERY_SET,
+        judge_query,
+        JUDGE_MODEL,
+        collect_query_subtopics,
+        should_use_debiasing,
+    )
     from .search_interface import close_backend
     import json
 
@@ -218,6 +233,7 @@ def cmd_judge():
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     k_per_strategy = 20
+    use_debiasing = should_use_debiasing()
 
     # Load existing ground truth (supports incremental judging)
     existing_gt = _load_ground_truth(output_path)
@@ -233,9 +249,30 @@ def cmd_judge():
             if q["id"] not in existing_queries:
                 existing_queries[q["id"]] = q
 
+    queries_to_process = list(QUERY_SET)
+    spec_by_id = {spec.id: spec for spec in queries_to_process}
+
+    # Reuse previous labels only when id/query/category still match.
+    # This avoids stale judgments after query-set rewrites.
+    stale_judgment_count = 0
+    compatible_existing: dict[str, dict] = {}
+    for query_id, prior in existing_queries.items():
+        spec = spec_by_id.get(query_id)
+        if spec is None:
+            continue
+        if prior.get("query") == spec.query and prior.get("category") == spec.category:
+            compatible_existing[query_id] = prior
+        else:
+            stale_judgment_count += len(prior.get("judgments", []))
+    existing_queries = compatible_existing
+
     report("model", JUDGE_MODEL)
-    report("debias", "enabled")
+    report("debias", "enabled" if use_debiasing else "disabled")
     report("pooling", f"hybrid + fts + vector @ k={k_per_strategy}")
+    if stale_judgment_count:
+        report(
+            "stale", f"ignored {stale_judgment_count} stale judgments (query changed)"
+        )
     if existing_queries:
         total_existing = sum(
             len(q.get("judgments", [])) for q in existing_queries.values()
@@ -249,15 +286,14 @@ def cmd_judge():
     # For each query, build existing_judgments map for incremental judging
     completed: dict[str, dict] = dict(existing_queries)
     new_judgments_total = 0
-
-    queries_to_process = list(QUERY_SET)
+    current_query_label = "-"
 
     total = len(queries_to_process)
     done = 0
 
     def save_checkpoint():
         queries_list = [completed[s.id] for s in QUERY_SET if s.id in completed]
-        gt = _build_ground_truth(queries_list, k_per_strategy, JUDGE_MODEL)
+        gt = _build_ground_truth(queries_list)
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint_path.write_text(json.dumps(gt, indent=2))
 
@@ -266,7 +302,9 @@ def cmd_judge():
 
     def _display():
         return Group(
-            Text(f"queries: {done}/{total}  new judgments: {new_judgments_total}"),
+            Text(
+                f"queries: {done}/{total}  new judgments: {new_judgments_total}  current: {current_query_label}"
+            ),
             progress,
         )
 
@@ -276,6 +314,8 @@ def cmd_judge():
     try:
         with Live(_display(), console=console, transient=True) as live:
             for spec in queries_to_process:
+                current_query_label = f"{spec.id} {spec.query[:56]}"
+                live.update(_display())
                 # Build map of already-judged chunk_ids for this query
                 existing_for_query: dict[int, int] = {}
                 if spec.id in completed:
@@ -333,7 +373,7 @@ def cmd_judge():
                     judge_query(
                         spec,
                         verbose=False,
-                        use_debiasing=True,
+                        use_debiasing=use_debiasing,
                         existing_judgments=existing_for_query,
                         k_per_strategy=k_per_strategy,
                         on_chunk_judged=_on_chunk_judged,
@@ -343,7 +383,7 @@ def cmd_judge():
                     rate_limited = True
                     report_error(
                         "judge stopped",
-                        cause=str(e),
+                        cause=f"{spec.id} ({spec.query}): {e}",
                         action=f"rerun judge to continue from checkpoint ({done}/{total} queries saved)",
                     )
                     break
@@ -370,7 +410,7 @@ def cmd_judge():
 
     # Build final output in query order
     queries_list = [completed[spec.id] for spec in QUERY_SET if spec.id in completed]
-    ground_truth = _build_ground_truth(queries_list, k_per_strategy, JUDGE_MODEL)
+    ground_truth = _build_ground_truth(queries_list)
 
     total_judgments = 0
     score_counts = {0: 0, 1: 0, 2: 0, 3: 0}
@@ -400,17 +440,30 @@ def cmd_judge():
     render_table(table, gap_before=True)
 
 
-def cmd_run(name: str | None = None):
-    """Run benchmark against ground truth with auto-fill for unjudged chunks."""
+def cmd_run(
+    name: str | None = None,
+    *,
+    autofill: bool = False,
+    runs: int = 3,
+    use_reranker: bool = config.SEARCH_USE_RERANKER,
+):
+    """Run benchmark as a 3-pass averaged baseline."""
     from .run_benchmark import run_search
-    from .evaluate import aggregate_metrics, aggregate_by_category
+    from .evaluate import (
+        aggregate_metrics,
+        aggregate_by_category,
+        compute_metrics,
+        compute_diversity_metrics,
+        STANDARD_K,
+        QueryResult,
+    )
     from .search_interface import (
         measure_latency,
         clear_cache,
         close_backend,
         get_backend,
     )
-    from .judge import judge_single_chunk
+    from .judge import judge_single_chunk, should_use_debiasing
     import json
     from pathlib import Path
     import statistics
@@ -451,130 +504,256 @@ def cmd_run(name: str | None = None):
         )
         sys.exit(1)
 
+    k = 10
+    k_values = STANDARD_K
+    run_count = max(1, int(runs))
+
     report("queries", str(len(ground_truth["queries"])))
+    report("autofill", "enabled" if autofill else "disabled")
+    report("reranker", "enabled" if use_reranker else "disabled")
+    report("runs", f"{run_count} (mean)")
+    autofill_use_debiasing = should_use_debiasing()
 
-    try:
-        clear_cache()
-        latency_queries = [
-            "ARM exception handling",
-            "RISC-V trap handling",
-            "memory protection unit",
-            "process scheduling algorithm",
-            "GIC interrupt priority",
-        ]
+    def _p95(arr: list[float]) -> float:
+        s = sorted(arr)
+        return s[int(len(s) * 0.95)] if len(s) >= 20 else s[-1]
 
-        report("phase", "latency probe")
-        latency_data = measure_latency(latency_queries)
-        latency_times = latency_data["total_times"]
+    metric_names = [
+        "ndcg",
+        "mrr",
+        "precision",
+        "map",
+        "recall",
+        "hit_rate",
+        "doc_coverage",
+        "subtopic_recall",
+        "alpha_ndcg",
+    ]
+    category_metric_names = [
+        "ndcg",
+        "mrr",
+        "map",
+        "precision",
+        "recall",
+        "subtopic_recall",
+        "doc_coverage",
+    ]
 
-        def _p95(arr):
-            s = sorted(arr)
-            return s[int(len(s) * 0.95)] if len(s) >= 20 else s[-1]
+    def _average_metrics(samples: list[dict]) -> dict[str, dict[int, float]]:
+        if not samples:
+            return {name: {} for name in metric_names}
+        out: dict[str, dict[int, float]] = {name: {} for name in metric_names}
+        n = len(samples)
+        for name in metric_names:
+            for kv in k_values:
+                out[name][kv] = (
+                    sum(_metric_at(sample.get(name, {}), kv) for sample in samples) / n
+                )
+        return out
 
-        latency_p50 = statistics.median(latency_times)
-        latency_p95 = _p95(latency_times)
-        from .evaluate import (
-            compute_metrics,
-            compute_diversity_metrics,
-            STANDARD_K,
-            QueryResult,
+    def _average_neg_fp(samples: list[dict]) -> dict[int, float]:
+        if not samples:
+            return {}
+        n = len(samples)
+        return {
+            kv: sum(_metric_at(sample, kv) for sample in samples) / n for kv in k_values
+        }
+
+    def _average_by_category(samples: list[dict]) -> dict[str, dict[str, float]]:
+        if not samples:
+            return {}
+        totals: dict[str, dict[str, float]] = {}
+        counts: dict[str, int] = {}
+        for sample in samples:
+            for cat, metrics in sample.items():
+                counts[cat] = counts.get(cat, 0) + 1
+                bucket = totals.setdefault(cat, {})
+                for metric in category_metric_names:
+                    bucket[metric] = bucket.get(metric, 0.0) + float(
+                        metrics.get(metric, 0.0)
+                    )
+        averaged: dict[str, dict[str, float]] = {}
+        for cat, metric_totals in totals.items():
+            n = counts[cat]
+            averaged[cat] = {
+                metric: metric_totals.get(metric, 0.0) / n
+                for metric in category_metric_names
+            }
+            count_values = [sample.get(cat, {}).get("count", 0) for sample in samples]
+            if any(count_values):
+                averaged[cat]["count"] = round(sum(count_values) / len(count_values))
+        return averaged
+
+    run_outputs: list[dict] = []
+    all_start = time.time()
+
+    for run_idx in range(1, run_count + 1):
+        report("pass", f"{run_idx}/{run_count}")
+        run_start = time.time()
+        try:
+            clear_cache()
+            latency_queries = [
+                "ARM exception handling",
+                "RISC-V trap handling",
+                "memory protection unit",
+                "process scheduling algorithm",
+                "GIC interrupt priority",
+            ]
+
+            report("phase", f"latency probe ({run_idx}/{run_count})")
+            latency_data = measure_latency(latency_queries, use_reranker=use_reranker)
+            latency_times = latency_data["total_times"]
+            latency_p50 = statistics.median(latency_times)
+            latency_p95 = _p95(latency_times)
+
+            results = []
+
+            # Track auto-fill stats
+            autofill_count = 0
+            unjudged_count = 0
+            gt_modified = False
+
+            report("phase", f"evaluation ({run_idx}/{run_count})")
+            with report_progress("evaluating") as progress:
+                task = progress.add_task("", total=len(ground_truth["queries"]))
+
+                for q in ground_truth["queries"]:
+                    hits = run_search(
+                        q["query"],
+                        limit=max(k_values),
+                        use_reranker=use_reranker,
+                    )
+
+                    judgments = {j["chunk_id"]: j["score"] for j in q["judgments"]}
+                    judgment_list = q["judgments"]
+
+                    missing_chunk_ids = [
+                        h["chunk_id"] for h in hits if h["chunk_id"] not in judgments
+                    ]
+                    if missing_chunk_ids and not autofill:
+                        preview = ", ".join(str(cid) for cid in missing_chunk_ids[:5])
+                        raise RuntimeError(
+                            "ground truth contains unjudged chunks "
+                            f"for {q['id']} ({q['query']}): {len(missing_chunk_ids)} missing "
+                            f"(sample: {preview})"
+                        )
+
+                    if autofill:
+                        for h in hits:
+                            chunk_id = h["chunk_id"]
+                            if chunk_id not in judgments:
+                                # Auto-fill: judge on the fly
+                                backend = get_backend()
+                                chunk_info = backend.get_chunk_text(chunk_id)
+                                if chunk_info is None:
+                                    unjudged_count += 1
+                                    continue
+
+                                doc, text = chunk_info
+                                j = judge_single_chunk(
+                                    q["query"],
+                                    chunk_id,
+                                    text,
+                                    doc,
+                                    use_debiasing=autofill_use_debiasing,
+                                )
+
+                                # Add to in-memory ground truth
+                                new_judgment = {
+                                    "chunk_id": j.chunk_id,
+                                    "doc": j.doc,
+                                    "score": j.score,
+                                    "confidence": j.confidence,
+                                    "subtopics": j.subtopics,
+                                    "reason": j.reason,
+                                    "auto_filled": True,
+                                }
+                                judgment_list.append(new_judgment)
+                                judgments[chunk_id] = j.score
+                                autofill_count += 1
+                                gt_modified = True
+
+                    subtopics = {
+                        j["chunk_id"]: j.get("subtopics", [])
+                        for j in judgment_list
+                        if j["score"] >= 2
+                    }
+
+                    result_ids = [h["chunk_id"] for h in hits]
+                    metrics = compute_metrics(result_ids, judgments, k_values=k_values)
+                    div_metrics = compute_diversity_metrics(
+                        hits, judgments, subtopics, k_values=k_values
+                    )
+
+                    metrics.subtopic_recall = div_metrics.subtopic_recall
+                    metrics.alpha_ndcg = div_metrics.alpha_ndcg
+                    metrics.doc_coverage = div_metrics.doc_coverage
+
+                    results.append(
+                        QueryResult(
+                            query_id=q["id"],
+                            query=q["query"],
+                            category=q["category"],
+                            metrics=metrics,
+                        )
+                    )
+                    progress.update(task, advance=1)
+
+            # Save updated ground truth if auto-fill added judgments
+            if gt_modified:
+                _save_ground_truth(gt_path, ground_truth)
+        finally:
+            close_backend()
+
+        # Separate negative queries from main metrics
+        positive_results = [r for r in results if r.category != "negative"]
+        negative_results = [r for r in results if r.category == "negative"]
+
+        agg = aggregate_metrics(positive_results) if positive_results else {}
+
+        neg_fp_rate = {}
+        if negative_results:
+            for kv in k_values:
+                fp_counts = [r.metrics.precision.get(kv, 0) for r in negative_results]
+                neg_fp_rate[kv] = sum(fp_counts) / len(fp_counts) if fp_counts else 0
+
+        by_cat = aggregate_by_category(results, k=k)
+        run_duration = time.time() - run_start
+        report(
+            "pass-summary",
+            f"{run_idx}/{run_count} nDCG@10 {_metric_at(agg.get('ndcg', {}), 10):.3f} | "
+            f"MRR@10 {_metric_at(agg.get('mrr', {}), 10):.3f} | P50 {latency_p50:.0f}ms",
         )
 
-        k = 10
-        k_values = STANDARD_K
-        results = []
+        run_outputs.append(
+            {
+                "duration_s": run_duration,
+                "latency_ms": {"p50": latency_p50, "p95": latency_p95},
+                "metrics": agg,
+                "negative_fp_rate": neg_fp_rate,
+                "by_category": by_cat,
+                "auto_filled": autofill_count,
+                "unjudged": unjudged_count,
+            }
+        )
 
-        # Track auto-fill stats
-        autofill_count = 0
-        unjudged_count = 0
-        gt_modified = False
+    latency_p50 = statistics.mean(r["latency_ms"]["p50"] for r in run_outputs)
+    latency_p95 = statistics.mean(r["latency_ms"]["p95"] for r in run_outputs)
+    p50_values = [r["latency_ms"]["p50"] for r in run_outputs]
+    p95_values = [r["latency_ms"]["p95"] for r in run_outputs]
 
-        start = time.time()
-        report("phase", "evaluation")
-        with report_progress("evaluating") as progress:
-            task = progress.add_task("", total=len(ground_truth["queries"]))
+    agg = _average_metrics([r["metrics"] for r in run_outputs])
+    neg_fp_rate = _average_neg_fp([r["negative_fp_rate"] for r in run_outputs])
+    by_cat = _average_by_category([r["by_category"] for r in run_outputs])
+    autofill_count = sum(int(r["auto_filled"]) for r in run_outputs)
+    unjudged_count = sum(int(r["unjudged"]) for r in run_outputs)
 
-            for q in ground_truth["queries"]:
-                hits = run_search(q["query"], limit=max(k_values))
-
-                judgments = {j["chunk_id"]: j["score"] for j in q["judgments"]}
-                judgment_list = q["judgments"]
-
-                # Check for unjudged chunks and auto-fill
-                for h in hits:
-                    chunk_id = h["chunk_id"]
-                    if chunk_id not in judgments:
-                        # Auto-fill: judge on the fly
-                        backend = get_backend()
-                        chunk_info = backend.get_chunk_text(chunk_id)
-                        if chunk_info is None:
-                            unjudged_count += 1
-                            continue
-
-                        doc, text = chunk_info
-                        j = judge_single_chunk(q["query"], chunk_id, text, doc)
-
-                        # Add to in-memory ground truth
-                        new_judgment = {
-                            "chunk_id": j.chunk_id,
-                            "doc": j.doc,
-                            "score": j.score,
-                            "confidence": j.confidence,
-                            "subtopics": j.subtopics,
-                            "reason": j.reason,
-                            "auto_filled": True,
-                        }
-                        judgment_list.append(new_judgment)
-                        judgments[chunk_id] = j.score
-                        autofill_count += 1
-                        gt_modified = True
-
-                subtopics = {
-                    j["chunk_id"]: j.get("subtopics", [])
-                    for j in judgment_list
-                    if j["score"] >= 2
-                }
-
-                result_ids = [h["chunk_id"] for h in hits]
-                metrics = compute_metrics(result_ids, judgments, k_values=k_values)
-                div_metrics = compute_diversity_metrics(
-                    hits, judgments, subtopics, k_values=k_values
-                )
-
-                metrics.subtopic_recall = div_metrics.subtopic_recall
-                metrics.alpha_ndcg = div_metrics.alpha_ndcg
-                metrics.doc_coverage = div_metrics.doc_coverage
-
-                results.append(
-                    QueryResult(
-                        query_id=q["id"],
-                        query=q["query"],
-                        category=q["category"],
-                        metrics=metrics,
-                    )
-                )
-                progress.update(task, advance=1)
-
-        # Save updated ground truth if auto-fill added judgments
-        if gt_modified:
-            _save_ground_truth(gt_path, ground_truth)
-    finally:
-        close_backend()
-
-    # Separate negative queries from main metrics
-    positive_results = [r for r in results if r.category != "negative"]
-    negative_results = [r for r in results if r.category == "negative"]
-
-    agg = aggregate_metrics(positive_results) if positive_results else {}
-
-    # Compute false positive rate for negative queries
-    neg_fp_rate = {}
-    if negative_results:
-        for kv in k_values:
-            fp_counts = [r.metrics.precision.get(kv, 0) for r in negative_results]
-            neg_fp_rate[kv] = sum(fp_counts) / len(fp_counts) if fp_counts else 0
-
-    report("evaluated", f"in {fmt_duration(time.time() - start).strip()}")
+    report("evaluated", f"in {fmt_duration(time.time() - all_start).strip()}")
+    report(
+        "latency-spread",
+        f"P50 {min(p50_values):.0f}-{max(p50_values):.0f}ms | "
+        f"P95 {min(p95_values):.0f}-{max(p95_values):.0f}ms",
+    )
     if autofill_count > 0:
         report("auto-fill", f"judged {autofill_count} new chunks")
     if unjudged_count > 0:
@@ -591,7 +770,7 @@ def cmd_run(name: str | None = None):
     )
     print_gap()
     blank = "\u2014"
-    table = make_table(title="Results")
+    table = make_table(title="Results (3-run mean)")
     table.add_column("Metric")
     for kv in k_values:
         table.add_column(f"@{kv}", justify="right")
@@ -613,17 +792,19 @@ def cmd_run(name: str | None = None):
         ("subtopic_recall", "S-Recall"),
         ("alpha_ndcg", "\u03b1-nDCG"),
     ]:
-        row = [label] + [f"{agg.get(metric, {}).get(kv, 0):.3f}" for kv in k_values]
+        row = [label] + [
+            f"{_metric_at(agg.get(metric, {}), kv):.3f}" for kv in k_values
+        ]
         table.add_row(*row)
 
     # FP rate at bottom
     if neg_fp_rate:
         table.add_section()
-        table.add_row("FP Rate", *[f"{neg_fp_rate.get(kv, 0):.3f}" for kv in k_values])
+        table.add_row(
+            "FP Rate", *[f"{_metric_at(neg_fp_rate, kv):.3f}" for kv in k_values]
+        )
 
     render_table(table)
-
-    by_cat = aggregate_by_category(results, k=k)
 
     if by_cat:
         cat_table = make_table(title="By Category")
@@ -635,17 +816,19 @@ def cmd_run(name: str | None = None):
         for cat, metrics in sorted(by_cat.items()):
             cat_table.add_row(
                 cat,
-                f"{metrics['ndcg']:.3f}",
-                f"{metrics['mrr']:.3f}",
-                f"{metrics['precision']:.3f}",
-                f"{metrics['recall']:.3f}",
+                f"{metrics.get('ndcg', 0):.3f}",
+                f"{metrics.get('mrr', 0):.3f}",
+                f"{metrics.get('precision', 0):.3f}",
+                f"{metrics.get('recall', 0):.3f}",
             )
         render_table(cat_table, gap_before=True)
 
     output = {
         "name": name,
         "k": k,
+        "runs": run_count,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "reranker_enabled": use_reranker,
         "latency_ms": {"p50": round(latency_p50, 1), "p95": round(latency_p95, 1)},
         "metrics": agg,
         "negative_fp_rate": neg_fp_rate,
@@ -748,6 +931,11 @@ def cmd_show(run_name: str | None = None):
     created = data.get("created", "unknown")
     report_mode("bench.show", f"{run_label}")
     report("date", created)
+    if "reranker_enabled" in data:
+        report(
+            "reranker",
+            "enabled" if bool(data.get("reranker_enabled")) else "disabled",
+        )
     from .evaluate import STANDARD_K
 
     def get_val(d, k):
@@ -841,6 +1029,16 @@ def main():
     p_run = sub.add_parser("run", help="Run benchmark against ground truth")
     p_run.add_argument("project", help="Project id/path")
     p_run.add_argument("name", help="Benchmark run name (e.g. 'baseline-v2')")
+    p_run.add_argument(
+        "--autofill",
+        action="store_true",
+        help="Judge unjudged chunks during run (disabled by default)",
+    )
+    p_run.add_argument(
+        "--reranker",
+        action="store_true",
+        help="Enable cross-encoder reranker for this run (disabled by default)",
+    )
 
     p_show = sub.add_parser("show", help="Display benchmark results")
     p_show.add_argument("project", help="Project id/path")
@@ -870,7 +1068,11 @@ def main():
         if args.command == "judge":
             cmd_judge()
         elif args.command == "run":
-            cmd_run(name=args.name)
+            cmd_run(
+                name=args.name,
+                autofill=bool(args.autofill),
+                use_reranker=bool(args.reranker),
+            )
         elif args.command == "show":
             cmd_show(run_name=args.name)
     finally:

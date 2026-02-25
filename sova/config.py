@@ -157,6 +157,18 @@ def _env_float(name: str) -> float | None:
         return None
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def _parse_float(value: object, default: float) -> float:
     if isinstance(value, str | bytes | bytearray | memoryview | int | float):
         try:
@@ -534,6 +546,9 @@ SEARCH_EXACT_TERM_BONUS = 0.15
 SEARCH_INDEX_PENALTY = -0.5
 # Decay factor for diversity reranking across similar documents
 SEARCH_DIVERSITY_DECAY = 0.95
+# Enable cross-encoder reranker in search flow. Disabled by default to keep
+# baseline search lightweight unless explicitly requested.
+SEARCH_USE_RERANKER = _env_bool("SOVA_SEARCH_USE_RERANKER", False)
 # Number of documents to embed per batch
 BATCH_SIZE = 10
 # Target words per chunk

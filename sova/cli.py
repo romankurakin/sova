@@ -344,18 +344,25 @@ def _report_service_diag(url: str) -> None:
         report("service", f"{name} {diag}")
 
 
-def _report_relevant_service_diags(exc: BaseException, mode: str) -> None:
+def _report_relevant_service_diags(
+    exc: BaseException,
+    mode: str,
+    *,
+    include_reranker: bool = True,
+) -> None:
     text = _format_error_chain(exc).lower()
     urls: list[str] = []
     if "8081" in text or "embedding" in text:
         urls.append(config.EMBEDDING_SERVER_URL)
-    if "8082" in text or "rerank" in text:
+    if include_reranker and ("8082" in text or "rerank" in text):
         urls.append(config.RERANKER_SERVER_URL)
     if "8083" in text or "context" in text or "chat" in text:
         urls.append(config.CONTEXT_SERVER_URL)
     if not urls:
         if mode == "search":
-            urls = [config.EMBEDDING_SERVER_URL, config.RERANKER_SERVER_URL]
+            urls = [config.EMBEDDING_SERVER_URL]
+            if include_reranker:
+                urls.append(config.RERANKER_SERVER_URL)
         elif mode == "index_context":
             urls = [config.CONTEXT_SERVER_URL]
         elif mode == "index_embed":
@@ -1115,6 +1122,7 @@ def search_semantic(
     query: str,
     limit: int = 10,
     verbose: bool = False,
+    use_reranker: bool = config.SEARCH_USE_RERANKER,
 ) -> None:
     """Perform semantic search and display results."""
     if not config.get_db_path().exists():
@@ -1146,7 +1154,13 @@ def search_semantic(
                 candidates=min_candidates,
             )
             cache.put(query_emb, vector_results)
-        results, n_vector, n_fts = fuse_and_rank(conn, vector_results, query, limit)
+        results, n_vector, n_fts = fuse_and_rank(
+            conn,
+            vector_results,
+            query,
+            limit,
+            use_reranker=use_reranker,
+        )
     finally:
         conn.close()
 
@@ -1252,8 +1266,36 @@ def _activate_project_from_ref(
     return project
 
 
-def _run_search_mode(query: str, limit: int) -> None:
-    report("mode", f'search | "{_preview(query)}"')
+def _run_search_mode(query: str, limit: int, use_reranker: bool) -> None:
+    rerank_state = "on" if use_reranker else "off"
+    report("mode", f'search | "{_preview(query)}" | reranker {rerank_state}')
+    try:
+        ok, msg = check_servers(
+            mode="search",
+            fast_only=True,
+            use_reranker=use_reranker,
+        )
+    except KeyboardInterrupt:
+        report("status", "interrupted")
+        sys.exit(130)
+
+    if ok:
+        report("server", msg)
+        try:
+            search_semantic(query, limit, verbose=False, use_reranker=use_reranker)
+        except KeyboardInterrupt:
+            report("status", "interrupted")
+            sys.exit(130)
+        except Exception as e:
+            _report_error(e)
+            _report_relevant_service_diags(
+                e,
+                mode="search",
+                include_reranker=use_reranker,
+            )
+            sys.exit(1)
+        return
+
     try:
         with Live(
             Text(format_line("server", "checking")),
@@ -1265,23 +1307,32 @@ def _run_search_mode(query: str, limit: int) -> None:
             ok, msg = check_servers(
                 on_status=lambda s: live.update(Text(format_line("server", s))),
                 mode="search",
+                use_reranker=use_reranker,
             )
     except KeyboardInterrupt:
         report("status", "interrupted")
         sys.exit(130)
     if not ok:
         _report_error(RuntimeError(msg))
-        _report_relevant_service_diags(RuntimeError(msg), mode="search")
+        _report_relevant_service_diags(
+            RuntimeError(msg),
+            mode="search",
+            include_reranker=use_reranker,
+        )
         sys.exit(1)
     report("server", msg)
     try:
-        search_semantic(query, limit, verbose=False)
+        search_semantic(query, limit, verbose=False, use_reranker=use_reranker)
     except KeyboardInterrupt:
         report("status", "interrupted")
         sys.exit(130)
     except Exception as e:
         _report_error(e)
-        _report_relevant_service_diags(e, mode="search")
+        _report_relevant_service_diags(
+            e,
+            mode="search",
+            include_reranker=use_reranker,
+        )
         sys.exit(1)
 
 
@@ -1631,10 +1682,20 @@ def main() -> None:
                     default=10,
                     help="Max results (default: 10)",
                 )
+                parser.add_argument(
+                    "--reranker",
+                    action="store_true",
+                    default=config.SEARCH_USE_RERANKER,
+                    help="Enable cross-encoder reranker (off by default)",
+                )
                 args = parser.parse_args(argv)
                 project = _activate_project_from_ref(args.project)
                 report("project", project.project_id)
-                _run_search_mode(" ".join(args.query), args.limit)
+                _run_search_mode(
+                    " ".join(args.query),
+                    args.limit,
+                    use_reranker=bool(args.reranker),
+                )
                 return
             parser = _build_command_parser()
             parser.print_help()

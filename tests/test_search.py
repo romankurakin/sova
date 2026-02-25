@@ -242,10 +242,28 @@ class TestFuseAndRankReranker:
                     vector_results=[(1, 0.9), (2, 0.8)],
                     query_text="timer",
                     limit=2,
+                    use_reranker=True,
                 )
             assert rerank_mock.call_count == 1
             assert len(results) == 2
             assert "rerank_score" in results[0]
+        finally:
+            conn.close()
+
+    def test_skips_rerank_when_disabled(self):
+        conn = self._make_db()
+        try:
+            with patch("sova.search.rerank") as rerank_mock:
+                results, _, _ = fuse_and_rank(
+                    conn,
+                    vector_results=[(1, 0.9), (2, 0.8)],
+                    query_text="timer",
+                    limit=2,
+                    use_reranker=False,
+                )
+            assert rerank_mock.call_count == 0
+            assert len(results) == 2
+            assert "rerank_score" not in results[0]
         finally:
             conn.close()
 
@@ -263,6 +281,7 @@ class TestFuseAndRankReranker:
                         vector_results=[(1, 0.9), (2, 0.8)],
                         query_text="timer",
                         limit=2,
+                        use_reranker=True,
                     )
         finally:
             conn.close()
@@ -281,6 +300,7 @@ class TestFuseAndRankReranker:
                     vector_results=[(i, 1.0 / i) for i in range(1, 21)],
                     query_text="timer",
                     limit=10,
+                    use_reranker=True,
                 )
             assert rerank_mock.call_count == 1
             _, kwargs = rerank_mock.call_args

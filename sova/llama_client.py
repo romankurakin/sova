@@ -49,7 +49,7 @@ _CACHE_FILES = {
 
 # Idle timeout in seconds; services stop after this much inactivity
 _IDLE_TIMEOUT = 900  # 15 minutes
-_RERANK_MIN_UBATCH = 1024
+_RERANK_MIN_UBATCH = 4096
 
 _ACTIVITY_DIR = SOVA_HOME / "activity"
 _SEARCH_ACTIVITY_LABEL = "com.sova.search"
@@ -69,6 +69,9 @@ _EMBED_RECOVERY_TOKEN_BUDGET_STEPS = (512, 256, 192)
 _EMBED_RECOVERY_MAX_ATTEMPTS = 6
 _EMBED_RECOVERY_RESTART_PAUSE_S = 1.0
 _EMBED_RECOVERY_CANARY_REQUESTS = 2
+
+_RERANK_COMPACT_CHAR_BUDGETS = (3000, 2000, 1400, 1000, 800, 600, 450)
+_RERANK_KEEP_RATIO_FALLBACKS = (1.0, 0.75, 0.5, 0.35, 0.25)
 
 # Startup probe: send sequential requests to warm up the Metal autorelease
 # pool and fail early if the embedding server is unstable (llama.cpp #18568).
@@ -440,11 +443,11 @@ def _admit_services_for_mode(
     return admitted, optional_reason
 
 
-def _health_ok(url: str) -> bool:
+def _health_ok(url: str, timeout: float = 1.0) -> bool:
     """Lightweight /health probe without autostart side-effects."""
     try:
         req = urllib.request.Request(f"{url}/health")
-        with urllib.request.urlopen(req, timeout=1.0) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read()).get("status") == "ok"
     except Exception:
         return False
@@ -534,6 +537,8 @@ def get_services_runtime_status() -> list[dict[str, str | int | float | bool | N
 def check_servers(
     on_status: Callable[[str], None] | None = None,
     mode: str = "search",
+    fast_only: bool = False,
+    use_reranker: bool = True,
 ) -> tuple[bool, str]:
     """Probe /health on needed llama-server instances, starting them if needed.
 
@@ -541,13 +546,44 @@ def check_servers(
     ``mode`` selects which servers are needed:
       - "index_context": chat only
       - "index_embed": embedding only
-      - "search": embedding + reranker (chat skipped)
+      - "search": embedding (+ reranker when enabled; chat skipped)
     ``on_status`` is called with a human-readable status string on each poll.
     """
     timeout = 300.0
     all_servers = _MODE_SERVERS.get(mode)
     if all_servers is None:
         raise ValueError(f"unknown server mode: {mode}")
+    if mode == "search" and not use_reranker:
+        all_servers = [srv for srv in all_servers if srv[0] != "reranker"]
+
+    if mode == "search":
+        for name, url, required in all_servers:
+            label = _SERVICE_LABELS.get(url, "")
+            if name == "reranker" and required and label and _plist_exists(label):
+                ubatch = _configured_ubatch_size(label)
+                effective_ubatch = 512 if ubatch is None else ubatch
+                if effective_ubatch < _RERANK_MIN_UBATCH:
+                    return (
+                        False,
+                        "reranker service configured with too small --ubatch-size "
+                        f"({effective_ubatch}); run sova-install to update services",
+                    )
+
+    # Warm path: when required services are already healthy, skip launchctl and
+    # polling loops to keep repeated searches snappy.
+    required_servers = [(name, url) for name, url, required in all_servers if required]
+    if required_servers and all(
+        _health_ok(url, timeout=0.2) for _name, url in required_servers
+    ):
+        for name, url in required_servers:
+            label = _SERVICE_LABELS.get(url)
+            if label:
+                _touch_activity(label)
+        return True, "ready"
+
+    if fast_only:
+        return False, "warm check failed"
+
     all_servers, admission_note = _admit_services_for_mode(mode, all_servers)
     if not all_servers and admission_note:
         return False, admission_note
@@ -556,21 +592,6 @@ def check_servers(
     to_wait: list[tuple[str, str, str, bool]] = []  # (name, url, label, required)
     for name, url, required in all_servers:
         label = _SERVICE_LABELS.get(url, "")
-        if (
-            mode == "search"
-            and name == "reranker"
-            and required
-            and label
-            and _plist_exists(label)
-        ):
-            ubatch = _configured_ubatch_size(label)
-            effective_ubatch = 512 if ubatch is None else ubatch
-            if effective_ubatch < _RERANK_MIN_UBATCH:
-                return (
-                    False,
-                    "reranker service configured with too small --ubatch-size "
-                    f"({effective_ubatch}); run sova-install to update services",
-                )
         try:
             req = urllib.request.Request(f"{url}/health")
             with urllib.request.urlopen(req, timeout=3) as resp:
@@ -742,7 +763,7 @@ def _compact_header_line(header: str) -> str:
     if len(parts) <= 1:
         return text
     doc = parts[0]
-    tail = parts[-_EMBED_HEADER_KEEP_TAIL_PARTS :]
+    tail = parts[-_EMBED_HEADER_KEEP_TAIL_PARTS:]
     compact: list[str] = [doc]
     for part in tail:
         if part != doc:
@@ -793,9 +814,10 @@ def _prepare_embedding_text(
         return _fit_text_to_token_budget(normalized, budget)
 
     compacted_head = _compact_header_line(head)
-    if _token_count_via_server(head) > budget or _token_count_via_server(
-        f"{head}\n\n"
-    ) > budget:
+    if (
+        _token_count_via_server(head) > budget
+        or _token_count_via_server(f"{head}\n\n") > budget
+    ):
         head = compacted_head
         if _token_count_via_server(head) > budget:
             return _fit_text_to_token_budget(head, budget)
@@ -1042,10 +1064,9 @@ def get_embeddings_batch(
                                 str(single_exc).strip() or single_exc.__class__.__name__
                             )
                             last_reason = single_reason
-                            if (
-                                attempt >= (_EMBED_RECOVERY_MAX_ATTEMPTS - 1)
-                                or not _is_recoverable_embedding_error(single_reason)
-                            ):
+                            if attempt >= (
+                                _EMBED_RECOVERY_MAX_ATTEMPTS - 1
+                            ) or not _is_recoverable_embedding_error(single_reason):
                                 raise
                             stop_server(
                                 EMBEDDING_SERVER_URL,
@@ -1066,7 +1087,9 @@ def get_embeddings_batch(
                         )
                     batch_embeddings.append(embedded_vector)
             except Exception as recover_exc:
-                recover_reason = str(recover_exc).strip() or recover_exc.__class__.__name__
+                recover_reason = (
+                    str(recover_exc).strip() or recover_exc.__class__.__name__
+                )
                 raise ServerError(
                     "embedding server failed "
                     f"(completed={start}/{total}, batch_size={len(batch_texts)}, workers=1): "
@@ -1148,23 +1171,92 @@ def generate_context(
 
 def rerank(query: str, documents: list[str], top_n: int = 10) -> list[dict]:
     """Rerank documents via /v1/rerank."""
+
+    def _is_batch_overflow(msg: str) -> bool:
+        low = msg.lower()
+        return "too large to process" in low and "physical batch size" in low
+
+    def _is_timeout(msg: str) -> bool:
+        low = msg.lower()
+        return "server timeout" in low or "timed out" in low
+
+    def _compact_doc(text: str, char_budget: int) -> str:
+        if char_budget <= 0:
+            return ""
+        if len(text) <= char_budget:
+            return text
+        # Preserve both lead and tail signals when truncating for reranking.
+        head = max(200, int(char_budget * 0.72))
+        tail = max(0, char_budget - head - 5)
+        if tail <= 0:
+            return text[:char_budget]
+        return f"{text[:head]}\n...\n{text[-tail:]}"
+
     if not _ensure_server(RERANKER_SERVER_URL, timeout=30.0):
         raise ServerError(f"reranker server not reachable at {RERANKER_SERVER_URL}")
-    try:
-        resp = _post_json(
-            f"{RERANKER_SERVER_URL}/v1/rerank",
-            {"query": query, "documents": documents, "top_n": top_n},
-            timeout=RERANK_TIMEOUT,
-        )
-    except ServerError as e:
-        msg = str(e).lower()
-        if "too large to process" in msg and "physical batch size" in msg:
-            raise ServerError(
-                "reranker input exceeds llama-server physical batch size; "
-                "increase com.sova.reranker --ubatch-size and restart services"
-            ) from e
-        raise
-    results = resp.get("results")
-    if not isinstance(results, list):
-        raise ServerError("invalid rerank response: missing results")
-    return results
+
+    doc_count = len(documents)
+    if doc_count == 0:
+        return []
+
+    last_overflow: ServerError | None = None
+    last_timeout: ServerError | None = None
+    smallest_budget = _RERANK_COMPACT_CHAR_BUDGETS[-1]
+    attempts: list[tuple[int, int | None]] = [(doc_count, None)]
+
+    for keep_ratio in _RERANK_KEEP_RATIO_FALLBACKS:
+        keep_count = max(1, int(round(doc_count * keep_ratio)))
+        keep_count = min(keep_count, doc_count)
+        for budget in _RERANK_COMPACT_CHAR_BUDGETS:
+            attempts.append((keep_count, budget))
+
+    seen_attempts: set[tuple[int, int | None]] = set()
+    for keep_count, budget in attempts:
+        attempt_key = (keep_count, budget)
+        if attempt_key in seen_attempts:
+            continue
+        seen_attempts.add(attempt_key)
+
+        docs_slice = documents[:keep_count]
+        if budget is None:
+            docs_payload = docs_slice
+        else:
+            docs_payload = [_compact_doc(doc, budget) for doc in docs_slice]
+
+        try:
+            resp = _post_json(
+                f"{RERANKER_SERVER_URL}/v1/rerank",
+                {
+                    "query": query,
+                    "documents": docs_payload,
+                    "top_n": min(top_n, len(docs_payload)),
+                },
+                timeout=RERANK_TIMEOUT,
+            )
+            results = resp.get("results")
+            if not isinstance(results, list):
+                raise ServerError("invalid rerank response: missing results")
+            return results
+        except ServerError as e:
+            if _is_batch_overflow(str(e)):
+                last_overflow = e
+                continue
+            if _is_timeout(str(e)):
+                # Slow reranker calls are retried with tighter payloads.
+                last_timeout = e
+                continue
+            raise
+
+    if last_overflow is not None:
+        raise ServerError(
+            "reranker input exceeds llama-server physical batch size even after "
+            f"adaptive compaction (min doc budget={smallest_budget} chars); "
+            "increase com.sova.reranker --ubatch-size and restart services"
+        ) from last_overflow
+    if last_timeout is not None:
+        raise ServerError(
+            "reranker timed out even after adaptive compaction; "
+            "increase reranker timeout or reduce system load"
+        ) from last_timeout
+
+    raise ServerError("reranker failed unexpectedly")

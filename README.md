@@ -5,10 +5,10 @@
 ## Quick Start
 
 ```bash
-uv run sova-install                   # Build binary + set up llama-server services
-sova index /path/to/your/pdfs         # Register + index project
-sova projects                         # See project ids
-sova <project-id> "your query"        # Search
+uv run sova-install            # Build binary + set up llama-server services
+sova index /path/to/your/pdfs  # Register + index project
+sova projects                  # See project ids
+sova <project-id> "your query" # Search
 ```
 
 Services start on demand — no memory used until you run a search or index.
@@ -71,26 +71,23 @@ and start on demand.
 ## Usage
 
 ```bash
-sova help                             # Show unified help
-sova projects                         # List projects
-sova index /path/to/pdfs              # Add project and index
-sova index <project-id>               # Re-index existing project
-sova <project-id> "your query"        # Semantic search (default mode)
-sova <project-id> "query" -n 20       # More results
-sova list <project-id>                # List docs and indexing status
-sova remove <project-id>              # Remove project + local project data
-sova remove <project-id> --keep-data  # Remove from registry, keep project data(md,db)
+sova help                              # Show unified help
+sova projects                          # List projects
+sova index /path/to/pdfs               # Add project and index
+sova index <project-id>                # Re-index existing project
+sova <project-id> "your query"         # Semantic search (default mode)
+sova <project-id> "query" -n 20        # More results
+sova list <project-id>                 # List docs and indexing status
+sova remove <project-id>               # Remove project + local project data
+sova remove <project-id> --keep-data   # Remove from registry, keep project data (md,db)
 ```
 
 ## Install / Remove
 
 ```bash
-# Install: build binary, set up llama-server launchd services
-uv run sova-install
-
-# Remove: stop services, delete binary
-uv run sova-remove
-uv run sova-remove --purge-data       # Also delete ~/.sova
+uv run sova-install              # Build binary + set up llama-server launchd services
+uv run sova-remove               # Stop services and delete binary
+uv run sova-remove --purge-data  # Also delete ~/.sova
 ```
 
 ## Benchmarks

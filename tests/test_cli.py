@@ -194,7 +194,9 @@ class TestInterruptHandling:
             def update(self, renderable):
                 live_updates.append(str(renderable))
 
-        def fake_check_servers(on_status=None, mode="search"):
+        def fake_check_servers(on_status=None, mode="search", **kwargs):
+            if kwargs.get("fast_only"):
+                return False, "warm check failed"
             if on_status:
                 on_status("embedding: downloading (0.5 GB)")
                 on_status("embedding: loading")
@@ -222,6 +224,42 @@ class TestInterruptHandling:
         assert not any(
             n == "server" and ("downloading" in m or "loading" in m) for n, m in reports
         )
+
+    def test_search_defaults_to_reranker_off(self, monkeypatch):
+        from sova import cli
+
+        check_calls: list[dict[str, object]] = []
+        search_calls: list[bool] = []
+
+        class DummyProject:
+            project_id = "proj"
+
+        def fake_check_servers(**kwargs):
+            check_calls.append(kwargs)
+            return True, "ready"
+
+        def fake_search_semantic(
+            _query: str,
+            _limit: int,
+            verbose: bool = False,
+            use_reranker: bool = False,
+        ):
+            del verbose
+            search_calls.append(use_reranker)
+
+        monkeypatch.setattr(sys, "argv", ["sova", "proj", "q"])
+        monkeypatch.setattr(
+            cli,
+            "_activate_project_from_ref",
+            lambda _ref, allow_create_from_dir=False: DummyProject(),
+        )
+        monkeypatch.setattr(cli, "check_servers", fake_check_servers)
+        monkeypatch.setattr(cli, "search_semantic", fake_search_semantic)
+
+        cli.main()
+
+        assert check_calls[0].get("use_reranker") is False
+        assert search_calls == [False]
 
 
 def test_index_reserved_token_fails_before_project_lookup(monkeypatch):
@@ -1030,5 +1068,8 @@ def test_embed_doc_reports_absolute_progress(monkeypatch):
 
     cli._embed_doc("doc", 1, chunks, [], conn)
 
-    assert any(name == "embed" and "20/20 chunks" in msg.replace(",", "") for name, msg in reports)
+    assert any(
+        name == "embed" and "20/20 chunks" in msg.replace(",", "")
+        for name, msg in reports
+    )
     conn.close()

@@ -17,8 +17,13 @@ def results_to_dicts(results: list[SearchResult]) -> list[dict]:
     ]
 
 
-def run_search(query: str, limit: int = 10) -> list[dict]:
+def run_search(
+    query: str,
+    limit: int = 10,
+    *,
+    use_reranker: bool | None = None,
+) -> list[dict]:
     """Run search and return results."""
     backend = get_backend()
-    results = backend.search(query, limit=limit)
+    results = backend.search(query, limit=limit, use_reranker=use_reranker)
     return results_to_dicts(results)

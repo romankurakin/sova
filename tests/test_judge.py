@@ -1,8 +1,12 @@
 """Tests for benchmarks.judge module."""
 
+import io
+from email.message import Message
+import urllib.error
 from unittest.mock import patch, MagicMock
 import pytest
 
+import benchmarks.judge as judge_module
 from benchmarks.judge import (
     Judgment,
     JudgeError,
@@ -136,6 +140,117 @@ class TestJudgeQueryPropagatesErrors:
                     )
         # First chunk was judged and callback fired before error on second
         assert callback.call_count == 1
+
+
+class TestJudgeRuntimeAndParsing:
+    def test_call_judge_uses_llama_server(self, monkeypatch):
+        calls: list[tuple[str, dict, float]] = []
+
+        def _fake_post(url: str, payload: dict, timeout: float = 60.0):
+            calls.append((url, payload, timeout))
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"score": 2, "confidence": 0.9, "subtopics": [], "reason": "ok"}'
+                        }
+                    }
+                ]
+            }
+
+        monkeypatch.setattr(judge_module, "_post_json", _fake_post)
+        result = judge_module._call_judge("test prompt")
+        assert result.score == 2
+        url, payload, timeout = calls[0]
+        assert url.endswith("/v1/chat/completions")
+        assert payload["model"] == judge_module.JUDGE_MODEL
+        assert payload["messages"][0]["content"] == "test prompt"
+        assert payload["response_format"] == judge_module._JUDGE_RESPONSE_FORMAT
+        assert timeout == 60.0
+
+    def test_should_use_debiasing_defaults_true(self, monkeypatch):
+        monkeypatch.delenv("SOVA_BENCH_USE_DEBIASING", raising=False)
+        assert judge_module.should_use_debiasing() is True
+
+    def test_should_use_debiasing_respects_env(self, monkeypatch):
+        monkeypatch.setenv("SOVA_BENCH_USE_DEBIASING", "false")
+        assert judge_module.should_use_debiasing() is False
+        monkeypatch.setenv("SOVA_BENCH_USE_DEBIASING", "true")
+        assert judge_module.should_use_debiasing() is True
+
+    def test_python_literal_response_is_accepted(self):
+        result = judge_module._parse_judgment_response(
+            "{'score': 1, 'confidence': 0.6, 'subtopics': ['trap'], 'reason': 'partial'}"
+        )
+        assert result.score == 1
+        assert result.subtopics == ["trap"]
+
+    def test_json_with_trailing_commas_and_comments_is_accepted(self):
+        payload = """
+        ```json
+        {
+          "score": 2,
+          "confidence": 0.7,
+          "subtopics": ["mtvec", "handler",],
+          // inline comment
+          "reason": "mostly relevant",
+        }
+        ```
+        """
+        result = judge_module._parse_judgment_response(payload)
+        assert result.score == 2
+        assert result.reason == "mostly relevant"
+        assert result.subtopics == ["mtvec", "handler"]
+
+    def test_regex_recovery_for_non_json_output(self):
+        payload = """
+        score: 1
+        confidence: 0.42
+        subtopics: [trap entry, save/restore]
+        reason: partially relevant due to context only
+        """
+        result = judge_module._parse_judgment_response(payload)
+        assert result.score == 1
+        assert result.confidence == pytest.approx(0.42)
+        assert "partially relevant" in result.reason
+        assert result.subtopics == ["trap entry", "save/restore"]
+
+    def test_judge_query_error_includes_query_and_chunk_context(self):
+        spec = QuerySpec("t99", "failing query", "conceptual", [])
+        with patch(
+            "benchmarks.judge.collect_pool",
+            return_value=[
+                {"chunk_id": 77, "doc": "doc-a", "text": "t", "section_id": None}
+            ],
+        ):
+            with patch(
+                "benchmarks.judge.judge_chunk",
+                side_effect=JudgeError("bad model output"),
+            ):
+                with pytest.raises(JudgeError, match=r"query t99 chunk 77"):
+                    judge_query(spec, k_per_strategy=10)
+
+
+class TestPostJsonErrors:
+    def test_http_error_includes_response_body_detail(self, monkeypatch):
+        err = urllib.error.HTTPError(
+            url="http://localhost:11434/api/chat",
+            code=404,
+            msg="Not Found",
+            hdrs=Message(),
+            fp=io.BytesIO(b'{"error":"model \\"glm-5:cloud\\" not found"}'),
+        )
+
+        def _raise_http_error(*_args, **_kwargs):
+            raise err
+
+        monkeypatch.setattr("urllib.request.urlopen", _raise_http_error)
+
+        with pytest.raises(RuntimeError) as exc:
+            judge_module._post_json("http://localhost:11434/api/chat", {})
+        text = str(exc.value)
+        assert "HTTP Error 404: Not Found" in text
+        assert "glm-5:cloud" in text
 
 
 class TestQuerySet:

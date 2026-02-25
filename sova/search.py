@@ -15,6 +15,7 @@ from sova.config import (
     SEARCH_INDEX_PENALTY,
     SEARCH_RRF_K,
     SEARCH_RRF_WEIGHT,
+    SEARCH_USE_RERANKER,
 )
 from sova.db import embedding_to_blob
 from sova.diversity import score_decay_diversify
@@ -246,6 +247,7 @@ def fuse_and_rank(
     vector_results: list[tuple[int, float]],
     query_text: str,
     limit: int,
+    use_reranker: bool | None = None,
 ) -> tuple[list[dict], int, int]:
     """Fuse vector results with FTS and rank. Returns (results, n_vector, n_fts)."""
     if not vector_results:
@@ -325,32 +327,34 @@ def fuse_and_rank(
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
 
-    # Quality-first default: rerank more than final output to let cross-encoder
-    # rescue relevant chunks that were just below the first-stage cutoff
-    rerank_count = min(len(scored), candidate_count)
-    rerank_top = scored[:rerank_count]
-    rerank_ids = [r["chunk_id"] for r in rerank_top]
-    if rerank_ids:
-        ph = ",".join("?" * len(rerank_ids))
-        text_rows = {
-            r[0]: r[1]
-            for r in conn.execute(
-                f"SELECT id, text FROM chunks WHERE id IN ({ph})",
-                tuple(rerank_ids),
-            ).fetchall()
-        }
-        texts = [text_rows.get(cid, "") for cid in rerank_ids]
-        rerank_results = rerank(query_text, texts, top_n=len(texts))
-        for rr in rerank_results:
-            idx = rr["index"]
-            if idx < len(rerank_top):
-                rerank_top[idx]["rerank_score"] = rr["relevance_score"]
-        # Re-sort only the reranked portion by rerank_score, then append
-        # the rest (which keep their original final_score order).
-        reranked = [r for r in scored if "rerank_score" in r]
-        unreranked = [r for r in scored if "rerank_score" not in r]
-        reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
-        scored = reranked + unreranked
+    reranker_enabled = SEARCH_USE_RERANKER if use_reranker is None else use_reranker
+    if reranker_enabled:
+        # Quality-first default: rerank more than final output to let cross-encoder
+        # rescue relevant chunks that were just below the first-stage cutoff.
+        rerank_count = min(len(scored), candidate_count)
+        rerank_top = scored[:rerank_count]
+        rerank_ids = [r["chunk_id"] for r in rerank_top]
+        if rerank_ids:
+            ph = ",".join("?" * len(rerank_ids))
+            text_rows = {
+                r[0]: r[1]
+                for r in conn.execute(
+                    f"SELECT id, text FROM chunks WHERE id IN ({ph})",
+                    tuple(rerank_ids),
+                ).fetchall()
+            }
+            texts = [text_rows.get(cid, "") for cid in rerank_ids]
+            rerank_results = rerank(query_text, texts, top_n=len(texts))
+            for rr in rerank_results:
+                idx = rr["index"]
+                if idx < len(rerank_top):
+                    rerank_top[idx]["rerank_score"] = rr["relevance_score"]
+            # Re-sort only the reranked portion by rerank_score, then append
+            # the rest (which keep their original final_score order).
+            reranked = [r for r in scored if "rerank_score" in r]
+            unreranked = [r for r in scored if "rerank_score" not in r]
+            reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
+            scored = reranked + unreranked
 
     filtered = score_decay_diversify(scored, limit=limit, decay=diversity_decay)
 
@@ -391,7 +395,14 @@ def hybrid_search(
     query_emb: list[float],
     query_text: str,
     limit: int,
+    use_reranker: bool | None = None,
 ) -> tuple[list[dict], int, int]:
     """Perform hybrid vector + FTS search with RRF fusion."""
     vector_results = get_vector_candidates(conn, query_emb, limit)
-    return fuse_and_rank(conn, vector_results, query_text, limit)
+    return fuse_and_rank(
+        conn,
+        vector_results,
+        query_text,
+        limit,
+        use_reranker=use_reranker,
+    )

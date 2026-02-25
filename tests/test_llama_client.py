@@ -34,7 +34,12 @@ def _mock_urlopen_for_health(*up_ports: str):
 
 
 class TestCheckServers:
-    def _run_check(self, *up_ports: str, mode: str = "search"):
+    def _run_check(
+        self,
+        *up_ports: str,
+        mode: str = "search",
+        use_reranker: bool = True,
+    ):
         from sova.llama_client import check_servers
 
         with (
@@ -46,7 +51,7 @@ class TestCheckServers:
             patch("sova.llama_client._plist_exists", return_value=False),
             patch("sova.llama_client._touch_activity"),
         ):
-            return check_servers(mode=mode)
+            return check_servers(mode=mode, use_reranker=use_reranker)
 
     def test_index_context_healthy(self):
         ok, msg = self._run_check("8083", mode="index_context")
@@ -60,6 +65,11 @@ class TestCheckServers:
 
     def test_search_all_healthy(self):
         ok, msg = self._run_check("8081", "8082", mode="search")
+        assert ok is True
+        assert msg == "ready"
+
+    def test_search_without_reranker_only_requires_embedding(self):
+        ok, msg = self._run_check("8081", mode="search", use_reranker=False)
         assert ok is True
         assert msg == "ready"
 
@@ -717,7 +727,9 @@ class TestRerank:
                 side_effect=urlopen_side_effect,
             ),
         ):
-            with pytest.raises(ServerError, match="server timeout"):
+            with pytest.raises(
+                ServerError, match="timed out even after adaptive compaction"
+            ):
                 rerank("query", ["doc1"])
 
     def test_invalid_response_raises(self):
@@ -774,6 +786,52 @@ class TestRerank:
                 ServerError, match="increase com.sova.reranker --ubatch-size"
             ):
                 rerank("query", ["doc1"], top_n=1)
+
+    def test_retries_with_compaction_on_physical_batch_limit(self):
+        from sova.llama_client import ServerError, rerank
+
+        calls: list[dict] = []
+
+        def post_side_effect(_url, payload, timeout=None):
+            calls.append(payload)
+            if len(calls) == 1:
+                raise ServerError(
+                    "server error 500: input (20662 tokens) is too large to process. "
+                    "increase the physical batch size (current batch size: 4096)"
+                )
+            return {"results": [{"index": 0, "relevance_score": 0.91}]}
+
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch("sova.llama_client._post_json", side_effect=post_side_effect),
+        ):
+            result = rerank("query", ["x" * 8000], top_n=1)
+
+        assert result[0]["relevance_score"] == 0.91
+        assert len(calls) == 2
+        assert len(calls[0]["documents"][0]) == 8000
+        assert len(calls[1]["documents"][0]) < 8000
+
+    def test_retries_with_compaction_on_timeout(self):
+        from sova.llama_client import ServerError, rerank
+
+        calls: list[dict] = []
+
+        def post_side_effect(_url, payload, timeout=None):
+            calls.append(payload)
+            if len(calls) == 1:
+                raise ServerError("server timeout from http://localhost:8082/v1/rerank")
+            return {"results": [{"index": 0, "relevance_score": 0.88}]}
+
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch("sova.llama_client._post_json", side_effect=post_side_effect),
+        ):
+            result = rerank("query", ["x" * 8000], top_n=1)
+
+        assert result[0]["relevance_score"] == 0.88
+        assert len(calls) == 2
+        assert len(calls[1]["documents"][0]) < len(calls[0]["documents"][0])
 
 
 class TestStopServer:

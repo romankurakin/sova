@@ -5,33 +5,58 @@ Measure search quality against LLM-judged ground truth.
 ## Usage
 
 ```bash
-sova index /path/to/pdfs                                  # Index docs first
-sova projects                                             # Find project id
-uv run python -m benchmarks judge <project-id>            # Generate ground truth
-uv run python -m benchmarks run <project-id> my-test      # Run benchmark
-uv run python -m benchmarks show <project-id>             # View results
-uv run python -m benchmarks --help                        # Full CLI help
+sova index /path/to/pdfs                                         # Index docs first
+sova projects                                                    # Find project id
+uv run python -m benchmarks judge <project-id>                   # Generate ground truth
+uv run python -m benchmarks run <project-id> my-test             # Run benchmark
+uv run python -m benchmarks run <project-id> my-test --reranker  # Enable reranker
+uv run python -m benchmarks run <project-id> my-test --autofill  # Fill missing judgments
+uv run python -m benchmarks show <project-id>                    # View results
+uv run python -m benchmarks --help                               # Full CLI help
 ```
 
 ## Methodology
 
-1. **Ground Truth** - LLM (`gemma-3-12b-it` via llama-server) scores relevance 0-3 for top chunks per query
+1. **Ground Truth** - LLM judge (configured in `benchmarks/judge.py`) scores relevance 0-3 for pooled candidates per query
 2. **Benchmark Run** - Search retrieves results, compared against ground truth
-3. **Metrics** - Standard IR metrics computed, saved to `results/{name}.json`
+3. **Metrics** - Standard IR metrics computed as a 3-run mean, saved to `results/{name}.json`
 
 Compare runs: refactor sova -> run benchmark -> compare to previous run.
 
+## Judge Model
+
+`benchmarks/judge.py` defaults to the local llama-server context model
+(`sova.config.CONTEXT_MODEL`).
+
+Optional model override:
+
+```bash
+export SOVA_BENCH_JUDGE_MODEL=ministral-3-14b-instruct-2512
+```
+
+Debiasing default is `enabled`. Override with:
+
+```bash
+export SOVA_BENCH_USE_DEBIASING=true|false
+```
+
+`bench run` defaults to strict mode and executes 3 passes:
+- if retrieved chunks are missing in ground truth, run fails
+- final metrics are mean-aggregated across 3 runs into one JSON file
+- reranker is **disabled by default**; pass `--reranker` to enable it
+- use `--autofill` to allow on-the-fly judgments (slower, uses judge model)
+
 ## Query Categories
 
-20 queries across 5 categories testing different retrieval capabilities:
+30 queries across 5 categories testing broader corpus coverage:
 
 | Category | Tests | Example |
 |----------|-------|---------|
-| **Exact lookup** | BM25, specific terms | "ELR_EL1 register" |
-| **Conceptual** | Semantic understanding | "how the OS reclaims memory from a terminated process" |
-| **Cross-doc** | Multi-document retrieval | "how ARM and RISC-V differ in exception handling" |
-| **Natural** | Vague/real user phrasing | "my kernel crashes right after enabling the MMU" |
-| **Negative** | False positive rate | "Python asyncio event loop" (should return nothing) |
+| **Exact lookup** | Identifier-heavy lexical retrieval | "mcause CSR" |
+| **Conceptual** | Mechanism-level semantic retrieval | "how trap delegation moves exceptions from machine mode to supervisor mode" |
+| **Cross-doc** | Topics that should match multiple specs/books | "interrupt handling path from external signal to handler return" |
+| **Natural** | Debug-style user phrasing | "my trap handler returns to the wrong instruction address" |
+| **Negative** | False positive resistance | "x86 APIC ICR delivery mode" |
 
 ## Metrics
 
@@ -64,7 +89,7 @@ Compare runs: refactor sova -> run benchmark -> compare to previous run.
 ```text
 benchmarks/
 ├── search_interface.py   # <== Update this when refactoring sova
-├── judge.py              # LLM judge (gemma-3-12b-it via llama-server)
+├── judge.py              # LLM judge + query portfolio
 ├── evaluate.py           # Metrics computation
 ├── run_benchmark.py      # Search runner
 └── results/              # Output JSONs and reports

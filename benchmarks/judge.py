@@ -1,12 +1,16 @@
 """LLM-as-Judge for creating ground truth relevance judgments."""
 
+import ast
 import json
+import os
+import re
 import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel
+from sova.config import CONTEXT_MODEL
 
 from .search_interface import get_backend
 
@@ -15,14 +19,14 @@ class JudgeError(Exception):
     """Raised when the judge model fails permanently (e.g. model not found)."""
 
 
-JUDGE_MODEL = "ministral-3-14b-instruct-2512"
+JUDGE_MODEL = os.environ.get("SOVA_BENCH_JUDGE_MODEL", CONTEXT_MODEL)
 
 # Retry settings
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0
 
 
-JUDGE_PROMPT = """You are an information retrieval judge. Rate how well this document chunk satisfies the search query. Imagine a developer searched for this query while building an OS kernel — would this chunk help them?
+JUDGE_PROMPT = """You are an information retrieval judge. Rate how well this document chunk satisfies the search query. Imagine a developer searched this mixed technical corpus — would this chunk help them complete the task in the query?
 
 Query: {query}
 
@@ -83,110 +87,181 @@ class QueryJudgments:
     timestamp: str = ""
 
 
-# 20 queries in 5 categories (4 each)
 QUERY_SET: list[QuerySpec] = [
-    # Exact lookup (4) — specific terms, BM25 should handle well
+    # Exact lookup (6) — identifier-heavy retrieval that should reward BM25.
+    QuerySpec("q01", "mcause CSR", "exact_lookup", ["mcause", "trap_cause"]),
+    QuerySpec("q02", "mtvec CSR", "exact_lookup", ["mtvec", "trap_vector"]),
+    QuerySpec("q03", "satp CSR", "exact_lookup", ["satp", "address_translation"]),
     QuerySpec(
-        "e01", "ELR_EL1 register", "exact_lookup", ["exception_link", "return_address"]
+        "q04",
+        "PLIC claim complete register",
+        "exact_lookup",
+        ["plic_claim", "interrupt_complete"],
     ),
-    QuerySpec("e02", "mcause CSR", "exact_lookup", ["trap_cause", "exception_code"]),
     QuerySpec(
-        "e03", "GICD_ISENABLER", "exact_lookup", ["interrupt_enable", "distributor"]
+        "q05",
+        "SBI system reset extension",
+        "exact_lookup",
+        ["sbi_system_reset", "runtime_services"],
     ),
     QuerySpec(
-        "e04", "sv39 page table", "exact_lookup", ["page_table_entry", "translation"]
+        "q06",
+        "AAPCS64 callee-saved registers",
+        "exact_lookup",
+        ["aapcs64", "callee_saved", "calling_convention"],
     ),
-    # Conceptual (4) — needs semantic understanding across sections
+    # Conceptual (6) — semantic retrieval over mechanisms and procedures.
     QuerySpec(
-        "c01",
-        "how the OS reclaims memory from a terminated process",
+        "q07",
+        "how trap delegation moves exceptions from machine mode to supervisor mode",
         "conceptual",
-        ["memory_free", "process_exit"],
+        ["trap_delegation", "machine_mode", "supervisor_mode"],
     ),
     QuerySpec(
-        "c02",
-        "why kernel code runs in privileged mode",
+        "q08",
+        "how sv39 virtual address translation works",
         "conceptual",
-        ["protection", "privilege"],
+        ["sv39", "page_walk", "address_translation"],
     ),
     QuerySpec(
-        "c03",
-        "interrupt handling from hardware signal to handler return",
+        "q09",
+        "how plic prioritization and thresholding decide delivered interrupts",
         "conceptual",
-        ["irq_flow", "context_save"],
+        ["plic_priority", "threshold", "interrupt_delivery"],
     ),
     QuerySpec(
-        "c04",
-        "how virtual addresses get translated to physical",
+        "q10",
+        "how sbi mediates supervisor requests to machine-level firmware",
         "conceptual",
-        ["mmu", "page_walk"],
+        ["sbi_calls", "firmware_interface", "privilege_boundary"],
     ),
-    # Cross-doc (4) — queries answerable by chunks from multiple documents
     QuerySpec(
-        "d01",
-        "exception vector table base address register",
+        "q11",
+        "how calling conventions preserve registers across function calls",
+        "conceptual",
+        ["register_preservation", "prologue_epilogue", "abi_rules"],
+    ),
+    QuerySpec(
+        "q12",
+        "how kernel and user privilege separation is enforced",
+        "conceptual",
+        ["privilege_isolation", "user_kernel_boundary", "protection"],
+    ),
+    # Cross-doc (8) — broad tasks expected to draw from multiple documents.
+    QuerySpec(
+        "q13",
+        "function argument passing and return value conventions in low-level systems code",
         "cross_doc",
-        ["vbar_el1", "mtvec"],
+        ["arg_passing", "return_values", "abi_conventions"],
     ),
     QuerySpec(
-        "d02",
-        "function argument passing in registers",
+        "q14",
+        "interrupt handling path from external signal to handler return",
         "cross_doc",
-        ["arm_abi", "riscv_abi"],
+        ["interrupt_flow", "handler_entry", "handler_return"],
     ),
     QuerySpec(
-        "d03",
-        "interrupt priority registers",
+        "q15",
+        "syscall path from user code through trap handling to kernel service",
         "cross_doc",
-        ["gic_priority", "plic_priority"],
+        ["syscall_entry", "trap_handling", "kernel_service"],
     ),
     QuerySpec(
-        "d04",
-        "page table entry permission bits",
+        "q16",
+        "register context that must be saved during context switch and exception handling",
         "cross_doc",
-        ["arm_pte", "riscv_pte"],
-    ),
-    # Natural/vague (4) — real user phrasing, no exact keyword match
-    QuerySpec(
-        "n01",
-        "my kernel crashes right after enabling the MMU",
-        "natural",
-        ["mmu_enable", "fault"],
+        ["context_save_restore", "exception_context", "register_state"],
     ),
     QuerySpec(
-        "n02",
-        "context switch is losing register values",
-        "natural",
-        ["save_restore", "callee_saved"],
+        "q17",
+        "boot flow from firmware initialization to first user process",
+        "cross_doc",
+        ["boot_flow", "kernel_init", "first_user_process"],
     ),
     QuerySpec(
-        "n03",
-        "how do I set up interrupts from scratch",
-        "natural",
-        ["irq_setup", "vector_table"],
+        "q18",
+        "memory protection bits and page table permissions for user and kernel pages",
+        "cross_doc",
+        ["memory_protection", "page_permissions", "user_kernel_access"],
     ),
     QuerySpec(
-        "n04",
-        "what order should I initialize hardware on boot",
-        "natural",
-        ["boot_sequence", "init"],
+        "q19",
+        "trap vector setup and control transfer on exception entry",
+        "cross_doc",
+        ["trap_vector", "exception_entry", "control_transfer"],
     ),
-    # Negative (4) — should return nothing relevant, tests false positive rate
-    QuerySpec("x01", "Python asyncio event loop", "negative", []),
-    QuerySpec("x02", "React component lifecycle hooks", "negative", []),
-    QuerySpec("x03", "SQL JOIN optimization strategies", "negative", []),
-    QuerySpec("x04", "Kubernetes pod scheduling", "negative", []),
+    QuerySpec(
+        "q20",
+        "timer and software interrupts used by kernels and supervisors",
+        "cross_doc",
+        ["timer_interrupts", "software_interrupts", "scheduler_tick"],
+    ),
+    # Natural/vague (6) — realistic troubleshooting phrasing.
+    QuerySpec(
+        "q21",
+        "my trap handler returns to the wrong instruction address",
+        "natural",
+        ["trap_return", "saved_pc", "control_flow_bug"],
+    ),
+    QuerySpec(
+        "q22",
+        "external interrupts are pending but never reach my supervisor handler",
+        "natural",
+        ["interrupt_routing", "pending_interrupts", "supervisor_handler"],
+    ),
+    QuerySpec(
+        "q23",
+        "after enabling virtual memory my kernel immediately page-faults",
+        "natural",
+        ["vm_enable", "page_fault", "translation_setup"],
+    ),
+    QuerySpec(
+        "q24",
+        "porting from arm64 to riscv broke function call register usage",
+        "natural",
+        ["porting", "calling_convention", "register_mismatch"],
+    ),
+    QuerySpec(
+        "q25",
+        "context switch loses register values between processes",
+        "natural",
+        ["context_switch_bug", "register_corruption", "save_restore"],
+    ),
+    QuerySpec(
+        "q26",
+        "firmware call returns not supported for an sbi feature",
+        "natural",
+        ["sbi_error_codes", "firmware_call", "feature_support"],
+    ),
+    # Negative (4) — hard negatives (near-domain + far-domain).
+    QuerySpec("q27", "x86 APIC ICR delivery mode", "negative", []),
+    QuerySpec("q28", "Linux cgroup v2 cpu.max throttling", "negative", []),
+    QuerySpec("q29", "PostgreSQL query planner cost model tuning", "negative", []),
+    QuerySpec(
+        "q30", "TensorFlow distributed training checkpoint sharding", "negative", []
+    ),
 ]
 
 
 def _is_permanent_error(exc: Exception) -> bool:
     """Check if an error is permanent (no point retrying)."""
     msg = str(exc).lower()
-    return "not found" in msg or "status code: 404" in msg
+    permanent_markers = (
+        "not found",
+        "status code: 404",
+        "status code: 401",
+        "status code: 403",
+        "invalid api key",
+        "api key not valid",
+        "permission denied",
+        "quota exceeded",
+        "insufficient_quota",
+    )
+    return any(marker in msg for marker in permanent_markers)
 
 
 def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
-    """POST JSON to llama-server endpoint."""
+    """POST JSON and parse JSON response."""
     import urllib.request
     import urllib.error
 
@@ -194,8 +269,31 @@ def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
     req = urllib.request.Request(
         url, data=data, headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode("utf-8", errors="replace").strip()
+        except Exception:
+            body = ""
+
+        detail = body
+        if body:
+            try:
+                parsed = json.loads(body)
+                if isinstance(parsed, dict):
+                    detail = str(parsed.get("error") or parsed)
+            except Exception:
+                pass
+
+        message = f"HTTP Error {e.code}: {e.reason}"
+        if detail:
+            message = f"{message} - {detail}"
+        raise RuntimeError(message) from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"request failed: {e.reason}") from e
 
 
 _JUDGE_RESPONSE_FORMAT = {
@@ -208,8 +306,169 @@ _JUDGE_RESPONSE_FORMAT = {
 }
 
 
-def _call_judge(prompt: str) -> JudgmentResponse:
-    """Call the judge model via llama-server chat completions API."""
+def _iter_payload_candidates(text: str) -> list[str]:
+    """Collect likely JSON payload candidates from model output."""
+    stripped = text.strip()
+    if not stripped:
+        return []
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def _add(candidate: str) -> None:
+        candidate = candidate.strip()
+        if not candidate or candidate in seen:
+            return
+        seen.add(candidate)
+        candidates.append(candidate)
+
+    # Fenced candidates first (models often wrap JSON in markdown).
+    for m in re.finditer(r"```(?:json)?\s*(.*?)```", stripped, re.DOTALL):
+        _add(m.group(1))
+
+    # Any decodable JSON object/array in free text.
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(stripped):
+        if ch not in "{[":
+            continue
+        try:
+            _, end = decoder.raw_decode(stripped[i:])
+            _add(stripped[i : i + end])
+        except json.JSONDecodeError:
+            continue
+
+    # Whole response as a last resort.
+    _add(stripped)
+    return candidates
+
+
+def _cleanup_json_like_text(payload: str) -> str:
+    """Normalize common model output issues before parsing."""
+    cleaned = payload.strip()
+    if cleaned.lower().startswith("json"):
+        parts = cleaned.splitlines()
+        if len(parts) > 1:
+            cleaned = "\n".join(parts[1:])
+        else:
+            cleaned = cleaned[4:]
+    cleaned = cleaned.strip().strip("`")
+    cleaned = cleaned.replace("\u201c", '"').replace("\u201d", '"')
+    cleaned = cleaned.replace("\u2018", "'").replace("\u2019", "'")
+    cleaned = re.sub(r"(?m)^\s*//.*$", "", cleaned)
+    cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
+    return cleaned.strip()
+
+
+def _python_literal_variants(payload: str) -> list[str]:
+    variants = [payload]
+    # Allow json-like literals with true/false/null for ast literal_eval fallback.
+    normalized = re.sub(r"\btrue\b", "True", payload, flags=re.IGNORECASE)
+    normalized = re.sub(r"\bfalse\b", "False", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\bnull\b", "None", normalized, flags=re.IGNORECASE)
+    if normalized != payload:
+        variants.append(normalized)
+    return variants
+
+
+def _recover_with_regex(text: str) -> JudgmentResponse | None:
+    """Best-effort recovery for non-JSON outputs that still contain fields."""
+    score_match = re.search(r"(?i)[\"']?score[\"']?\s*[:=]\s*(-?\d+)", text)
+    if not score_match:
+        return None
+
+    conf_match = re.search(
+        r"(?i)[\"']?confidence[\"']?\s*[:=]\s*(-?\d+(?:\.\d+)?)", text
+    )
+    confidence = float(conf_match.group(1)) if conf_match else 0.5
+
+    reason_match = re.search(r"(?is)[\"']?reason[\"']?\s*[:=]\s*([\"'])(.*?)\1", text)
+    if reason_match:
+        reason = reason_match.group(2).strip()
+    else:
+        reason_line = re.search(r"(?im)^\s*[\"']?reason[\"']?\s*[:=]\s*(.+)$", text)
+        reason = (
+            reason_line.group(1).strip() if reason_line else "parsed from model output"
+        )
+
+    subs: list[str] = []
+    subs_match = re.search(r"(?is)[\"']?subtopics?[\"']?\s*[:=]\s*\[(.*?)\]", text)
+    if subs_match:
+        inner = subs_match.group(1)
+        quoted = re.findall(r'(?s)"([^"]+)"|\'([^\']+)\'', inner)
+        for a, b in quoted:
+            token = (a or b).strip()
+            if token:
+                subs.append(token)
+        if not subs:
+            for token in inner.split(","):
+                value = token.strip().strip("'\"")
+                if value:
+                    subs.append(value)
+
+    return JudgmentResponse(
+        score=int(score_match.group(1)),
+        confidence=confidence,
+        subtopics=subs[:5],
+        reason=reason,
+    )
+
+
+def _parse_judgment_response(text: str) -> JudgmentResponse:
+    """Parse model output into JudgmentResponse with tolerant fallback formats."""
+    candidates = _iter_payload_candidates(text)
+    last_error: Exception | None = None
+
+    for payload in candidates:
+        cleaned = _cleanup_json_like_text(payload)
+        for candidate in (payload, cleaned):
+            if not candidate:
+                continue
+            try:
+                return JudgmentResponse.model_validate_json(candidate)
+            except Exception as json_error:
+                last_error = json_error
+
+            # Some models emit Python dict literals instead of strict JSON.
+            for literal_candidate in _python_literal_variants(candidate):
+                try:
+                    parsed = ast.literal_eval(literal_candidate)
+                except (SyntaxError, ValueError):
+                    continue
+                if isinstance(parsed, dict):
+                    try:
+                        return JudgmentResponse.model_validate(parsed)
+                    except Exception as validate_error:
+                        last_error = validate_error
+
+    recovered = _recover_with_regex(text)
+    if recovered is not None:
+        return recovered
+
+    if last_error is not None:
+        raise last_error
+    raise ValueError("empty or unparseable judge response")
+
+
+def _parse_bool(raw: str | None) -> bool | None:
+    if raw is None:
+        return None
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def should_use_debiasing() -> bool:
+    """Return whether debiasing should be enabled for judge calls."""
+    forced = _parse_bool(os.environ.get("SOVA_BENCH_USE_DEBIASING"))
+    return True if forced is None else forced
+
+
+def _call_judge_llama(prompt: str) -> JudgmentResponse:
+    """Call a local llama-server chat model and parse JSON response."""
     from sova.config import CONTEXT_SERVER_URL
 
     resp = _post_json(
@@ -224,7 +483,12 @@ def _call_judge(prompt: str) -> JudgmentResponse:
     content = (resp["choices"][0]["message"]["content"] or "").strip()
     if not content:
         raise ValueError("empty response from model")
-    return JudgmentResponse.model_validate_json(content)
+    return _parse_judgment_response(content)
+
+
+def _call_judge(prompt: str) -> JudgmentResponse:
+    """Call the local llama-server judge model."""
+    return _call_judge_llama(prompt)
 
 
 def judge_chunk(
@@ -372,12 +636,19 @@ def judge_query(
         if existing_judgments and chunk_id in existing_judgments:
             continue
 
-        if use_debiasing:
-            score, reason, confidence, subtopics, _ = judge_chunk_with_debiasing(
-                spec.query, hit["text"]
-            )
-        else:
-            score, reason, confidence, subtopics = judge_chunk(spec.query, hit["text"])
+        try:
+            if use_debiasing:
+                score, reason, confidence, subtopics, _ = judge_chunk_with_debiasing(
+                    spec.query, hit["text"]
+                )
+            else:
+                score, reason, confidence, subtopics = judge_chunk(
+                    spec.query, hit["text"]
+                )
+        except JudgeError as e:
+            raise JudgeError(
+                f"query {spec.id} chunk {chunk_id} ({hit['doc']}): {e}"
+            ) from e
 
         j = Judgment(
             chunk_id=chunk_id,
