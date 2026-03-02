@@ -151,7 +151,7 @@ class TestCheckServers:
         ):
             ok, msg = check_servers(mode="index_context")
 
-        # index_context uses one required model and should not be blocked by
+        # index_context uses one required model and should not be blocked by.
         # conservative estimate-only preflight.
         assert ok is False
         assert "not reachable" in msg
@@ -839,10 +839,10 @@ class TestStopServer:
         from sova.llama_client import stop_server
 
         mock_run = MagicMock()
-        # First call: launchctl stop; second call: launchctl list (already stopped)
+        # First call: launchctl stop; second call: launchctl list (already stopped).
         mock_run.side_effect = [
-            MagicMock(),  # stop
-            MagicMock(returncode=0, stdout="- 0\tcom.sova.embedding"),  # list: stopped
+            MagicMock(),  # stop.
+            MagicMock(returncode=0, stdout="- 0\tcom.sova.embedding"),  # list: stopped.
         ]
 
         with (
@@ -903,10 +903,10 @@ class TestStopServer:
 
         mock_run = MagicMock()
         mock_run.side_effect = [
-            MagicMock(),  # launchctl stop
+            MagicMock(),  # launchctl stop.
             MagicMock(
                 returncode=0, stdout="- 0\tcom.sova.embedding"
-            ),  # already stopped
+            ),  # already stopped.
         ]
 
         with (
@@ -924,10 +924,10 @@ class TestStopServer:
 
         mock_run = MagicMock()
         mock_run.side_effect = [
-            MagicMock(),  # launchctl stop
+            MagicMock(),  # launchctl stop.
             MagicMock(
                 returncode=0, stdout="- 0\tcom.sova.embedding"
-            ),  # already stopped
+            ),  # already stopped.
         ]
 
         with (

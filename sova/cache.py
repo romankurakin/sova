@@ -22,7 +22,7 @@ class SemanticCache:
     def __init__(
         self,
         # 0.92 cosine sim means queries must be nearly identical in meaning.
-        # Lower values give more cache hits but risk returning stale results
+        # Lower values give more cache hits but risk returning stale results.
         # for semantically different queries.
         threshold: float = 0.92,
         max_size: int = 500,

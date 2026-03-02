@@ -82,7 +82,7 @@ SOVA_ASCII = """\
 /|  |  |\\
   "   " """
 
-# Keep embedding work bounded so Python memory and llama-server lifetime stay
+# Keep embedding work bounded so Python memory and llama-server lifetime stay.
 # controlled on large indexes.
 _EMBED_WINDOW_CHUNKS = 256
 _EMBED_RECYCLE_CHUNKS = 1800
@@ -154,7 +154,7 @@ class _IndexLiveView:
             self._refresh()
             return
         line = format_line(name, msg)
-        # Keep progress lines stable: update the latest context/embed/server line
+        # Keep progress lines stable: update the latest context/embed/server line.
         # in place instead of appending a new event every tick.
         if name in {"context", "embed", "server"} and self._events:
             prefix = format_line(name, "")
@@ -772,7 +772,7 @@ def _generate_contexts(
             ).fetchall()
         )
     chunks_needing_context = []
-    # Protect against duplicate start_line entries in chunk lists. This keeps
+    # Protect against duplicate start_line entries in chunk lists. This keeps.
     # context generation idempotent across interrupted/retried runs.
     planned_chunk_ids = set(existing_contexts)
     for i, chunk in enumerate(chunks):
@@ -1042,14 +1042,14 @@ def _doc_status_label(status: dict) -> str:
     total = status.get("expected") or chunks
     ctx = status.get("contextualized", 0)
     embedded = status.get("embedded", 0)
-    # All done
+    # All done.
     if embedded >= total:
         return "[green]ready[/green]"
-    # Context generation in progress
+    # Context generation in progress.
     if ctx < total:
         pct = _progress_pct(ctx, total)
         return f"[yellow]context {pct}%[/yellow]"
-    # Context done, embedding in progress
+    # Context done, embedding in progress.
     pct = _progress_pct(embedded, total)
     return f"[yellow]embed {pct}%[/yellow]"
 
@@ -1138,7 +1138,7 @@ def search_semantic(
     try:
         query_emb = get_query_embedding(query)
 
-        # Compute min candidates before checking cache so we only accept cached
+        # Compute min candidates before checking cache so we only accept cached.
         # results that searched at least as broadly as we need.
         total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
         min_candidates = compute_candidates(total_chunks, limit)

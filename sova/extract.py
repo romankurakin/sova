@@ -16,7 +16,7 @@ def get_data_dir() -> Path:
     return config.get_data_dir()
 
 
-# pymupdf emits RuntimeWarnings about unsupported PDF features (fonts, etc.)
+# pymupdf emits RuntimeWarnings about unsupported PDF features (fonts, etc.).
 # that don't affect extraction quality. Safe to suppress.
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="pymupdf")
 
@@ -53,8 +53,8 @@ def find_docs() -> list[dict]:
 
 def extract_pdf(pdf_path: Path) -> str:
     """Extract markdown from PDF using pymupdf4llm with layout analysis."""
-    # pymupdf4llm checks if pymupdf.layout was already imported to decide
-    # whether to use layout analysis. Must be imported first or it silently
+    # pymupdf4llm checks if pymupdf.layout was already imported to decide.
+    # whether to use layout analysis. Must be imported first or it silently.
     # falls back to basic extraction with much worse quality.
     import pymupdf.layout  # noqa: F401
     import pymupdf4llm
@@ -93,9 +93,9 @@ def chunk_text(lines: list[str], target_words: int = config.CHUNK_SIZE) -> list[
         current_lines.append(line)
         current_words += line_words
 
-        # Two conditions to split: (1) reached target size AND at a natural
-        # break (blank line or header), or (2) hit a header with enough content
-        # (>50 words) to stand alone. This prevents both oversized chunks that
+        # Two conditions to split: (1) reached target size AND at a natural.
+        # break (blank line or header), or (2) hit a header with enough content.
+        # (>50 words) to stand alone. This prevents both oversized chunks that.
         # degrade embedding quality and tiny fragments under headers.
         is_break = line.strip() == "" or line.startswith("#")
         if (current_words >= target_words and is_break) or (
@@ -131,7 +131,7 @@ def find_section(sections: list[dict], line: int) -> int | None:
     """Find which section a line belongs to. O(log n) via bisect."""
     if not sections:
         return None
-    # Sections are sorted by start_line. Find the rightmost section
+    # Sections are sorted by start_line. Find the rightmost section.
     # whose start_line <= line, then check if line <= end_line.
     idx = bisect.bisect_right([s["start_line"] for s in sections], line) - 1
     if idx < 0:

@@ -517,39 +517,39 @@ def _resolve_vector_extension() -> Path:
 
 VECTOR_EXT = _resolve_vector_extension()
 
-# llama-server endpoints (one instance per model)
+# llama-server endpoints (one instance per model).
 EMBEDDING_SERVER_URL = "http://localhost:8081"
 RERANKER_SERVER_URL = "http://localhost:8082"
 CONTEXT_SERVER_URL = "http://localhost:8083"
-# Embedding model used for indexing and query vectors
+# Embedding model used for indexing and query vectors.
 EMBEDDING_MODEL = "qwen3-embedding-4b"
-# LLM model used for context answers and analysis
+# LLM model used for context answers and analysis.
 CONTEXT_MODEL = "ministral-3-14b-instruct-2512"
-# Reranker model for second-stage ranking
+# Reranker model for second-stage ranking.
 RERANKER_MODEL = "qwen3-reranker-0.6b"
-# Vector dimension expected from embedding model
+# Vector dimension expected from embedding model.
 EMBEDDING_DIM = 2560
-# Number of top RRF results sent to reranker
-# Reranker sees limit * RERANK_FACTOR candidates
+# Number of top RRF results sent to reranker.
+# Reranker sees limit * RERANK_FACTOR candidates.
 RERANK_FACTOR = 2
-# Reranker timeout in seconds; graceful fallback if exceeded
+# Reranker timeout in seconds; graceful fallback if exceeded.
 RERANK_TIMEOUT = 10.0
-# RRF base rank constant controlling how strongly top results are favored
+# RRF base rank constant controlling how strongly top results are favored.
 SEARCH_RRF_K = 20
-# Weight multiplier applied to RRF score in final ranking
+# Weight multiplier applied to RRF score in final ranking.
 SEARCH_RRF_WEIGHT = 30.0
-# Bonus added when full query phrase appears in chunk text
+# Bonus added when full query phrase appears in chunk text.
 SEARCH_EXACT_PHRASE_BONUS = 0.3
-# Bonus multiplier for fraction of query terms found in chunk text
+# Bonus multiplier for fraction of query terms found in chunk text.
 SEARCH_EXACT_TERM_BONUS = 0.15
-# Penalty applied to index-like chunks to demote boilerplate hits
+# Penalty applied to index-like chunks to demote boilerplate hits.
 SEARCH_INDEX_PENALTY = -0.5
-# Decay factor for diversity reranking across similar documents
+# Decay factor for diversity reranking across similar documents.
 SEARCH_DIVERSITY_DECAY = 0.95
-# Enable cross-encoder reranker in search flow. Disabled by default to keep
+# Enable cross-encoder reranker in search flow. Disabled by default to keep.
 # baseline search lightweight unless explicitly requested.
 SEARCH_USE_RERANKER = _env_bool("SOVA_SEARCH_USE_RERANKER", False)
-# Number of documents to embed per batch
+# Number of documents to embed per batch.
 BATCH_SIZE = 10
-# Target words per chunk
+# Target words per chunk.
 CHUNK_SIZE = 512

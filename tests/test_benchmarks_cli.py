@@ -274,7 +274,7 @@ def test_cmd_run_averages_three_passes_by_default(monkeypatch, tmp_path: Path):
 
     data = json.loads(result_path.read_text())
     assert data["runs"] == 3
-    # Median per pass: 100, 200, 300 -> mean 200
+    # Median per pass: 100, 200, 300 -> mean 200.
     assert data["latency_ms"]["p50"] == pytest.approx(200.0)
     assert len(clear_calls) == 3
     assert len(close_calls) == 3

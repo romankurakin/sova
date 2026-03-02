@@ -36,7 +36,7 @@ class TestCollectQuerySubtopics:
             Judgment(chunk_id=2, doc="d", score=3, reason="", subtopics=["b", "c"]),
         ]
         result = collect_query_subtopics(judgments)
-        assert result == ["a", "b", "c"]  # sorted, deduplicated
+        assert result == ["a", "b", "c"]  # sorted, deduplicated.
 
     def test_empty_subtopics_ignored(self):
         judgments = [
@@ -138,7 +138,7 @@ class TestJudgeQueryPropagatesErrors:
                         k_per_strategy=10,
                         on_chunk_judged=callback,
                     )
-        # First chunk was judged and callback fired before error on second
+        # First chunk was judged and callback fired before error on second.
         assert callback.call_count == 1
 
 

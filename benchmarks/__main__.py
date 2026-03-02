@@ -235,14 +235,14 @@ def cmd_judge():
     k_per_strategy = 20
     use_debiasing = should_use_debiasing()
 
-    # Load existing ground truth (supports incremental judging)
+    # Load existing ground truth (supports incremental judging).
     existing_gt = _load_ground_truth(output_path)
     existing_queries: dict[str, dict] = {}
     if existing_gt:
         for q in existing_gt.get("queries", []):
             existing_queries[q["id"]] = q
 
-    # Also load partial checkpoint (interrupted previous run)
+    # Also load partial checkpoint (interrupted previous run).
     partial_gt = _load_ground_truth(checkpoint_path)
     if partial_gt:
         for q in partial_gt.get("queries", []):
@@ -283,7 +283,7 @@ def cmd_judge():
         )
     start = time.time()
 
-    # For each query, build existing_judgments map for incremental judging
+    # For each query, build existing_judgments map for incremental judging.
     completed: dict[str, dict] = dict(existing_queries)
     new_judgments_total = 0
     current_query_label = "-"
@@ -316,13 +316,13 @@ def cmd_judge():
             for spec in queries_to_process:
                 current_query_label = f"{spec.id} {spec.query[:56]}"
                 live.update(_display())
-                # Build map of already-judged chunk_ids for this query
+                # Build map of already-judged chunk_ids for this query.
                 existing_for_query: dict[int, int] = {}
                 if spec.id in completed:
                     for j in completed[spec.id].get("judgments", []):
                         existing_for_query[j["chunk_id"]] = j["score"]
 
-                # Per-chunk checkpoint: merge each judgment immediately
+                # Per-chunk checkpoint: merge each judgment immediately.
                 existing_judgment_list = completed.get(spec.id, {}).get("judgments", [])
                 existing_chunk_ids = {j["chunk_id"] for j in existing_judgment_list}
                 current_query_judgments = list(existing_judgment_list)
@@ -343,7 +343,7 @@ def cmd_judge():
                         existing_chunk_ids.add(j.chunk_id)
                     new_judgments_total += 1
 
-                    # Update completed with partial progress and checkpoint
+                    # Update completed with partial progress and checkpoint.
                     all_j_objs = [
                         _J(
                             chunk_id=jd["chunk_id"],
@@ -408,7 +408,7 @@ def cmd_judge():
             f"no new chunks to judge ({fmt_duration(time.time() - start).strip()})",
         )
 
-    # Build final output in query order
+    # Build final output in query order.
     queries_list = [completed[spec.id] for spec in QUERY_SET if spec.id in completed]
     ground_truth = _build_ground_truth(queries_list)
 
@@ -608,7 +608,7 @@ def cmd_run(
 
             results = []
 
-            # Track auto-fill stats
+            # Track auto-fill stats.
             autofill_count = 0
             unjudged_count = 0
             gt_modified = False
@@ -642,7 +642,7 @@ def cmd_run(
                         for h in hits:
                             chunk_id = h["chunk_id"]
                             if chunk_id not in judgments:
-                                # Auto-fill: judge on the fly
+                                # Auto-fill: judge on the fly.
                                 backend = get_backend()
                                 chunk_info = backend.get_chunk_text(chunk_id)
                                 if chunk_info is None:
@@ -658,7 +658,7 @@ def cmd_run(
                                     use_debiasing=autofill_use_debiasing,
                                 )
 
-                                # Add to in-memory ground truth
+                                # Add to in-memory ground truth.
                                 new_judgment = {
                                     "chunk_id": j.chunk_id,
                                     "doc": j.doc,
@@ -699,13 +699,13 @@ def cmd_run(
                     )
                     progress.update(task, advance=1)
 
-            # Save updated ground truth if auto-fill added judgments
+            # Save updated ground truth if auto-fill added judgments.
             if gt_modified:
                 _save_ground_truth(gt_path, ground_truth)
         finally:
             close_backend()
 
-        # Separate negative queries from main metrics
+        # Separate negative queries from main metrics.
         positive_results = [r for r in results if r.category != "negative"]
         negative_results = [r for r in results if r.category == "negative"]
 
@@ -775,12 +775,12 @@ def cmd_run(
     for kv in k_values:
         table.add_column(f"@{kv}", justify="right")
 
-    # Latency — single values in @10 column
+    # Latency — single values in @10 column.
     table.add_row("Latency P50", *[blank] * (len(k_values) - 1), f"{latency_p50:.0f}ms")
     table.add_row("Latency P95", *[blank] * (len(k_values) - 1), f"{latency_p95:.0f}ms")
     table.add_section()
 
-    # IR metrics at all k cutoffs
+    # IR metrics at all k cutoffs.
     for metric, label in [
         ("ndcg", "nDCG"),
         ("mrr", "MRR"),
@@ -797,7 +797,7 @@ def cmd_run(
         ]
         table.add_row(*row)
 
-    # FP rate at bottom
+    # FP rate at bottom.
     if neg_fp_rate:
         table.add_section()
         table.add_row(
@@ -959,7 +959,7 @@ def cmd_show(run_name: str | None = None):
     for kv in STANDARD_K:
         table.add_column(f"@{kv}", justify="right")
 
-    # Latency
+    # Latency.
     if lat:
         table.add_row(
             "Latency P50",
@@ -973,7 +973,7 @@ def cmd_show(run_name: str | None = None):
             )
         table.add_section()
 
-    # IR metrics
+    # IR metrics.
     for metric, label in [
         ("ndcg", "nDCG"),
         ("mrr", "MRR"),
@@ -988,7 +988,7 @@ def cmd_show(run_name: str | None = None):
         row = [label] + [f"{get_val(m.get(metric, {}), kv):.3f}" for kv in STANDARD_K]
         table.add_row(*row)
 
-    # FP rate
+    # FP rate.
     if neg_fp:
         table.add_section()
         table.add_row("FP Rate", *[f"{get_val(neg_fp, kv):.3f}" for kv in STANDARD_K])

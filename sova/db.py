@@ -83,7 +83,7 @@ def init_db() -> sqlite3.Connection:
         END;
     """)
 
-    # FTS triggers only fire on new inserts. If chunks were added before FTS
+    # FTS triggers only fire on new inserts. If chunks were added before FTS.
     # was set up (e.g. schema migration), backfill the index from existing rows.
     fts_count = conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]
     chunk_count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]

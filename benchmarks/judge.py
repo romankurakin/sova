@@ -21,7 +21,7 @@ class JudgeError(Exception):
 
 JUDGE_MODEL = os.environ.get("SOVA_BENCH_JUDGE_MODEL", CONTEXT_MODEL)
 
-# Retry settings
+# Retry settings.
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0
 
@@ -526,11 +526,11 @@ def judge_chunk_with_debiasing(
     """Judge with position bias mitigation. Returns (score, reason, confidence, subtopics, variance)."""
     score1, reason1, conf1, subs1 = judge_chunk(query, chunk_text)
 
-    # Re-judge borderline cases
+    # Re-judge borderline cases.
     if conf1 >= 0.7 and score1 not in {1, 2}:
         return score1, reason1, conf1, subs1, 0.0
 
-    # Re-judge with attention shift
+    # Re-judge with attention shift.
     padding = f"Reference: {uuid.uuid4()}\n\n"
     padded_prompt = padding + JUDGE_PROMPT.format(query=query, chunk=chunk_text[:1400])
 
@@ -589,13 +589,13 @@ def collect_pool(query: str, k_per_strategy: int = 20) -> list[dict]:
                     "section_id": r.section_id,
                 }
 
-    # Strategy 1: hybrid (existing search)
+    # Strategy 1: hybrid (existing search).
     _add_results(backend.search(query, limit=k_per_strategy))
 
-    # Strategy 2: BM25-only
+    # Strategy 2: BM25-only.
     _add_results(backend.search_fts_only(query, limit=k_per_strategy))
 
-    # Strategy 3: vector-only
+    # Strategy 3: vector-only.
     _add_results(backend.search_vector_only(query, limit=k_per_strategy))
 
     return list(seen.values())
@@ -632,7 +632,7 @@ def judge_query(
     for hit in candidates:
         chunk_id = hit["chunk_id"]
 
-        # Skip already-judged chunks (incremental)
+        # Skip already-judged chunks (incremental).
         if existing_judgments and chunk_id in existing_judgments:
             continue
 

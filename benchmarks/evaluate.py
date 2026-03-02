@@ -13,7 +13,7 @@ import math
 from dataclasses import dataclass, field
 
 
-# Standard cutoffs used in BEIR/MTEB
+# Standard cutoffs used in BEIR/MTEB.
 STANDARD_K = [1, 3, 5, 10]
 
 
@@ -28,12 +28,12 @@ class Metrics:
     recall: dict[int, float] = field(default_factory=dict)
     hit_rate: dict[int, float] = field(default_factory=dict)
 
-    # Diversity metrics
+    # Diversity metrics.
     subtopic_recall: dict[int, float] = field(default_factory=dict)
     alpha_ndcg: dict[int, float] = field(default_factory=dict)
     doc_coverage: dict[int, float] = field(default_factory=dict)
 
-    # Diagnostic
+    # Diagnostic.
     unjudged_count: int = 0
 
 
@@ -157,7 +157,7 @@ def alpha_ndcg_at_k(
         rel = relevance.get(doc_id, 0)
         subtopics = subtopic_map.get(doc_id, [])
 
-        # Novelty-weighted gain
+        # Novelty-weighted gain.
         doc_gain = 0.0
         for st in subtopics:
             count = seen_subtopics.get(st, 0)
@@ -169,8 +169,8 @@ def alpha_ndcg_at_k(
 
         gain += doc_gain / math.log2(i + 2)
 
-    # Compute ideal (greedy selection for max α-nDCG)
-    # Simplified: use standard nDCG as upper bound
+    # Compute ideal (greedy selection for max α-nDCG).
+    # Simplified: use standard nDCG as upper bound.
     ideal = sorted(relevance.values(), reverse=True)[:k]
     idcg = sum((2**rel - 1) / math.log2(i + 2) for i, rel in enumerate(ideal))
 

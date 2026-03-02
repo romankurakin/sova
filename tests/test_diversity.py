@@ -30,8 +30,8 @@ class TestScoreDecayDiversify:
         """Second chunk from same doc should drop below a close competitor."""
         results = _make_results([("a", 10), ("a", 9.5), ("b", 9)])
         filtered = score_decay_diversify(results, limit=3, decay=0.7)
-        # a's 2nd chunk: 9.5 * 0.7 = 6.65, b's 1st: 9.0
-        # Order should be: a(10), b(9), a(6.65)
+        # a's 2nd chunk: 9.5 * 0.7 = 6.65, b's 1st: 9.0.
+        # Order should be: a(10), b(9), a(6.65).
         docs = [r["doc"] for r in filtered]
         assert docs == ["a", "b", "a"]
 
@@ -39,8 +39,8 @@ class TestScoreDecayDiversify:
         """If one doc is much higher scored, multiple chunks survive."""
         results = _make_results([("a", 20), ("a", 18), ("a", 16), ("b", 5)])
         filtered = score_decay_diversify(results, limit=4, decay=0.8)
-        # a chunks: 20, 18*0.8=14.4, 16*0.64=10.24; b: 5
-        # All a's above b, so a dominates
+        # a chunks: 20, 18*0.8=14.4, 16*0.64=10.24; b: 5.
+        # All a's above b, so a dominates.
         docs = [r["doc"] for r in filtered]
         assert docs == ["a", "a", "a", "b"]
 
@@ -49,7 +49,7 @@ class TestScoreDecayDiversify:
         results = _make_results([("a", 10), ("a", 9), ("b", 8), ("b", 7)])
         filtered = score_decay_diversify(results, limit=4, decay=0.0)
         docs = [r["doc"] for r in filtered]
-        # a(10), b(8), a(0), b(0)
+        # a(10), b(8), a(0), b(0).
         assert docs[:2] == ["a", "b"]
 
     def test_decay_one_is_no_diversity(self):

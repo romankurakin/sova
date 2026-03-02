@@ -26,12 +26,12 @@ class TestTextDensity:
         assert text_density("123456") == 0.0
 
     def test_mixed_content(self):
-        # "hello 123" = 5 letters / 9 chars
+        # "hello 123" = 5 letters / 9 chars.
         density = text_density("hello 123")
         assert 0.5 < density < 0.6
 
     def test_with_punctuation(self):
-        # "hi!" = 2 letters / 3 chars
+        # "hi!" = 2 letters / 3 chars.
         assert text_density("hi!") == pytest.approx(2 / 3)
 
 
@@ -45,12 +45,12 @@ class TestIsIndexLike:
         assert is_index_like(text) is True
 
     def test_low_density_text(self):
-        # Simulating index-like content with lots of numbers and dots
+        # Simulating index-like content with lots of numbers and dots.
         text = "1.1 ... 10\n1.2 ... 15\n1.3 ... 20\n" * 50
         assert is_index_like(text) is True
 
     def test_code_block(self):
-        # Code has letters, should pass density check
+        # Code has letters, should pass density check.
         text = "def function():\n    return value\n" * 30
         assert is_index_like(text) is False
 
@@ -63,28 +63,28 @@ class TestRRFFusion:
     def test_single_list(self):
         ranked = [(1, 0.9), (2, 0.8), (3, 0.7)]
         scores = rrf_fusion([ranked])
-        # First item: 1/(60+1), second: 1/(60+2), third: 1/(60+3)
+        # First item: 1/(60+1), second: 1/(60+2), third: 1/(60+3).
         assert scores[1] > scores[2] > scores[3]
 
     def test_two_lists_same_order(self):
         list1 = [(1, 0.9), (2, 0.8)]
         list2 = [(1, 0.95), (2, 0.85)]
         scores = rrf_fusion([list1, list2])
-        # Item 1 appears first in both, should have highest score
+        # Item 1 appears first in both, should have highest score.
         assert scores[1] > scores[2]
 
     def test_two_lists_different_order(self):
         list1 = [(1, 0.9), (2, 0.8)]
         list2 = [(2, 0.95), (1, 0.85)]
         scores = rrf_fusion([list1, list2])
-        # Both items appear once at rank 1 and once at rank 2
+        # Both items appear once at rank 1 and once at rank 2.
         assert scores[1] == pytest.approx(scores[2])
 
     def test_custom_k(self):
         ranked = [(1, 0.9), (2, 0.8)]
         scores_k60 = rrf_fusion([ranked], k=60)
         scores_k10 = rrf_fusion([ranked], k=10)
-        # With smaller k, rank differences matter more
+        # With smaller k, rank differences matter more.
         ratio_k60 = scores_k60[1] / scores_k60[2]
         ratio_k10 = scores_k10[1] / scores_k10[2]
         assert ratio_k10 > ratio_k60
@@ -100,9 +100,9 @@ class TestRRFFusion:
         list1 = [(1, 0.9), (2, 0.8), (3, 0.7)]
         list2 = [(2, 0.95), (3, 0.85), (4, 0.75)]
         scores = rrf_fusion([list1, list2])
-        # Item 2 and 3 appear in both lists
-        assert scores[2] > scores[1]  # 2 appears in both, 1 only in first
-        assert scores[2] > scores[4]  # 2 appears in both, 4 only in second
+        # Item 2 and 3 appear in both lists.
+        assert scores[2] > scores[1]  # 2 appears in both, 1 only in first.
+        assert scores[2] > scores[4]  # 2 appears in both, 4 only in second.
 
     def test_non_positive_k_is_clamped(self):
         ranked = [(1, 0.9)]
@@ -112,13 +112,13 @@ class TestRRFFusion:
 
 class TestComputeCandidates:
     def test_small_corpus(self):
-        # With few chunks, should return at least base_candidates
+        # With few chunks, should return at least base_candidates.
         result = compute_candidates(10, 5)
-        assert result >= 20  # limit * 4
+        assert result >= 20  # limit * 4.
 
     def test_large_corpus(self):
         result = compute_candidates(100_000, 10)
-        # Should cap at 1500
+        # Should cap at 1500.
         assert result <= 1500
 
     def test_scales_with_limit(self):
@@ -128,11 +128,11 @@ class TestComputeCandidates:
 
     def test_minimum_floor(self):
         result = compute_candidates(50, 5)
-        assert result >= 50  # at least limit * 4 = 20, but also at least min(50, 150)
+        assert result >= 50  # at least limit * 4 = 20, but also at least min(50, 150).
 
     def test_zero_chunks(self):
         result = compute_candidates(0, 10)
-        assert result >= 40  # at least limit * 4
+        assert result >= 40  # at least limit * 4.
 
 
 class TestSearchFtsSingleChar:
@@ -159,7 +159,7 @@ class TestSearchFtsSingleChar:
 
     def test_single_char_query_returns_empty(self):
         conn = self._make_fts_db()
-        # All single-char tokens get dropped
+        # All single-char tokens get dropped.
         results = search_fts(conn, "a b c", 5)
         assert results == []
         conn.close()

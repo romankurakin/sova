@@ -335,7 +335,7 @@ def _generate_watchdog_plist(binary_path: Path) -> dict[str, Any]:
     return {
         "Label": _WATCHDOG_LABEL,
         "ProgramArguments": [str(binary_path), "--_watchdog"],
-        "StartInterval": 600,  # every 10 minutes
+        "StartInterval": 600,  # every 10 minutes.
         "StandardOutPath": str(logs / "watchdog.log"),
         "StandardErrorPath": str(logs / "watchdog.err.log"),
     }

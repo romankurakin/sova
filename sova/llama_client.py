@@ -25,7 +25,7 @@ from sova.config import (
     get_model_memory_estimate_gib,
 )
 
-# Map server URLs to launchd service labels for on-demand startup
+# Map server URLs to launchd service labels for on-demand startup.
 _SERVICE_LABELS = {
     EMBEDDING_SERVER_URL: "com.sova.embedding",
     RERANKER_SERVER_URL: "com.sova.reranker",
@@ -37,18 +37,18 @@ _SERVICE_PORTS = {
     CONTEXT_SERVER_URL: 8083,
 }
 
-# llama.cpp model cache directory
+# llama.cpp model cache directory.
 _LLAMA_CACHE = Path.home() / "Library" / "Caches" / "llama.cpp"
 
-# Map service labels to expected cache file basenames
+# Map service labels to expected cache file basenames.
 _CACHE_FILES = {
     "com.sova.embedding": "Qwen_Qwen3-Embedding-4B-GGUF_Qwen3-Embedding-4B-Q8_0.gguf",
     "com.sova.chat": "mistralai_Ministral-3-14B-Instruct-2512-GGUF_Ministral-3-14B-Instruct-2512-Q8_0.gguf",
     "com.sova.reranker": "ggml-org_Qwen3-Reranker-0.6B-Q8_0-GGUF_qwen3-reranker-0.6b-q8_0.gguf",
 }
 
-# Idle timeout in seconds; services stop after this much inactivity
-_IDLE_TIMEOUT = 900  # 15 minutes
+# Idle timeout in seconds; services stop after this much inactivity.
+_IDLE_TIMEOUT = 900  # 15 minutes.
 _RERANK_MIN_UBATCH = 4096
 
 _ACTIVITY_DIR = SOVA_HOME / "activity"
@@ -73,14 +73,14 @@ _EMBED_RECOVERY_CANARY_REQUESTS = 2
 _RERANK_COMPACT_CHAR_BUDGETS = (3000, 2000, 1400, 1000, 800, 600, 450)
 _RERANK_KEEP_RATIO_FALLBACKS = (1.0, 0.75, 0.5, 0.35, 0.25)
 
-# Startup probe: send sequential requests to warm up the Metal autorelease
+# Startup probe: send sequential requests to warm up the Metal autorelease.
 # pool and fail early if the embedding server is unstable (llama.cpp #18568).
 _EMBED_CANARY_REQUESTS = 24
 _EMBED_CANARY_TEXT = "sova embedding canary"
 _DOWNLOAD_PROGRESS_STEP_GIB = 0.5
 
-# Required-model admission is estimate-based; allow a small mode-specific
-# slack to avoid false negatives on machines where real RSS is lower than
+# Required-model admission is estimate-based; allow a small mode-specific.
+# slack to avoid false negatives on machines where real RSS is lower than.
 # static estimates.
 _REQUIRED_SOFT_MARGIN_GIB = {
     "index": 2.0,
@@ -100,9 +100,9 @@ _MODE_SERVERS = {
     ],
 }
 
-# Asymmetric retrieval: queries get this instruction prefix, chunks don't
-# This tells the model to optimize for query-passage matching rather than
-# generic similarity, which measurably improves recall on retrieval tasks
+# Asymmetric retrieval: queries get this instruction prefix, chunks don't.
+# This tells the model to optimize for query-passage matching rather than.
+# generic similarity, which measurably improves recall on retrieval tasks.
 QUERY_TASK = "Given a search query, retrieve relevant passages that answer the query"
 
 CONTEXT_SYSTEM_PROMPT = (
@@ -419,7 +419,7 @@ def _admit_services_for_mode(
         if required and (mode in {"index_context", "index_embed"} or mode == "search"):
             # Index phases run exactly one required model at a time.
             # Search required services should also skip estimate-only preflight.
-            # Rely on real server startup/health for
+            # Rely on real server startup/health for.
             # the final capacity decision.
             admitted.append((name, url, required))
             used_gib += estimate
@@ -569,7 +569,7 @@ def check_servers(
                         f"({effective_ubatch}); run sova-install to update services",
                     )
 
-    # Warm path: when required services are already healthy, skip launchctl and
+    # Warm path: when required services are already healthy, skip launchctl and.
     # polling loops to keep repeated searches snappy.
     required_servers = [(name, url) for name, url, required in all_servers if required]
     if required_servers and all(
@@ -589,7 +589,7 @@ def check_servers(
         return False, admission_note
 
     # Kick off launchctl start for all services that aren't already healthy.
-    to_wait: list[tuple[str, str, str, bool]] = []  # (name, url, label, required)
+    to_wait: list[tuple[str, str, str, bool]] = []  # (name, url, label, required).
     for name, url, required in all_servers:
         label = _SERVICE_LABELS.get(url, "")
         try:
@@ -1151,8 +1151,8 @@ def generate_context(
         msg = str(e).lower()
         if "failed to parse input at pos 0" not in msg:
             raise
-        # llama.cpp occasionally fails parsing chat output for specific prompts
-        # Retry via completion endpoint with equivalent instruction text
+        # llama.cpp occasionally fails parsing chat output for specific prompts.
+        # Retry via completion endpoint with equivalent instruction text.
         fallback = _post_json(
             f"{CONTEXT_SERVER_URL}/completion",
             {

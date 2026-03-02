@@ -34,9 +34,9 @@ class TestCosineSimBatch:
         query = np.array([1.0, 0.0])
         embeddings = np.array(
             [
-                [0.0, 1.0],  # orthogonal
-                [1.0, 0.0],  # identical
-                [0.5, 0.5],  # partial
+                [0.0, 1.0],  # orthogonal.
+                [1.0, 0.0],  # identical.
+                [0.5, 0.5],  # partial.
             ]
         )
         sims = _cosine_sim_batch(query, embeddings)
@@ -94,20 +94,20 @@ class TestSemanticCache:
         expected = [(1, 0.9), (2, 0.8)]
         cache.put(emb, expected)
         result = cache.get(emb)
-        # msgpack deserializes tuples as lists
+        # msgpack deserializes tuples as lists.
         assert [list(t) for t in expected] == result
 
     def test_miss_on_dissimilar_query(self, cache_db):
         cache, conn = cache_db
         cache.put([1.0, 0.0, 0.0], [(1, 0.9)])
-        # Orthogonal vector — well below 0.92 threshold
+        # Orthogonal vector — well below 0.92 threshold.
         result = cache.get([0.0, 1.0, 0.0])
         assert result is None
 
     def test_hit_on_similar_query(self, cache_db):
         cache, conn = cache_db
         cache.put([1.0, 0.0, 0.0], [(1, 0.9)])
-        # Very close vector — should exceed 0.92 threshold
+        # Very close vector — should exceed 0.92 threshold.
         result = cache.get([0.99, 0.01, 0.0])
         assert result is not None
 
@@ -121,7 +121,7 @@ class TestSemanticCache:
 
     def test_lru_eviction(self, cache_db):
         cache, conn = cache_db
-        # max_size=3, insert 4 entries
+        # max_size=3, insert 4 entries.
         cache.put([1.0, 0.0], [(1, 0.9)])
         cache.put([0.0, 1.0], [(2, 0.8)])
         cache.put([0.5, 0.5], [(3, 0.7)])
@@ -134,7 +134,7 @@ class TestSemanticCache:
         cache, conn = cache_db
         emb = [1.0, 0.0, 0.0]
         cache.put(emb, [(1, 0.9)])
-        # Backdate the entry beyond TTL
+        # Backdate the entry beyond TTL.
         conn.execute("UPDATE query_cache SET created_at = ?", (time.time() - 7200,))
         conn.commit()
 
@@ -144,9 +144,9 @@ class TestSemanticCache:
     def test_min_candidates_filter(self, cache_db):
         cache, conn = cache_db
         emb = [1.0, 0.0, 0.0]
-        cache.put(emb, [(1, 0.9), (2, 0.8)])  # 2 candidates
+        cache.put(emb, [(1, 0.9), (2, 0.8)])  # 2 candidates.
 
-        # Requesting at least 2 — should hit
+        # Requesting at least 2 — should hit.
         assert cache.get(emb, min_candidates=2) is not None
-        # Requesting at least 5 — should miss
+        # Requesting at least 5 — should miss.
         assert cache.get(emb, min_candidates=5) is None

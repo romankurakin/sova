@@ -20,7 +20,7 @@ def main() -> None:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             print(f"FAIL {header}")
-            # Show output on failure
+            # Show output on failure.
             if result.stdout.strip():
                 for line in result.stdout.strip().splitlines():
                     print(f"  {line}")
@@ -29,7 +29,7 @@ def main() -> None:
                     print(f"  {line}")
             failed.append(name)
         else:
-            # For pytest, grab the summary line
+            # For pytest, grab the summary line.
             summary = ""
             if name == "test":
                 lines = result.stdout.strip().splitlines()

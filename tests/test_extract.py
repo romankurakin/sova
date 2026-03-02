@@ -60,12 +60,12 @@ class TestChunkText:
 
     def test_small_text(self):
         lines = ["Short text"] * 5
-        # Too few words, should return empty
+        # Too few words, should return empty.
         chunks = chunk_text(lines)
         assert chunks == []
 
     def test_single_chunk(self):
-        lines = ["Word " * 100] * 2  # ~200 words
+        lines = ["Word " * 100] * 2  # ~200 words.
         chunks = chunk_text(lines)
         assert len(chunks) >= 1
         assert chunks[0]["start_line"] == 1
@@ -73,7 +73,7 @@ class TestChunkText:
     def test_chunk_at_header(self):
         lines = ["Word " * 60] + ["# New Section"] + ["More words " * 60]
         chunks = chunk_text(lines)
-        # Should split at header
+        # Should split at header.
         assert len(chunks) >= 1
 
     def test_chunk_word_count(self):
@@ -84,10 +84,10 @@ class TestChunkText:
             assert "text" in chunk
 
     def test_respects_target_words(self):
-        # Chunks split at blank lines, so include them
-        lines = (["Word " * 100] * 5 + [""]) * 4  # 2000 words with breaks
+        # Chunks split at blank lines, so include them.
+        lines = (["Word " * 100] * 5 + [""]) * 4  # 2000 words with breaks.
         chunks = chunk_text(lines, target_words=500)
-        # Should create multiple chunks at blank line boundaries
+        # Should create multiple chunks at blank line boundaries.
         assert len(chunks) >= 2
 
 
@@ -179,7 +179,7 @@ class TestFindDocs:
                 patch("sova.extract.get_data_dir", return_value=data_dir),
             ):
                 docs = find_docs()
-                # PDF and its extracted MD should merge into one entry
+                # PDF and its extracted MD should merge into one entry.
                 assert len(docs) == 1
                 assert docs[0]["name"] == "paper"
                 assert docs[0]["pdf"] is not None

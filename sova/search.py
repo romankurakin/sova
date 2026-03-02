@@ -33,8 +33,8 @@ def search_vector(
     except sqlite3.OperationalError:
         pass
 
-    # Preload quantized vectors into memory for faster search. Not all DBs
-    # have quantized data yet (first run, interrupted indexing), so we ignore
+    # Preload quantized vectors into memory for faster search. Not all DBs.
+    # have quantized data yet (first run, interrupted indexing), so we ignore.
     # the error and fall through to brute-force if needed.
     try:
         conn.execute("SELECT vector_quantize_preload('chunks', 'embedding')")
@@ -51,7 +51,7 @@ def search_vector(
         """,
             (query_blob, candidates),
         ).fetchall()
-        # sqlite-vector returns cosine distance (0 = identical), convert to
+        # sqlite-vector returns cosine distance (0 = identical), convert to.
         # similarity (1 = identical) for consistent scoring downstream.
         return [(row[0], 1.0 - row[1]) for row in rows]
     except sqlite3.OperationalError:
@@ -75,7 +75,7 @@ def fallback_vector_scan(
     """
     ).fetchall()
 
-    # Use a min-heap to track top-K without sorting all results. O(n log k)
+    # Use a min-heap to track top-K without sorting all results. O(n log k).
     # vs O(n log n) for sorted(), which matters when scanning thousands of chunks.
     top: list[tuple[float, int]] = []
     for chunk_id, emb_blob in rows:
@@ -103,8 +103,8 @@ def search_fts(
 ) -> list[tuple[int, float]]:
     """FTS5 BM25 search. Returns list of (chunk_id, bm25_score)."""
     try:
-        # Quote each term for exact matching in FTS5 syntax. Single-char
-        # tokens are dropped because they're almost always noise and can
+        # Quote each term for exact matching in FTS5 syntax. Single-char.
+        # tokens are dropped because they're almost always noise and can.
         # cause FTS to return too many low-quality matches.
         fts_query = " ".join(
             f'"{term}"'
@@ -157,17 +157,17 @@ def is_index_like(text: str) -> bool:
     """Detect ToC/index pages using text density."""
     if "table of contents" in text[:600].lower():
         return True
-    # ToC pages have lots of dots, dashes, and numbers (page refs) which
-    # push letter density below ~55%. Only check first 1000 chars because
+    # ToC pages have lots of dots, dashes, and numbers (page refs) which.
+    # push letter density below ~55%. Only check first 1000 chars because.
     # the pattern is strongest at the start and full-text scan is wasteful.
     return text_density(text[:1000]) < 0.55
 
 
 def compute_candidates(total_chunks: int, limit: int) -> int:
     """Compute number of vector candidates needed for a given limit."""
-    # We need more candidates than the final limit because RRF fusion,
+    # We need more candidates than the final limit because RRF fusion,.
     # diversification, and index-page penalties all filter results down.
-    # The adaptive sizing scales with corpus size (5% of chunks, min 150)
+    # The adaptive sizing scales with corpus size (5% of chunks, min 150).
     # but caps at 1500 to keep search latency bounded.
     base_candidates = max(limit * 4, 50)
     adaptive = min(total_chunks, max(150, int(total_chunks * 0.05), base_candidates))
@@ -273,8 +273,8 @@ def fuse_and_rank(
 
     candidate_count = limit * RERANK_FACTOR
 
-    # Keep a wider candidate pool for fusion/diversity, then rerank a smaller
-    # target subset for latency and memory stability
+    # Keep a wider candidate pool for fusion/diversity, then rerank a smaller.
+    # target subset for latency and memory stability.
     top_ids = fused_ids[:candidate_count]
     if not top_ids:
         return [], 0, 0
@@ -292,7 +292,7 @@ def fuse_and_rank(
         term_bonus=exact_term_bonus,
     )
 
-    # Fetch only doc name and is_index for ranking and diversification,
+    # Fetch only doc name and is_index for ranking and diversification,.
     # deferring the heavier text column to after we know the final top-k.
     meta = {
         r[0]: (r[1], r[2])
@@ -329,7 +329,7 @@ def fuse_and_rank(
 
     reranker_enabled = SEARCH_USE_RERANKER if use_reranker is None else use_reranker
     if reranker_enabled:
-        # Quality-first default: rerank more than final output to let cross-encoder
+        # Quality-first default: rerank more than final output to let cross-encoder.
         # rescue relevant chunks that were just below the first-stage cutoff.
         rerank_count = min(len(scored), candidate_count)
         rerank_top = scored[:rerank_count]
@@ -349,7 +349,7 @@ def fuse_and_rank(
                 idx = rr["index"]
                 if idx < len(rerank_top):
                     rerank_top[idx]["rerank_score"] = rr["relevance_score"]
-            # Re-sort only the reranked portion by rerank_score, then append
+            # Re-sort only the reranked portion by rerank_score, then append.
             # the rest (which keep their original final_score order).
             reranked = [r for r in scored if "rerank_score" in r]
             unreranked = [r for r in scored if "rerank_score" not in r]
@@ -364,7 +364,7 @@ def fuse_and_rank(
         for r in filtered:
             r["display_score"] = (r["diversity_score"] - lo) / span if span else 1.0
 
-    # Now that we know the final top-k, fetch the text and line ranges
+    # Now that we know the final top-k, fetch the text and line ranges.
     # only for results we will actually display.
     final_ids = [r["chunk_id"] for r in filtered]
     if final_ids:

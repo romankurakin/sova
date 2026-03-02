@@ -51,13 +51,13 @@ def temp_db():
             );
         """)
 
-        # Insert test document
+        # Insert test document.
         conn.execute(
             "INSERT INTO documents (name, path, line_count) VALUES (?, ?, ?)",
             ("test_doc", "/tmp/test.md", 100),
         )
 
-        # Insert test chunks
+        # Insert test chunks.
         test_chunks = [
             (
                 1,
@@ -112,7 +112,7 @@ class TestFTSSearch:
         conn, _ = temp_db
         results = search_fts(conn, "memory management", 5)
         assert len(results) > 0
-        # First chunk should match
+        # First chunk should match.
         chunk_ids = [r[0] for r in results]
         assert 1 in chunk_ids
 
@@ -140,9 +140,9 @@ class TestRRFIntegration:
 
         scores = rrf_fusion([vector_results, fts_results])
 
-        # Item 2 appears high in both lists
-        assert scores[2] > scores[3]  # 3 only in vector
-        assert scores[2] > scores[4]  # 4 only in fts
+        # Item 2 appears high in both lists.
+        assert scores[2] > scores[3]  # 3 only in vector.
+        assert scores[2] > scores[4]  # 4 only in fts.
 
 
 class TestIndexDetection:

@@ -18,7 +18,7 @@ def score_decay_diversify(
     """
     doc_counts: dict[str, int] = {}
 
-    # Compute adjusted scores
+    # Compute adjusted scores.
     scored = []
     for r in results:
         doc = r["doc"]
@@ -28,7 +28,7 @@ def score_decay_diversify(
         scored.append((adjusted, count, r))
         doc_counts[doc] = count + 1
 
-    # Re-sort by adjusted score and pick top-k
+    # Re-sort by adjusted score and pick top-k.
     scored.sort(key=lambda x: x[0], reverse=True)
 
     out = []

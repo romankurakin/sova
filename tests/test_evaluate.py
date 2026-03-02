@@ -35,7 +35,7 @@ class TestReciprocalRank:
         assert reciprocal_rank([1, 2, 3], {99}, 10) == 0.0
 
     def test_k_cutoff(self):
-        # Relevant doc at position 3, but k=2
+        # Relevant doc at position 3, but k=2.
         assert reciprocal_rank([1, 2, 3], {3}, 2) == 0.0
 
     def test_empty_results(self):
@@ -86,14 +86,14 @@ class TestHitRateAtK:
 
 class TestAveragePrecision:
     def test_perfect_ranking(self):
-        # All relevant at top
+        # All relevant at top.
         assert average_precision([1, 2, 3, 4], {1, 2}, 4) == 1.0
 
     def test_no_relevant(self):
         assert average_precision([1, 2, 3], set(), 3) == 0.0
 
     def test_one_relevant_at_position_2(self):
-        # AP = (1/2) / min(1, 3) = 0.5
+        # AP = (1/2) / min(1, 3) = 0.5.
         assert average_precision([10, 1, 20], {1}, 3) == 0.5
 
     def test_empty_results(self):
@@ -102,20 +102,20 @@ class TestAveragePrecision:
 
 class TestDCGAndNDCG:
     def test_dcg_single_result(self):
-        # DCG = (2^3 - 1) / log2(2) = 7.0
+        # DCG = (2^3 - 1) / log2(2) = 7.0.
         assert dcg_at_k([1], {1: 3}, 1) == pytest.approx(7.0)
 
     def test_dcg_two_results(self):
-        # First: (2^3-1)/log2(2) = 7.0, Second: (2^1-1)/log2(3) = 0.63
+        # First: (2^3-1)/log2(2) = 7.0, Second: (2^1-1)/log2(3) = 0.63.
         dcg = dcg_at_k([1, 2], {1: 3, 2: 1}, 2)
         assert dcg == pytest.approx(7.0 + 1.0 / math.log2(3))
 
     def test_ndcg_perfect(self):
-        # Already in ideal order
+        # Already in ideal order.
         assert ndcg_at_k([1, 2], {1: 3, 2: 1}, 2) == pytest.approx(1.0)
 
     def test_ndcg_reversed(self):
-        # Worst order — should be < 1
+        # Worst order — should be < 1.
         score = ndcg_at_k([2, 1], {1: 3, 2: 1}, 2)
         assert 0 < score < 1.0
 
@@ -124,7 +124,7 @@ class TestDCGAndNDCG:
 
     def test_ndcg_k_cutoff(self):
         score = ndcg_at_k([1, 2, 3], {3: 3}, 1)
-        # Relevant doc at position 3 but k=1
+        # Relevant doc at position 3 but k=1.
         assert score == 0.0
 
 
@@ -145,7 +145,7 @@ class TestSubtopicRecall:
     def test_k_cutoff(self):
         results = [{"chunk_id": 1}, {"chunk_id": 2}]
         subtopic_map = {2: ["a"]}
-        # k=1, only first result checked, which has no subtopics
+        # k=1, only first result checked, which has no subtopics.
         assert subtopic_recall_at_k(results, subtopic_map, 1) == 0.0
 
 
@@ -164,7 +164,7 @@ class TestAlphaNDCG:
     def test_redundant_subtopics_penalized(self):
         results = [{"chunk_id": 1}, {"chunk_id": 2}]
         relevance = {1: 3, 2: 3}
-        # Same subtopic repeated — should be penalized
+        # Same subtopic repeated — should be penalized.
         same_subs = {1: ["a"], 2: ["a"]}
         diff_subs = {1: ["a"], 2: ["b"]}
         score_same = alpha_ndcg_at_k(results, relevance, same_subs, 2)
@@ -199,16 +199,16 @@ class TestComputeMetrics:
 
     def test_default_k_values(self):
         m = compute_metrics([1], {1: 3})
-        # Should use STANDARD_K = [1, 3, 5, 10]
+        # Should use STANDARD_K = [1, 3, 5, 10].
         assert 1 in m.mrr
         assert 10 in m.mrr
 
     def test_threshold(self):
         results = [1, 2]
         relevance = {1: 1, 2: 3}
-        # Default threshold=2, so only doc 2 is relevant
+        # Default threshold=2, so only doc 2 is relevant.
         m = compute_metrics(results, relevance, k_values=[2])
-        # Doc 2 is at position 2, so precision = 1/2
+        # Doc 2 is at position 2, so precision = 1/2.
         assert m.precision[2] == 0.5
 
 

@@ -95,8 +95,8 @@ class TestGetDocStatus:
 
         status = get_doc_status(conn, "doc1")
         assert status["extracted"] is True
-        assert status["embedded"] == 1  # one chunk has embedding
-        assert status["complete"] is False  # 2 chunks < 3 expected
+        assert status["embedded"] == 1  # one chunk has embedding.
+        assert status["complete"] is False  # 2 chunks < 3 expected.
         assert status["chunks"] == 2
         conn.close()
 
