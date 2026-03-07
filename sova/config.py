@@ -173,11 +173,11 @@ def _parse_float(value: object, default: float) -> float:
     if isinstance(value, str | bytes | bytearray | memoryview | int | float):
         try:
             return float(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return default
     try:
         return float(str(value))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 

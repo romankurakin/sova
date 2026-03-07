@@ -41,11 +41,15 @@ from sova.llama_client import (
     QUERY_TASK,
     check_servers,
     generate_context,
+    get_model_status,
     get_service_diagnostics,
     get_services_runtime_status,
     get_embeddings_batch,
     get_query_embedding,
+    is_model_cached,
+    is_service_installed,
     run_embedding_canary,
+    start_service,
     stop_server,
 )
 from sova.search import (
@@ -1336,6 +1340,59 @@ def _run_search_mode(query: str, limit: int, use_reranker: bool) -> None:
         sys.exit(1)
 
 
+_DOWNLOAD_SERVICES = [
+    ("embedding", "com.sova.embedding", config.EMBEDDING_SERVER_URL),
+    ("reranker", "com.sova.reranker", config.RERANKER_SERVER_URL),
+    ("chat", "com.sova.chat", config.CONTEXT_SERVER_URL),
+]
+_DOWNLOAD_NAME_WIDTH = max(len(name) for name, _, _ in _DOWNLOAD_SERVICES)
+
+
+def _run_download_mode() -> None:
+    """Download all three model files by briefly starting each service."""
+    report("mode", "download")
+    needs_install = False
+    downloaded_any = False
+    for name, label, url in _DOWNLOAD_SERVICES:
+        col = name.ljust(_DOWNLOAD_NAME_WIDTH)
+        if not is_service_installed(label):
+            report(
+                "step",
+                f"{col} | [yellow]not installed — run sova-install first[/yellow]",
+            )
+            needs_install = True
+            continue
+        if is_model_cached(label):
+            report("step", f"{col} | cached")
+            continue
+        downloaded_any = True
+        start_service(label)
+        try:
+            with Live(
+                Text(format_line("step", f"{col} | starting")),
+                console=console,
+                refresh_per_second=2,
+            ) as live:
+                while True:
+                    status = get_model_status(label)
+                    live.update(Text(format_line("step", f"{col} | {status}")))
+                    if is_model_cached(label):
+                        break
+                    time.sleep(1)
+        except KeyboardInterrupt:
+            report("status", "interrupted")
+            stop_server(url, suppress_interrupt=True)
+            sys.exit(130)
+        stop_server(url)
+        report("step", f"{col} | done")
+    if needs_install:
+        return
+    if downloaded_any:
+        report("status", "done")
+    else:
+        report("status", "all models cached")
+
+
 def _run_list_mode() -> None:
     docs = find_docs()
     report("mode", f"list | {len(docs)} docs")
@@ -1548,6 +1605,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("help", help="Show help", add_help=False)
     sub.add_parser("projects", help="List configured projects", add_help=False)
+    sub.add_parser("download", help="Download all model files", add_help=False)
 
     p_remove = sub.add_parser("remove", help="Remove project from Sova", add_help=False)
     p_remove.add_argument("project", help="Project id/path")
@@ -1571,6 +1629,7 @@ def _run_command_cli(argv: list[str]) -> bool:
     commands = {
         "help",
         "projects",
+        "download",
         "remove",
         "list",
         "index",
@@ -1585,6 +1644,9 @@ def _run_command_cli(argv: list[str]) -> bool:
         return True
     if args.command == "projects":
         _run_projects_mode()
+        return True
+    if args.command == "download":
+        _run_download_mode()
         return True
     if args.command == "remove":
         report("mode", "remove")
@@ -1643,7 +1705,7 @@ def main() -> None:
                     action=f"use: sova {argv[0]} <project>",
                 )
                 sys.exit(2)
-            known_commands = {"help", "projects", "remove", "list", "index"}
+            known_commands = {"help", "projects", "download", "remove", "list", "index"}
             if len(argv) == 1 and argv[0] not in known_commands:
                 only = Path(argv[0]).expanduser()
                 if only.exists() and only.is_dir():

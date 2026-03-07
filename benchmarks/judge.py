@@ -433,7 +433,7 @@ def _parse_judgment_response(text: str) -> JudgmentResponse:
             for literal_candidate in _python_literal_variants(candidate):
                 try:
                     parsed = ast.literal_eval(literal_candidate)
-                except (SyntaxError, ValueError):
+                except SyntaxError, ValueError:
                     continue
                 if isinstance(parsed, dict):
                     try:

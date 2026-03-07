@@ -41,7 +41,7 @@ def _metric_at(values: dict, k: int) -> float:
     raw = values.get(k, values.get(str(k), 0.0))
     try:
         return float(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0.0
 
 

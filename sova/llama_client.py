@@ -1260,3 +1260,29 @@ def rerank(query: str, documents: list[str], top_n: int = 10) -> list[dict]:
         ) from last_timeout
 
     raise ServerError("reranker failed unexpectedly")
+
+
+def is_service_installed(label: str) -> bool:
+    """Return True if the launchd plist for label is present."""
+    return _plist_exists(label)
+
+
+def is_model_cached(label: str) -> bool:
+    """Return True if the model file for label is fully downloaded."""
+    cache_file = _CACHE_FILES.get(label)
+    if not cache_file:
+        return False
+    cached = _LLAMA_CACHE / cache_file
+    in_progress = _LLAMA_CACHE / f"{cache_file}.downloadInProgress"
+    return cached.exists() and not in_progress.exists()
+
+
+def get_model_status(label: str) -> str:
+    """Return human-readable download/startup status for a service label."""
+    return _server_status(label)
+
+
+def start_service(label: str) -> None:
+    """Start a launchd-managed service to trigger a model download."""
+    if _plist_exists(label):
+        subprocess.run(["launchctl", "start", label], capture_output=True)
