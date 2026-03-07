@@ -296,7 +296,8 @@ def test_help_command_prints_global_help(monkeypatch, capsys):
 
     out = capsys.readouterr().out
     assert "usage: sova" in out
-    assert "{help,projects,remove,list,index}" in out
+    assert "{help,projects,download,remove,list,index}" in out
+    assert "Download all model files" in out
 
 
 def test_help_flag_is_unknown_option(monkeypatch):
