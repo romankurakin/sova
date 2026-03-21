@@ -17,6 +17,12 @@ def test_get_db_path_default():
     assert config.get_db_path() == config.DB_PATH
 
 
+def test_server_urls_use_literal_loopback():
+    assert config.EMBEDDING_SERVER_URL == "http://127.0.0.1:8081"
+    assert config.RERANKER_SERVER_URL == "http://127.0.0.1:8082"
+    assert config.CONTEXT_SERVER_URL == "http://127.0.0.1:8083"
+
+
 def test_get_memory_settings_runtime_snapshot(monkeypatch, isolated_config):
     monkeypatch.setattr(config, "_probe_total_ram_gib", lambda: 32.0)
     monkeypatch.setattr(config, "_probe_metal_ceiling_gib", lambda: 26.25)

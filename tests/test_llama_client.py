@@ -162,10 +162,10 @@ class TestCheckServers:
         with patch("sova.llama_client.get_memory_hard_cap_gib", return_value=2.0):
             admitted, note = _admit_services_for_mode(
                 "index_context",
-                [("chat", "http://localhost:8083", True)],
+                [("chat", "http://127.0.0.1:8083", True)],
             )
 
-        assert admitted == [("chat", "http://localhost:8083", True)]
+        assert admitted == [("chat", "http://127.0.0.1:8083", True)]
         assert note is None
 
     def test_search_skips_strict_required_admission_for_embedding(self):
@@ -174,10 +174,10 @@ class TestCheckServers:
         with patch("sova.llama_client.get_memory_hard_cap_gib", return_value=2.0):
             admitted, note = _admit_services_for_mode(
                 "search",
-                [("embedding", "http://localhost:8081", True)],
+                [("embedding", "http://127.0.0.1:8081", True)],
             )
 
-        assert admitted == [("embedding", "http://localhost:8081", True)]
+        assert admitted == [("embedding", "http://127.0.0.1:8081", True)]
         assert note is None
 
     def test_search_skips_strict_required_admission_for_reranker(self):
@@ -187,14 +187,14 @@ class TestCheckServers:
             admitted, note = _admit_services_for_mode(
                 "search",
                 [
-                    ("embedding", "http://localhost:8081", True),
-                    ("reranker", "http://localhost:8082", True),
+                    ("embedding", "http://127.0.0.1:8081", True),
+                    ("reranker", "http://127.0.0.1:8082", True),
                 ],
             )
 
         assert admitted == [
-            ("embedding", "http://localhost:8081", True),
-            ("reranker", "http://localhost:8082", True),
+            ("embedding", "http://127.0.0.1:8081", True),
+            ("reranker", "http://127.0.0.1:8082", True),
         ]
         assert note is None
 
@@ -210,7 +210,7 @@ class TestPostJson:
             ),
             patch("sova.llama_client._touch_activity") as mock_touch,
         ):
-            out = _post_json("http://localhost:8083/v1/chat/completions", {"x": 1})
+            out = _post_json("http://127.0.0.1:8083/v1/chat/completions", {"x": 1})
 
         assert out == {"ok": True}
         mock_touch.assert_called_once_with("com.sova.chat")
@@ -820,7 +820,7 @@ class TestRerank:
         def post_side_effect(_url, payload, timeout=None):
             calls.append(payload)
             if len(calls) == 1:
-                raise ServerError("server timeout from http://localhost:8082/v1/rerank")
+                raise ServerError("server timeout from http://127.0.0.1:8082/v1/rerank")
             return {"results": [{"index": 0, "relevance_score": 0.88}]}
 
         with (
@@ -852,7 +852,7 @@ class TestStopServer:
         ):
             mock_file = MagicMock()
             mock_dir.__truediv__ = MagicMock(return_value=mock_file)
-            stop_server("http://localhost:8081")
+            stop_server("http://127.0.0.1:8081")
 
         assert mock_run.call_count == 2
         mock_file.unlink.assert_any_call(missing_ok=True)
@@ -878,7 +878,7 @@ class TestStopServer:
             mock_file = MagicMock()
             mock_dir.__truediv__ = MagicMock(return_value=mock_file)
             with pytest.raises(KeyboardInterrupt):
-                stop_server("http://localhost:8081")
+                stop_server("http://127.0.0.1:8081")
             mock_file.unlink.assert_any_call(missing_ok=True)
             assert mock_file.unlink.call_count >= 1
 
@@ -894,7 +894,7 @@ class TestStopServer:
         ):
             mock_file = MagicMock()
             mock_dir.__truediv__ = MagicMock(return_value=mock_file)
-            stop_server("http://localhost:8081", suppress_interrupt=True)
+            stop_server("http://127.0.0.1:8081", suppress_interrupt=True)
             mock_file.unlink.assert_any_call(missing_ok=True)
             assert mock_file.unlink.call_count >= 1
 
@@ -917,7 +917,7 @@ class TestStopServer:
             mock_file = MagicMock()
             mock_file.unlink.side_effect = KeyboardInterrupt()
             mock_dir.__truediv__ = MagicMock(return_value=mock_file)
-            stop_server("http://localhost:8081", suppress_interrupt=True)
+            stop_server("http://127.0.0.1:8081", suppress_interrupt=True)
 
     def test_propagates_keyboard_interrupt_from_cleanup_by_default(self):
         from sova.llama_client import stop_server
@@ -939,7 +939,7 @@ class TestStopServer:
             mock_file.unlink.side_effect = KeyboardInterrupt()
             mock_dir.__truediv__ = MagicMock(return_value=mock_file)
             with pytest.raises(KeyboardInterrupt):
-                stop_server("http://localhost:8081")
+                stop_server("http://127.0.0.1:8081")
 
 
 class TestCleanupIdleServices:

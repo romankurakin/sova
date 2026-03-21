@@ -518,9 +518,9 @@ def _resolve_vector_extension() -> Path:
 VECTOR_EXT = _resolve_vector_extension()
 
 # llama-server endpoints (one instance per model).
-EMBEDDING_SERVER_URL = "http://localhost:8081"
-RERANKER_SERVER_URL = "http://localhost:8082"
-CONTEXT_SERVER_URL = "http://localhost:8083"
+EMBEDDING_SERVER_URL = "http://127.0.0.1:8081"
+RERANKER_SERVER_URL = "http://127.0.0.1:8082"
+CONTEXT_SERVER_URL = "http://127.0.0.1:8083"
 # Embedding model used for indexing and query vectors.
 EMBEDDING_MODEL = "qwen3-embedding-4b"
 # LLM model used for context answers and analysis.
