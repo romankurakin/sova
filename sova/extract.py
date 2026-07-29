@@ -1,6 +1,7 @@
 """PDF extraction and text processing."""
 
 import bisect
+import importlib
 import re
 import warnings
 from pathlib import Path
@@ -56,7 +57,7 @@ def extract_pdf(pdf_path: Path) -> str:
     # pymupdf4llm checks if pymupdf.layout was already imported to decide.
     # whether to use layout analysis. Must be imported first or it silently.
     # falls back to basic extraction with much worse quality.
-    import pymupdf.layout  # noqa: F401
+    importlib.import_module("pymupdf.layout")
     import pymupdf4llm
 
     return pymupdf4llm.to_markdown(str(pdf_path), header=False, footer=False)
@@ -77,9 +78,8 @@ def parse_sections(lines: list[str]) -> list[dict]:
                 }
             )
     for i, s in enumerate(sections):
-        s["end_line"] = (
-            sections[i + 1]["start_line"] - 1 if i + 1 < len(sections) else len(lines)
-        )
+        next_start = sections[i + 1]["start_line"] if i + 1 < len(sections) else None
+        s["end_line"] = next_start - 1 if isinstance(next_start, int) else len(lines)
     return sections
 
 

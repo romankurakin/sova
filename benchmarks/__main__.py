@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import cast
 
-from rich.console import Group
+from rich.console import Console, Group
 from rich.live import Live
 from rich.progress import BarColumn, Progress, TimeElapsedColumn
 from rich.text import Text
@@ -14,19 +14,22 @@ from rich.text import Text
 from sova import config
 from sova import projects as sova_projects
 from sova.ui import (
-    console,
     fmt_duration,
     make_table,
     print_gap,
+    render_table,
     report,
     report_error,
     report_mode,
     report_progress,
-    render_table,
 )
 
 _BENCH_DIR = Path(__file__).parent
 DATA_DIR = config.DATA_DIR
+
+# Benchmarks keep their own Rich console for live judging progress;
+# the sova CLI itself is plain-text only.
+console = Console()
 
 
 def get_data_dir() -> Path:
@@ -175,7 +178,7 @@ def _load_ground_truth(path: Path) -> dict | None:
         return None
     try:
         loaded = json.loads(path.read_text())
-    except Exception:
+    except OSError, UnicodeError, json.JSONDecodeError:
         return None
     return _normalize_ground_truth(loaded)
 
@@ -208,15 +211,16 @@ def _build_ground_truth(
 
 def cmd_judge():
     """Generate ground truth judgments with multi-source pooling."""
+    import json
+
     from .judge import (
-        QUERY_SET,
-        judge_query,
         JUDGE_MODEL,
+        QUERY_SET,
         collect_query_subtopics,
+        judge_query,
         should_use_debiasing,
     )
     from .search_interface import close_backend
-    import json
 
     if not config.get_db_path().exists():
         report_error(
@@ -308,7 +312,53 @@ def cmd_judge():
             progress,
         )
 
-    from .judge import JudgeError, Judgment as _J
+    from .judge import JudgeError
+    from .judge import Judgment as _J
+
+    def _make_judgment_callback(spec, existing_chunk_ids, current_query_judgments):
+        def _on_chunk_judged(j: _J):
+            nonlocal new_judgments_total
+            if j.chunk_id not in existing_chunk_ids:
+                current_query_judgments.append(
+                    {
+                        "chunk_id": j.chunk_id,
+                        "doc": j.doc,
+                        "score": j.score,
+                        "confidence": j.confidence,
+                        "subtopics": j.subtopics,
+                        "reason": j.reason,
+                    }
+                )
+                existing_chunk_ids.add(j.chunk_id)
+            new_judgments_total += 1
+
+            # Update completed with partial progress and checkpoint.
+            all_j_objs = [
+                _J(
+                    chunk_id=jd["chunk_id"],
+                    doc=jd["doc"],
+                    score=jd["score"],
+                    reason=jd["reason"],
+                    subtopics=jd.get("subtopics", []),
+                )
+                for jd in current_query_judgments
+            ]
+            extracted_subtopics = collect_query_subtopics(all_j_objs)
+            existing_subtopics = completed.get(spec.id, {}).get("subtopics", [])
+            all_subtopics = sorted(
+                set(spec.subtopics + existing_subtopics + extracted_subtopics)
+            )
+            completed[spec.id] = {
+                "id": spec.id,
+                "query": spec.query,
+                "category": spec.category,
+                "subtopics": all_subtopics,
+                "judgments": current_query_judgments,
+            }
+            save_checkpoint()
+            live.update(_display())
+
+        return _on_chunk_judged
 
     rate_limited = False
     try:
@@ -326,48 +376,9 @@ def cmd_judge():
                 existing_judgment_list = completed.get(spec.id, {}).get("judgments", [])
                 existing_chunk_ids = {j["chunk_id"] for j in existing_judgment_list}
                 current_query_judgments = list(existing_judgment_list)
-
-                def _on_chunk_judged(j: _J):
-                    nonlocal new_judgments_total
-                    if j.chunk_id not in existing_chunk_ids:
-                        current_query_judgments.append(
-                            {
-                                "chunk_id": j.chunk_id,
-                                "doc": j.doc,
-                                "score": j.score,
-                                "confidence": j.confidence,
-                                "subtopics": j.subtopics,
-                                "reason": j.reason,
-                            }
-                        )
-                        existing_chunk_ids.add(j.chunk_id)
-                    new_judgments_total += 1
-
-                    # Update completed with partial progress and checkpoint.
-                    all_j_objs = [
-                        _J(
-                            chunk_id=jd["chunk_id"],
-                            doc=jd["doc"],
-                            score=jd["score"],
-                            reason=jd["reason"],
-                            subtopics=jd.get("subtopics", []),
-                        )
-                        for jd in current_query_judgments
-                    ]
-                    extracted_subtopics = collect_query_subtopics(all_j_objs)
-                    existing_subtopics = completed.get(spec.id, {}).get("subtopics", [])
-                    all_subtopics = sorted(
-                        set(spec.subtopics + existing_subtopics + extracted_subtopics)
-                    )
-                    completed[spec.id] = {
-                        "id": spec.id,
-                        "query": spec.query,
-                        "category": spec.category,
-                        "subtopics": all_subtopics,
-                        "judgments": current_query_judgments,
-                    }
-                    save_checkpoint()
-                    live.update(_display())
+                on_chunk_judged = _make_judgment_callback(
+                    spec, existing_chunk_ids, current_query_judgments
+                )
 
                 try:
                     judge_query(
@@ -376,7 +387,7 @@ def cmd_judge():
                         use_debiasing=use_debiasing,
                         existing_judgments=existing_for_query,
                         k_per_strategy=k_per_strategy,
-                        on_chunk_judged=_on_chunk_judged,
+                        on_chunk_judged=on_chunk_judged,
                     )
                 except JudgeError as e:
                     save_checkpoint()
@@ -448,25 +459,26 @@ def cmd_run(
     use_reranker: bool = config.SEARCH_USE_RERANKER,
 ):
     """Run benchmark as a 3-pass averaged baseline."""
-    from .run_benchmark import run_search
+    import json
+    import statistics
+    from pathlib import Path
+
     from .evaluate import (
-        aggregate_metrics,
-        aggregate_by_category,
-        compute_metrics,
-        compute_diversity_metrics,
         STANDARD_K,
         QueryResult,
+        aggregate_by_category,
+        aggregate_metrics,
+        compute_diversity_metrics,
+        compute_metrics,
     )
+    from .judge import judge_single_chunk, should_use_debiasing
+    from .run_benchmark import run_search
     from .search_interface import (
-        measure_latency,
         clear_cache,
         close_backend,
         get_backend,
+        measure_latency,
     )
-    from .judge import judge_single_chunk, should_use_debiasing
-    import json
-    from pathlib import Path
-    import statistics
 
     if not name:
         report_error(
@@ -487,7 +499,7 @@ def cmd_run(
 
     try:
         ground_truth = json.loads(gt_path.read_text())
-    except Exception as e:
+    except (OSError, UnicodeError, json.JSONDecodeError) as e:
         report_error(
             "ground truth is invalid",
             cause=f"{gt_path.name}: {e}",
@@ -544,10 +556,14 @@ def cmd_run(
             return {name: {} for name in metric_names}
         out: dict[str, dict[int, float]] = {name: {} for name in metric_names}
         n = len(samples)
-        for name in metric_names:
+        for metric_name in metric_names:
             for kv in k_values:
-                out[name][kv] = (
-                    sum(_metric_at(sample.get(name, {}), kv) for sample in samples) / n
+                out[metric_name][kv] = (
+                    sum(
+                        _metric_at(sample.get(metric_name, {}), kv)
+                        for sample in samples
+                    )
+                    / n
                 )
         return out
 
@@ -878,7 +894,7 @@ def cmd_show(run_name: str | None = None):
         for run_path in runs[:10]:
             try:
                 data = json.loads(run_path.read_text())
-            except Exception:
+            except OSError, UnicodeError, json.JSONDecodeError:
                 skipped += 1
                 continue
             k = data["k"]
@@ -917,7 +933,7 @@ def cmd_show(run_name: str | None = None):
 
     try:
         data = json.loads(results_path.read_text())
-    except Exception as e:
+    except (OSError, UnicodeError, json.JSONDecodeError) as e:
         report_error(
             "benchmark run is invalid",
             cause=f"{results_path.name}: {e}",
@@ -1085,6 +1101,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         report("status", "interrupted")
         sys.exit(130)
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         _report_exception(e)
         sys.exit(1)

@@ -11,13 +11,18 @@ from sova import config
 
 _PROJECTS_ROOT = config.SOVA_HOME / "projects"
 _REGISTRY_PATH = _PROJECTS_ROOT / "registry.json"
-_RESERVED_PROJECT_IDS = {
-    "help",
-    "projects",
-    "remove",
-    "list",
-    "index",
-}
+# Must stay in sync with the CLI command names in sova.cli.
+RESERVED_PROJECT_IDS = frozenset(
+    {
+        "help",
+        "projects",
+        "download",
+        "remove",
+        "list",
+        "index",
+        "search",
+    }
+)
 
 
 class RegistryError(ValueError):
@@ -26,7 +31,7 @@ class RegistryError(ValueError):
 
 def is_reserved_project_id(value: str) -> bool:
     """Return True when value collides with top-level CLI words."""
-    return value.strip().lower() in _RESERVED_PROJECT_IDS
+    return value.strip().lower() in RESERVED_PROJECT_IDS
 
 
 @dataclass(frozen=True)
@@ -59,7 +64,7 @@ def _save_registry(reg: dict) -> None:
 def _validate_project_id(project_id: str, taken: set[str]) -> None:
     if not project_id:
         raise ValueError("invalid project id")
-    if project_id.lower() in _RESERVED_PROJECT_IDS:
+    if project_id.lower() in RESERVED_PROJECT_IDS:
         raise ValueError(
             f"reserved project id: {project_id} (rename docs folder and retry)"
         )

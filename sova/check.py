@@ -17,7 +17,7 @@ def main() -> None:
     failed = []
     for name, cmd in checks:
         header = f"  {name}"
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, check=False, text=True)
         if result.returncode != 0:
             print(f"FAIL {header}")
             # Show output on failure.

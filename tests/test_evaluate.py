@@ -5,6 +5,8 @@ import math
 import pytest
 
 from benchmarks.evaluate import (
+    Metrics,
+    QueryResult,
     aggregate_by_category,
     aggregate_metrics,
     alpha_ndcg_at_k,
@@ -19,8 +21,6 @@ from benchmarks.evaluate import (
     recall_at_k,
     reciprocal_rank,
     subtopic_recall_at_k,
-    Metrics,
-    QueryResult,
 )
 
 

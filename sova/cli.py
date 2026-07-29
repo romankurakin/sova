@@ -1,29 +1,27 @@
-"""Command-line interface and Rich UI."""
+"""Command-line interface."""
 
-import argparse
 import hashlib
 import re
 import sqlite3
 import sys
 import time
-from collections import deque
 from collections.abc import Callable
-from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
 
-from rich.console import Group
-from rich.live import Live
-from rich.text import Text
+import typer
+from typer._click import exceptions as click_exceptions
+from typer._click.shell_completion import CompletionItem
+from typer.core import TyperGroup
 
+from sova import config, projects
 from sova.cache import get_cache
-from sova import config
-from sova import projects
 from sova.db import (
     connect_readonly,
     embedding_to_blob,
-    get_meta,
     get_doc_status,
+    get_meta,
     init_db,
     quantize_vectors,
     set_meta,
@@ -41,13 +39,14 @@ from sova.llama_client import (
     QUERY_TASK,
     check_servers,
     generate_context,
+    get_embeddings_batch,
     get_model_status,
+    get_query_embedding,
     get_service_diagnostics,
     get_services_runtime_status,
-    get_embeddings_batch,
-    get_query_embedding,
     is_model_cached,
     is_service_installed,
+    is_service_running,
     run_embedding_canary,
     start_service,
     stop_server,
@@ -59,13 +58,10 @@ from sova.search import (
     is_index_like,
 )
 from sova.ui import (
-    console,
     fmt_duration,
-    format_line,
     make_table,
-    report as ui_report,
     render_table,
-    report_progress,
+    report,
 )
 
 
@@ -79,13 +75,6 @@ def _display_path(path: Path) -> str:
         return str(path)
 
 
-SOVA_ASCII = """\
-   ___
-  (o o)
- (  V  )
-/|  |  |\\
-  "   " """
-
 # Keep embedding work bounded so Python memory and llama-server lifetime stay.
 # controlled on large indexes.
 _EMBED_WINDOW_CHUNKS = 256
@@ -96,8 +85,8 @@ _EMBED_PREFIX_VERSION = "chunk-prefix.v1"
 _CONTEXT_RETRY_ATTEMPTS = 2
 _CONTEXT_RECYCLE_PAUSE_S = 2.0
 _RUNTIME_REFRESH_S = 20.0
-_LIVE_PROGRESS_PCT_STEP = 2
-_LIVE_PROGRESS_REFRESH_S = 6.0
+_PROGRESS_PCT_STEP = 2
+_PROGRESS_REFRESH_S = 6.0
 
 _META_CONTEXT_SIG = "pipeline.context.signature"
 _META_EMBED_SIG = "pipeline.embedding.signature"
@@ -119,82 +108,6 @@ def _preview(text: str, max_chars: int = 48) -> str:
     if len(clean) <= max_chars:
         return clean
     return clean[: max_chars - 1].rstrip() + "…"
-
-
-class _IndexLiveView:
-    """Minimal live view that keeps phase/runtime pinned above event log."""
-
-    def __init__(self) -> None:
-        self._phase = "-"
-        self._runtime = "-"
-        self._events: deque[str] = deque(maxlen=18)
-        self._live: Live | None = None
-
-    def start(self) -> None:
-        if self._live is not None:
-            return
-        self._live = Live(
-            self._render(),
-            console=console,
-            screen=False,
-            transient=False,
-            refresh_per_second=4,
-        )
-        self._live.__enter__()
-
-    def stop(self) -> None:
-        if self._live is None:
-            return
-        self._live.__exit__(None, None, None)
-        self._live = None
-
-    def emit(self, name: str, msg: str) -> None:
-        if name == "phase":
-            self._phase = msg
-            self._refresh()
-            return
-        if name == "runtime":
-            self._runtime = msg
-            self._refresh()
-            return
-        line = format_line(name, msg)
-        # Keep progress lines stable: update the latest context/embed/server line.
-        # in place instead of appending a new event every tick.
-        if name in {"context", "embed", "server"} and self._events:
-            prefix = format_line(name, "")
-            if self._events[-1].startswith(prefix):
-                self._events[-1] = line
-                self._refresh()
-                return
-        self._events.append(line)
-        self._refresh()
-
-    def _refresh(self) -> None:
-        if self._live is None:
-            return
-        self._live.update(self._render())
-
-    def _render(self) -> Group:
-        header = [
-            format_line("phase", self._phase),
-            format_line("runtime", self._runtime),
-            "",
-        ]
-        events = (
-            list(self._events) if self._events else [format_line("event", "waiting")]
-        )
-        return Group(*header, *events)
-
-
-_ACTIVE_INDEX_VIEW: _IndexLiveView | None = None
-
-
-def report(name: str, msg: str) -> None:
-    """Route report lines to live index view when active."""
-    if _ACTIVE_INDEX_VIEW is not None:
-        _ACTIVE_INDEX_VIEW.emit(name, msg)
-        return
-    ui_report(name, msg)
 
 
 def fmt_size(size_bytes: int) -> str:
@@ -256,7 +169,7 @@ def _report_error_block(
     action: str | None = None,
     detail: str | None = None,
 ) -> None:
-    report("error", f"[red]{summary}[/red]")
+    report("error", summary)
     if cause:
         report("cause", cause)
     if action:
@@ -386,20 +299,12 @@ def _service_status_line(service_name: str, *, with_memory: bool = False) -> str
             continue
         state = str(row["state"])
         rss = _fmt_rss(row["rss_mib"] if isinstance(row["rss_mib"], float) else None)
-        if state == "running":
-            label = "[green]running[/green]"
-        elif state == "starting":
-            label = "[yellow]starting[/yellow]"
-        elif state == "stopped":
-            label = "[dim]stopped[/dim]"
-        else:
-            label = "[dim]not installed[/dim]"
         if with_memory:
-            return f"{service_name} {label} | rss {rss}"
-        return f"{service_name} {label}"
+            return f"{service_name} {state} | rss {rss}"
+        return f"{service_name} {state}"
     if with_memory:
-        return f"{service_name} [dim]unknown[/dim] | rss -"
-    return f"{service_name} [dim]unknown[/dim]"
+        return f"{service_name} unknown | rss -"
+    return f"{service_name} unknown"
 
 
 def _report_phase_runtime(phase: str, service_name: str, mode: str = "index") -> None:
@@ -415,7 +320,7 @@ def _report_phase_runtime(phase: str, service_name: str, mode: str = "index") ->
         else:
             cap = config.get_memory_hard_cap_gib(mode)
             report("runtime", f"cap {_fmt_gib(cap)} | {service}")
-    except Exception:
+    except OSError, RuntimeError, TypeError, ValueError:
         pass
 
 
@@ -463,7 +368,7 @@ def _prepare_doc(
             lines = len(markdown.splitlines())
             report("extract", f"{lines:>9,} lines  {fmt_duration(time.time() - start)}")
             extracted_now = True
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             _report_error_block(
                 "extract failed",
                 cause=f"{name}: {e}",
@@ -745,6 +650,27 @@ def _commit_index_signatures(
     conn.commit()
 
 
+def _make_progress_reporter(name: str, total: int) -> Callable[[int], None]:
+    """Return throttled plain progress reporter printing done/total lines."""
+    last_reported_pct = -1
+    last_report_ts = 0.0
+
+    def emit(done: int) -> None:
+        nonlocal last_reported_pct, last_report_ts
+        pct = _progress_pct(done, total)
+        now = time.monotonic()
+        if (
+            done == total
+            or pct >= (last_reported_pct + _PROGRESS_PCT_STEP)
+            or (now - last_report_ts) >= _PROGRESS_REFRESH_S
+        ):
+            report(name, f"{done:>9,}/{total:,} chunks")
+            last_reported_pct = pct
+            last_report_ts = now
+
+    return emit
+
+
 def _generate_contexts(
     name: str,
     doc_id: int,
@@ -763,7 +689,7 @@ def _generate_contexts(
     if force_rebuild_context:
         existing_contexts: set[int] = set()
     else:
-        existing_contexts = set(
+        existing_contexts = {
             r[0]
             for r in conn.execute(
                 """
@@ -774,7 +700,7 @@ def _generate_contexts(
                 """,
                 (doc_id,),
             ).fetchall()
-        )
+        }
     chunks_needing_context = []
     # Protect against duplicate start_line entries in chunk lists. This keeps.
     # context generation idempotent across interrupted/retried runs.
@@ -796,72 +722,48 @@ def _generate_contexts(
     try:
         start = time.time()
         total = len(chunks_needing_context)
-        use_progress_bar = _ACTIVE_INDEX_VIEW is None
-        progress_cm = report_progress("context") if use_progress_bar else nullcontext()
-        done = 0
-        last_reported_pct = -1
-        last_report_ts = 0.0
+        emit_progress = _make_progress_reporter("context", total)
+        for done, (i, chunk, chunk_id) in enumerate(chunks_needing_context, start=1):
+            sec_idx = find_section(sections, chunk["start_line"])
+            sec_title = sections[sec_idx]["title"] if sec_idx is not None else None
+            prev_text = chunks[i - 1]["text"] if i > 0 else ""
+            next_text = chunks[i + 1]["text"] if i + 1 < len(chunks) else ""
 
-        with progress_cm as progress:
-            task = None
-            if use_progress_bar:
-                assert progress is not None
-                task = progress.add_task("", total=total)
-            for i, chunk, chunk_id in chunks_needing_context:
-                sec_idx = find_section(sections, chunk["start_line"])
-                sec_title = sections[sec_idx]["title"] if sec_idx is not None else None
-                prev_text = chunks[i - 1]["text"] if i > 0 else ""
-                next_text = chunks[i + 1]["text"] if i + 1 < len(chunks) else ""
+            ctx = ""
+            for attempt in range(_CONTEXT_RETRY_ATTEMPTS):
+                try:
+                    candidate = generate_context(
+                        name, sec_title, chunk["text"], prev_text, next_text
+                    )
+                    ctx = " ".join(candidate.split())
+                    if not ctx:
+                        raise RuntimeError("context model returned empty content")
+                    break
+                except Exception:
+                    if attempt == (_CONTEXT_RETRY_ATTEMPTS - 1):
+                        raise
+                    stop_server(config.CONTEXT_SERVER_URL)
+                    time.sleep(_CONTEXT_RECYCLE_PAUSE_S)
 
-                ctx = ""
-                for attempt in range(_CONTEXT_RETRY_ATTEMPTS):
-                    try:
-                        candidate = generate_context(
-                            name, sec_title, chunk["text"], prev_text, next_text
-                        )
-                        ctx = " ".join(candidate.split())
-                        if not ctx:
-                            raise RuntimeError("context model returned empty content")
-                        break
-                    except Exception:
-                        if attempt == (_CONTEXT_RETRY_ATTEMPTS - 1):
-                            raise
-                        stop_server(config.CONTEXT_SERVER_URL)
-                        time.sleep(_CONTEXT_RECYCLE_PAUSE_S)
+            assert ctx
 
-                assert ctx
-
-                conn.execute(
-                    """
-                    INSERT INTO chunk_contexts (chunk_id, context, model)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(chunk_id)
-                    DO UPDATE SET context = excluded.context, model = excluded.model
-                    """,
-                    (chunk_id, ctx, config.CONTEXT_MODEL),
-                )
-                conn.execute(
-                    "UPDATE chunks SET embedding = NULL WHERE id = ?",
-                    (chunk_id,),
-                )
-                conn.commit()
-                done += 1
-                if use_progress_bar and task is not None:
-                    assert progress is not None
-                    progress.update(task, advance=1)
-                else:
-                    pct = _progress_pct(done, total)
-                    now = time.monotonic()
-                    if (
-                        done == total
-                        or pct >= (last_reported_pct + _LIVE_PROGRESS_PCT_STEP)
-                        or (now - last_report_ts) >= _LIVE_PROGRESS_REFRESH_S
-                    ):
-                        report("context", f"{done:>9,}/{total:,} chunks")
-                        last_reported_pct = pct
-                        last_report_ts = now
-                if runtime_tick:
-                    runtime_tick(False)
+            conn.execute(
+                """
+                INSERT INTO chunk_contexts (chunk_id, context, model)
+                VALUES (?, ?, ?)
+                ON CONFLICT(chunk_id)
+                DO UPDATE SET context = excluded.context, model = excluded.model
+                """,
+                (chunk_id, ctx, config.CONTEXT_MODEL),
+            )
+            conn.execute(
+                "UPDATE chunks SET embedding = NULL WHERE id = ?",
+                (chunk_id,),
+            )
+            conn.commit()
+            emit_progress(done)
+            if runtime_tick:
+                runtime_tick(False)
 
         report("context", f"{total:>9,} chunks {fmt_duration(time.time() - start)}")
 
@@ -896,13 +798,13 @@ def _embed_doc(
     embedded_ids = (
         set()
         if force_rebuild_embed
-        else set(
+        else {
             r[0]
             for r in conn.execute(
                 "SELECT id FROM chunks WHERE doc_id = ? AND embedding IS NOT NULL",
                 (doc_id,),
             ).fetchall()
-        )
+        }
     )
     pending_embed = []
     for i, chunk in enumerate(chunks):
@@ -920,116 +822,86 @@ def _embed_doc(
         total = len(pending_embed)
         absolute_total = len(chunks)
         absolute_done_base = len(embedded_ids)
-        use_progress_bar = _ACTIVE_INDEX_VIEW is None
-        progress_cm = report_progress("embed") if use_progress_bar else nullcontext()
+        emit_progress = _make_progress_reporter("embed", absolute_total)
         done = 0
-        last_reported_pct = -1
-        last_report_ts = 0.0
+        embedded_since_recycle = 0
 
-        with progress_cm as progress:
-            task = None
-            if use_progress_bar:
-                assert progress is not None
-                task = progress.add_task("", total=total)
-            embedded_since_recycle = 0
+        for window_start in range(0, total, _EMBED_WINDOW_CHUNKS):
+            window = pending_embed[window_start : window_start + _EMBED_WINDOW_CHUNKS]
+            window_texts: list[str] = []
+            window_chunk_ids: list[int] = []
 
-            for window_start in range(0, total, _EMBED_WINDOW_CHUNKS):
-                window = pending_embed[
-                    window_start : window_start + _EMBED_WINDOW_CHUNKS
-                ]
-                window_texts: list[str] = []
-                window_chunk_ids: list[int] = []
+            for i, chunk, chunk_id in window:
+                sec_idx = find_section(sections, chunk["start_line"])
+                sec_title = sections[sec_idx]["title"] if sec_idx is not None else None
+                prefix = f"[{name}"
+                if sec_title:
+                    prefix += f" | {sec_title}"
+                prefix += "]\n\n"
 
-                for i, chunk, chunk_id in window:
-                    sec_idx = find_section(sections, chunk["start_line"])
-                    sec_title = (
-                        sections[sec_idx]["title"] if sec_idx is not None else None
-                    )
-                    prefix = f"[{name}"
-                    if sec_title:
-                        prefix += f" | {sec_title}"
-                    prefix += "]\n\n"
+                llm_ctx = context_map.get(chunk_id)
+                if llm_ctx and llm_ctx.strip():
+                    prefix += llm_ctx.strip() + "\n\n"
 
-                    llm_ctx = context_map.get(chunk_id)
-                    if llm_ctx and llm_ctx.strip():
-                        prefix += llm_ctx.strip() + "\n\n"
+                window_texts.append(prefix + chunk["text"])
+                window_chunk_ids.append(chunk_id)
 
-                    window_texts.append(prefix + chunk["text"])
-                    window_chunk_ids.append(chunk_id)
+            remaining_texts = list(window_texts)
+            remaining_chunk_ids = list(window_chunk_ids)
+            window_done = 0
 
-                remaining_texts = list(window_texts)
-                remaining_chunk_ids = list(window_chunk_ids)
-                window_done = 0
+            for attempt in range(2):
+                attempt_done = 0
 
-                for attempt in range(2):
-                    attempt_done = 0
-
-                    def _persist_batch(
-                        batch_indices: list[int],
-                        batch_embeddings: list[list[float]],
-                        _stats: dict[str, float | int],
-                    ) -> None:
-                        nonlocal attempt_done, window_done, done
-                        nonlocal last_reported_pct, last_report_ts
-                        rows = [
-                            (
-                                embedding_to_blob(emb),
-                                remaining_chunk_ids[batch_idx],
-                            )
-                            for batch_idx, emb in zip(batch_indices, batch_embeddings)
-                        ]
-                        conn.executemany(
-                            "UPDATE chunks SET embedding = ? WHERE id = ?",
-                            rows,
+                def _persist_batch(
+                    batch_indices: list[int],
+                    batch_embeddings: list[list[float]],
+                    _stats: dict[str, float | int],
+                    remaining_chunk_ids: list[int] = remaining_chunk_ids,
+                ) -> None:
+                    nonlocal attempt_done, window_done, done
+                    rows = [
+                        (
+                            embedding_to_blob(emb),
+                            remaining_chunk_ids[batch_idx],
                         )
-                        conn.commit()
+                        for batch_idx, emb in zip(batch_indices, batch_embeddings)
+                    ]
+                    conn.executemany(
+                        "UPDATE chunks SET embedding = ? WHERE id = ?",
+                        rows,
+                    )
+                    conn.commit()
 
-                        batch_count = len(rows)
-                        attempt_done += batch_count
-                        window_done += batch_count
-                        done += batch_count
+                    batch_count = len(rows)
+                    attempt_done += batch_count
+                    window_done += batch_count
+                    done += batch_count
+                    emit_progress(absolute_done_base + done)
+                    if runtime_tick:
+                        runtime_tick(False)
 
-                        if use_progress_bar and task is not None:
-                            assert progress is not None
-                            progress.update(task, advance=batch_count)
-                        else:
-                            pct = _progress_pct(done, total)
-                            now = time.monotonic()
-                            if (
-                                done == total
-                                or pct >= (last_reported_pct + _LIVE_PROGRESS_PCT_STEP)
-                                or (now - last_report_ts) >= _LIVE_PROGRESS_REFRESH_S
-                            ):
-                                report(
-                                    "embed",
-                                    f"{(absolute_done_base + done):>9,}/{absolute_total:,} chunks",
-                                )
-                                last_reported_pct = pct
-                                last_report_ts = now
-                        if runtime_tick:
-                            runtime_tick(False)
-
-                    try:
-                        get_embeddings_batch(remaining_texts, on_batch=_persist_batch)
-                        break
-                    except Exception:
-                        if attempt_done > 0:
-                            remaining_texts = remaining_texts[attempt_done:]
-                            remaining_chunk_ids = remaining_chunk_ids[attempt_done:]
-                        if attempt == 1:
-                            raise
-                        stop_server(config.EMBEDDING_SERVER_URL)
-                        time.sleep(_EMBED_RECYCLE_PAUSE_S)
-                        run_embedding_canary(requests=_EMBED_RECYCLE_CANARY_REQUESTS)
-
-                embedded_since_recycle += window_done
-
-                has_more = (window_start + len(window)) < total
-                if has_more and embedded_since_recycle >= _EMBED_RECYCLE_CHUNKS:
+                try:
+                    get_embeddings_batch(remaining_texts, on_batch=_persist_batch)
+                    break
+                except Exception:
+                    if attempt_done > 0:
+                        remaining_texts = remaining_texts[attempt_done:]
+                        remaining_chunk_ids = remaining_chunk_ids[attempt_done:]
+                    if attempt == 1:
+                        raise
                     stop_server(config.EMBEDDING_SERVER_URL)
                     time.sleep(_EMBED_RECYCLE_PAUSE_S)
                     run_embedding_canary(requests=_EMBED_RECYCLE_CANARY_REQUESTS)
-                    embedded_since_recycle = 0
+
+            embedded_since_recycle += window_done
+
+            has_more = (window_start + len(window)) < total
+            if has_more and embedded_since_recycle >= _EMBED_RECYCLE_CHUNKS:
+                stop_server(config.EMBEDDING_SERVER_URL)
+                time.sleep(_EMBED_RECYCLE_PAUSE_S)
+                run_embedding_canary(requests=_EMBED_RECYCLE_CANARY_REQUESTS)
+                embedded_since_recycle = 0
 
         report("embed", f"{total:>9,} chunks {fmt_duration(time.time() - start)}")
 
@@ -1042,20 +914,20 @@ def _doc_status_label(status: dict) -> str:
     """Return a human-readable status label for a document."""
     chunks = status.get("chunks", 0)
     if not chunks:
-        return "[dim]pending[/dim]"
+        return "pending"
     total = status.get("expected") or chunks
     ctx = status.get("contextualized", 0)
     embedded = status.get("embedded", 0)
     # All done.
     if embedded >= total:
-        return "[green]ready[/green]"
+        return "ready"
     # Context generation in progress.
     if ctx < total:
         pct = _progress_pct(ctx, total)
-        return f"[yellow]context {pct}%[/yellow]"
+        return f"context {pct}%"
     # Context done, embedding in progress.
     pct = _progress_pct(embedded, total)
-    return f"[yellow]embed {pct}%[/yellow]"
+    return f"embed {pct}%"
 
 
 def list_docs(docs: list[dict] | None = None) -> None:
@@ -1070,14 +942,14 @@ def list_docs(docs: list[dict] | None = None) -> None:
 
     table = make_table()
     table.add_column("Name")
-    table.add_column("Size", justify="right", style="dim")
+    table.add_column("Size", justify="right")
     table.add_column("Status", justify="right")
 
     ready_count = 0
     for d in docs:
         status = get_doc_status(conn, d["name"]) if conn else {}
         label = _doc_status_label(status)
-        if "ready" in label:
+        if label == "ready":
             ready_count += 1
         table.add_row(d["name"], fmt_size(d["size"]), label)
 
@@ -1094,7 +966,7 @@ def show_stats(mode: str = "list") -> None:
     if docs_dir:
         report("docs", _display_path(docs_dir))
     else:
-        report("docs", "[dim]not configured[/dim]")
+        report("docs", "not configured")
 
     # Keep list output compact and search-focused.
     if mode == "list":
@@ -1106,7 +978,7 @@ def show_stats(mode: str = "list") -> None:
                 f"{_service_status_line('embedding', with_memory=False)} | "
                 f"{_service_status_line('reranker', with_memory=False)}",
             )
-        except Exception:
+        except OSError, RuntimeError, TypeError, ValueError:
             pass
         return
 
@@ -1118,7 +990,7 @@ def show_stats(mode: str = "list") -> None:
             report(
                 "index", f"cap {_fmt_gib(cap_index)} | effective {_fmt_gib(effective)}"
             )
-        except Exception:
+        except OSError, RuntimeError, TypeError, ValueError:
             pass
 
 
@@ -1183,12 +1055,7 @@ def search_semantic(
         else:
             location = f"{r['doc']}.md:{r['start']}-{r['end']}"
         if verbose:
-            console.print(
-                f"[bold]{location}[/bold]  [dim]{r['display_score']:.2f}[/dim]"
-            )
-        else:
-            console.print(f"[bold]{location}[/bold]")
-        if verbose:
+            print(f"{location}  {r['display_score']:.2f}")
             tags = []
             if r.get("fts_hit"):
                 tags.append("fts")
@@ -1196,22 +1063,21 @@ def search_semantic(
                 tags.append("idx")
             tag_str = "  ".join(tags)
             rerank_str = (
-                f"  [dim]rerank[/dim] {r['rerank_score']:.2f}"
-                if "rerank_score" in r
-                else ""
+                f"  rerank {r['rerank_score']:.2f}" if "rerank_score" in r else ""
             )
-            console.print(
-                f"  [dim]vec[/dim] {r['embed_score']:.2f}"
-                f". [dim]rrf[/dim] {r['rrf_score']:.4f}"
+            print(
+                f"  vec {r['embed_score']:.2f}"
+                f"  rrf {r['rrf_score']:.4f}"
                 f"{rerank_str}"
-                f"  {tag_str}"
+                f"  {tag_str}".rstrip()
             )
+        else:
+            print(location)
         body = r["text"]
-        lines = body.splitlines() or [body]
-        for line in lines:
-            console.print(Text(f"  {line}", style="dim"))
+        for line in body.splitlines() or [body]:
+            print(f"  {line}")
         if i < len(results):
-            console.print()
+            print()
 
 
 def _activate_project_from_ref(
@@ -1227,12 +1093,10 @@ def _activate_project_from_ref(
             and "/" not in raw_ref
             and "\\" not in raw_ref
         ):
+            reserved = ", ".join(sorted(projects.RESERVED_PROJECT_IDS))
             _report_error_block(
                 "project name is reserved",
-                cause=(
-                    f"'{raw_ref}' conflicts with a CLI command "
-                    "(projects, remove, list, index)"
-                ),
+                cause=f"'{raw_ref}' conflicts with a CLI command ({reserved})",
                 action="rename the docs folder and retry indexing",
             )
             sys.exit(2)
@@ -1279,43 +1143,16 @@ def _run_search_mode(query: str, limit: int, use_reranker: bool) -> None:
             fast_only=True,
             use_reranker=use_reranker,
         )
-    except KeyboardInterrupt:
-        report("status", "interrupted")
-        sys.exit(130)
-
-    if ok:
-        report("server", msg)
-        try:
-            search_semantic(query, limit, verbose=False, use_reranker=use_reranker)
-        except KeyboardInterrupt:
-            report("status", "interrupted")
-            sys.exit(130)
-        except Exception as e:
-            _report_error(e)
-            _report_relevant_service_diags(
-                e,
-                mode="search",
-                include_reranker=use_reranker,
-            )
-            sys.exit(1)
-        return
-
-    try:
-        with Live(
-            Text(format_line("server", "checking")),
-            console=console,
-            screen=False,
-            transient=True,
-            refresh_per_second=4,
-        ) as live:
+        if not ok:
             ok, msg = check_servers(
-                on_status=lambda s: live.update(Text(format_line("server", s))),
+                on_status=lambda s: report("server", s),
                 mode="search",
                 use_reranker=use_reranker,
             )
     except KeyboardInterrupt:
         report("status", "interrupted")
         sys.exit(130)
+
     if not ok:
         _report_error(RuntimeError(msg))
         _report_relevant_service_diags(
@@ -1330,7 +1167,7 @@ def _run_search_mode(query: str, limit: int, use_reranker: bool) -> None:
     except KeyboardInterrupt:
         report("status", "interrupted")
         sys.exit(130)
-    except Exception as e:
+    except (OSError, RuntimeError, sqlite3.Error, ValueError) as e:
         _report_error(e)
         _report_relevant_service_diags(
             e,
@@ -1346,6 +1183,9 @@ _DOWNLOAD_SERVICES = [
     ("chat", "com.sova.chat", config.CONTEXT_SERVER_URL),
 ]
 _DOWNLOAD_NAME_WIDTH = max(len(name) for name, _, _ in _DOWNLOAD_SERVICES)
+# Give launchd time to spawn the service before treating a dead process.
+# with no cached model and no download progress as a failure.
+_DOWNLOAD_STALL_TIMEOUT_S = 30.0
 
 
 def _run_download_mode() -> None:
@@ -1356,10 +1196,7 @@ def _run_download_mode() -> None:
     for name, label, url in _DOWNLOAD_SERVICES:
         col = name.ljust(_DOWNLOAD_NAME_WIDTH)
         if not is_service_installed(label):
-            report(
-                "step",
-                f"{col} | [yellow]not installed — run sova-install first[/yellow]",
-            )
+            report("step", f"{col} | not installed — run sova-install first")
             needs_install = True
             continue
         if is_model_cached(label):
@@ -1367,18 +1204,30 @@ def _run_download_mode() -> None:
             continue
         downloaded_any = True
         start_service(label)
+        last_status: str | None = None
+        stall_started: float | None = None
         try:
-            with Live(
-                Text(format_line("step", f"{col} | starting")),
-                console=console,
-                refresh_per_second=2,
-            ) as live:
-                while True:
-                    status = get_model_status(label)
-                    live.update(Text(format_line("step", f"{col} | {status}")))
-                    if is_model_cached(label):
-                        break
-                    time.sleep(1)
+            while True:
+                status = get_model_status(label)
+                if status != last_status:
+                    report("step", f"{col} | {status}")
+                    last_status = status
+                if is_model_cached(label):
+                    break
+                # Fail instead of polling forever when the service died.
+                # without producing a cached model or download progress.
+                if status.startswith("downloading") or is_service_running(label):
+                    stall_started = None
+                elif stall_started is None:
+                    stall_started = time.monotonic()
+                elif (time.monotonic() - stall_started) > _DOWNLOAD_STALL_TIMEOUT_S:
+                    _report_error_block(
+                        "model download failed",
+                        cause=f"{name} service is not running and its model is not cached",
+                        action=f"check logs: ~/.sova/logs/{name}.err.log",
+                    )
+                    sys.exit(1)
+                time.sleep(1)
         except KeyboardInterrupt:
             report("status", "interrupted")
             stop_server(url, suppress_interrupt=True)
@@ -1407,7 +1256,7 @@ def _run_list_mode() -> None:
             action="reinstall and retry: sova-install",
         )
         sys.exit(1)
-    except Exception as e:
+    except (OSError, RuntimeError, sqlite3.Error, ValueError) as e:
         _report_error(e)
         sys.exit(1)
 
@@ -1420,18 +1269,15 @@ def _run_index_mode() -> None:
         )
         sys.exit(1)
 
-    # Keep ASCII banner only for interactive indexing mode.
-    console.print(SOVA_ASCII)
-
     try:
         conn = init_db()
-    except Exception as e:
+    except (OSError, sqlite3.Error) as e:
         _report_error_block("failed to initialize database", cause=str(e))
         sys.exit(1)
     report("database", "ready")
     try:
         signature_state = _sync_index_signatures(conn)
-    except Exception as e:
+    except sqlite3.Error as e:
         _report_error_block(
             "failed to synchronize index metadata",
             cause=str(e),
@@ -1446,9 +1292,6 @@ def _run_index_mode() -> None:
     failed = False
     prepared: list[tuple[str, int, list[dict], list[dict]]] = []
 
-    global _ACTIVE_INDEX_VIEW
-    _ACTIVE_INDEX_VIEW = _IndexLiveView()
-    _ACTIVE_INDEX_VIEW.start()
     report("mode", f"index | {len(docs)} docs")
 
     try:
@@ -1489,7 +1332,7 @@ def _run_index_mode() -> None:
             except KeyboardInterrupt:
                 interrupted = True
                 report("status", "interrupt received, stopping services")
-            except Exception as e:
+            except (OSError, RuntimeError, sqlite3.Error) as e:
                 failed = True
                 _report_error(e)
                 _report_relevant_service_diags(e, mode="index_context")
@@ -1533,7 +1376,7 @@ def _run_index_mode() -> None:
                     interrupted = True
                     report("status", "interrupt received, stopping services")
                     stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-                except Exception as e:
+                except (OSError, RuntimeError, sqlite3.Error) as e:
                     failed = True
                     _report_error(e)
                     _report_relevant_service_diags(e, mode="index_embed")
@@ -1545,7 +1388,7 @@ def _run_index_mode() -> None:
             quantize_vectors(conn)
             try:
                 _commit_index_signatures(conn, signature_state)
-            except Exception as e:
+            except sqlite3.Error as e:
                 failed = True
                 _report_error_block(
                     "failed to finalize index metadata",
@@ -1561,9 +1404,6 @@ def _run_index_mode() -> None:
             report("status", "services stopped")
     finally:
         conn.close()
-        if _ACTIVE_INDEX_VIEW is not None:
-            _ACTIVE_INDEX_VIEW.stop()
-            _ACTIVE_INDEX_VIEW = None
 
     elapsed = fmt_duration(time.time() - start_time).strip()
     if interrupted:
@@ -1587,7 +1427,7 @@ def _run_projects_mode() -> None:
         return
     table = make_table()
     table.add_column("Id")
-    table.add_column("Docs", style="dim")
+    table.add_column("Docs")
     for p in rows:
         table.add_row(
             p.project_id,
@@ -1596,172 +1436,169 @@ def _run_projects_mode() -> None:
     render_table(table)
 
 
-def _build_command_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="sova project CLI (default search: sova <project> <query>)",
-        add_help=False,
-    )
-    sub = parser.add_subparsers(dest="command")
+def _complete_project_ids(incomplete: str) -> list[str]:
+    """Shell-complete registered project ids."""
+    try:
+        rows = projects.list_projects()
+    except OSError, projects.RegistryError:
+        return []
+    return [p.project_id for p in rows if p.project_id.startswith(incomplete)]
 
-    sub.add_parser("help", help="Show help", add_help=False)
-    sub.add_parser("projects", help="List configured projects", add_help=False)
-    sub.add_parser("download", help="Download all model files", add_help=False)
 
-    p_remove = sub.add_parser("remove", help="Remove project from Sova", add_help=False)
-    p_remove.add_argument("project", help="Project id/path")
-    p_remove.add_argument(
+class _SovaGroup(TyperGroup):
+    """Group that also completes project ids for the default search form."""
+
+    def shell_complete(self, ctx, incomplete):
+        items = super().shell_complete(ctx, incomplete)
+        seen = {item.value for item in items}
+        items.extend(
+            CompletionItem(project_id)
+            for project_id in _complete_project_ids(incomplete)
+            if project_id not in seen
+        )
+        return items
+
+
+app = typer.Typer(
+    name="sova",
+    cls=_SovaGroup,
+    add_completion=True,
+    rich_markup_mode=None,
+    help="sova project CLI (default search: sova <project> <query>)",
+    epilog='Default search: sova <project> "<query>" [-n LIMIT] [--reranker]',
+)
+
+
+@app.command("help", help="Show help")
+def help_command(ctx: typer.Context) -> None:
+    root = ctx.parent or ctx
+    print(root.get_help())
+
+
+@app.command("projects", help="List configured projects")
+def projects_command() -> None:
+    _run_projects_mode()
+
+
+@app.command("download", help="Download all model files")
+def download_command() -> None:
+    _run_download_mode()
+
+
+@app.command("remove", help="Remove project from Sova")
+def remove_command(
+    project: str = typer.Argument(
+        ..., help="Project id/path", autocompletion=_complete_project_ids
+    ),
+    keep_data: bool = typer.Option(
+        False,
         "--keep-data",
-        action="store_true",
         help="Keep local project data under ~/.sova/projects/<id>",
-    )
+    ),
+) -> None:
+    report("mode", "remove")
+    try:
+        removed = projects.remove_project(project, keep_data=keep_data)
+    except ValueError as e:
+        _report_error_block(
+            "project not found",
+            cause=str(e).replace("project not found: ", ""),
+            action="run: sova projects",
+        )
+        sys.exit(1)
+    report("project", f"removed {removed.project_id}")
+    if keep_data:
+        report("data", f"kept {_display_path(removed.root_dir)}")
+    else:
+        report("data", f"deleted {_display_path(removed.root_dir)}")
 
-    p_list = sub.add_parser(
-        "list", help="List docs and indexing status", add_help=False
-    )
-    p_list.add_argument("project", help="Project id/path")
 
-    p_index = sub.add_parser("index", help="Index project docs", add_help=False)
-    p_index.add_argument("project", help="Project id/path")
-    return parser
+@app.command("list", help="List docs and indexing status")
+def list_command(
+    project: str = typer.Argument(
+        ..., help="Project id/path", autocompletion=_complete_project_ids
+    ),
+) -> None:
+    resolved = _activate_project_from_ref(project)
+    report("project", resolved.project_id)
+    _run_list_mode()
 
 
-def _run_command_cli(argv: list[str]) -> bool:
-    commands = {
-        "help",
-        "projects",
-        "download",
-        "remove",
-        "list",
-        "index",
-    }
-    if not argv or argv[0] not in commands:
-        return False
-    parser = _build_command_parser()
-    args = parser.parse_args(argv)
+@app.command("index", help="Index project docs")
+def index_command(
+    project: str = typer.Argument(
+        ..., help="Project id/path", autocompletion=_complete_project_ids
+    ),
+) -> None:
+    resolved = _activate_project_from_ref(project, allow_create_from_dir=True)
+    report("project", resolved.project_id)
+    _run_index_mode()
 
-    if args.command == "help":
-        _build_command_parser().print_help()
-        return True
-    if args.command == "projects":
-        _run_projects_mode()
-        return True
-    if args.command == "download":
-        _run_download_mode()
-        return True
-    if args.command == "remove":
-        report("mode", "remove")
-        try:
-            removed = projects.remove_project(args.project, keep_data=args.keep_data)
-        except ValueError as e:
-            _report_error_block(
-                "project not found",
-                cause=str(e).replace("project not found: ", ""),
-                action="run: sova projects",
-            )
-            sys.exit(1)
-        report("project", f"removed {removed.project_id}")
-        if args.keep_data:
-            report("data", f"kept {_display_path(removed.root_dir)}")
-        else:
-            report("data", f"deleted {_display_path(removed.root_dir)}")
-        return True
-    project = _activate_project_from_ref(
-        args.project,
-        allow_create_from_dir=(args.command == "index"),
-    )
-    report("project", project.project_id)
 
-    if args.command == "list":
-        _run_list_mode()
-        return True
-    if args.command == "index":
-        _run_index_mode()
-        return True
-    return True
+@app.command("search", hidden=True, help="Search project docs (default command)")
+def search_command(
+    project: Annotated[
+        str,
+        typer.Argument(help="Project id/path", autocompletion=_complete_project_ids),
+    ],
+    query: Annotated[list[str], typer.Argument(help="Search query text")],
+    limit: int = typer.Option(10, "-n", "--limit", help="Max results (default: 10)"),
+    reranker: bool = typer.Option(
+        config.SEARCH_USE_RERANKER,
+        "--reranker",
+        help="Enable cross-encoder reranker (off by default)",
+    ),
+) -> None:
+    resolved = _activate_project_from_ref(project)
+    report("project", resolved.project_id)
+    _run_search_mode(" ".join(query), limit, use_reranker=bool(reranker))
+
+
+_COMMAND_NAMES = {"help", "projects", "download", "remove", "list", "index", "search"}
+
+
+def _argv_with_default_search(argv: list[str]) -> list[str]:
+    """Route `sova <project> <query>` to the hidden search command."""
+    if not argv:
+        return argv
+    head = argv[0]
+    if head in _COMMAND_NAMES or head.startswith("-"):
+        return argv
+    return ["search", *argv]
+
+
+def _handle_interrupt() -> None:
+    report("status", "interrupt received, stopping services")
+    stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
+    stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
+    stop_server(config.RERANKER_SERVER_URL, suppress_interrupt=True)
+    report("status", "services stopped")
+    report("status", "interrupted")
+    sys.exit(130)
 
 
 def main() -> None:
     """Main entry point."""
     config.clear_active_project()
     try:
-        try:
-            argv = sys.argv[1:]
-            if "--_watchdog" in argv:
-                from sova.llama_client import cleanup_idle_services
+        argv = sys.argv[1:]
+        if "--_watchdog" in argv:
+            from sova.llama_client import cleanup_idle_services
 
-                cleanup_idle_services()
-                return
-            if any(arg in {"-h", "--help"} for arg in argv):
-                _report_error_block(
-                    "unknown option",
-                    cause=f"sova {' '.join(argv)}".rstrip(),
-                    action="use: sova help",
-                )
-                sys.exit(2)
-            if argv and argv[0] in {"list", "index", "remove"} and len(argv) == 1:
-                _report_error_block(
-                    "project is required",
-                    cause=f"sova {argv[0]}",
-                    action=f"use: sova {argv[0]} <project>",
-                )
-                sys.exit(2)
-            known_commands = {"help", "projects", "download", "remove", "list", "index"}
-            if len(argv) == 1 and argv[0] not in known_commands:
-                only = Path(argv[0]).expanduser()
-                if only.exists() and only.is_dir():
-                    _report_error_block(
-                        "query is required",
-                        cause=f"sova {argv[0]}",
-                        action="use: sova index /path/to/pdfs",
-                    )
-                    sys.exit(2)
-                if projects.get_project(argv[0]) is None:
-                    _report_error_block(
-                        "unknown command or project",
-                        cause=f"sova {argv[0]}",
-                        action="run: sova projects",
-                    )
-                    sys.exit(2)
-                _report_error_block(
-                    "query is required",
-                    cause=f"sova {argv[0]}",
-                    action=f'use: sova {argv[0]} "<query>"',
-                )
-                sys.exit(2)
-            if _run_command_cli(argv):
-                return
-            if argv:
-                parser = argparse.ArgumentParser(
-                    prog="sova",
-                    description="Default search mode",
-                )
-                parser.add_argument("project", help="Project id/path")
-                parser.add_argument("query", nargs="+", help="Search query text")
-                parser.add_argument(
-                    "-n",
-                    "--limit",
-                    type=int,
-                    default=10,
-                    help="Max results (default: 10)",
-                )
-                parser.add_argument(
-                    "--reranker",
-                    action="store_true",
-                    default=config.SEARCH_USE_RERANKER,
-                    help="Enable cross-encoder reranker (off by default)",
-                )
-                args = parser.parse_args(argv)
-                project = _activate_project_from_ref(args.project)
-                report("project", project.project_id)
-                _run_search_mode(
-                    " ".join(args.query),
-                    args.limit,
-                    use_reranker=bool(args.reranker),
-                )
-                return
-            parser = _build_command_parser()
-            parser.print_help()
-            sys.exit(2)
+            cleanup_idle_services()
+            return
+        command = typer.main.get_command(app)
+        try:
+            command.main(
+                args=_argv_with_default_search(argv),
+                prog_name="sova",
+                standalone_mode=False,
+            )
+        except click_exceptions.Abort:
+            _handle_interrupt()
+        except click_exceptions.ClickException as e:
+            e.show()
+            sys.exit(e.exit_code)
         except projects.RegistryError as e:
             _report_error_block(
                 "project registry is invalid",
@@ -1769,26 +1606,9 @@ def main() -> None:
                 action="fix ~/.sova/projects/registry.json or re-create it via indexing",
             )
             sys.exit(1)
-        except KeyboardInterrupt:
-            report("status", "interrupt received, stopping services")
-            stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
-            stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-            stop_server(config.RERANKER_SERVER_URL, suppress_interrupt=True)
-            report("status", "services stopped")
-            report("status", "interrupted")
-            sys.exit(130)
     finally:
         config.clear_active_project()
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        report("status", "interrupt received, stopping services")
-        stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
-        stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-        stop_server(config.RERANKER_SERVER_URL, suppress_interrupt=True)
-        report("status", "services stopped")
-        report("status", "interrupted")
-        sys.exit(130)
+    main()

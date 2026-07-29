@@ -1,10 +1,10 @@
 """Tests for cache module."""
 
+import sqlite3
 import time
 from contextlib import contextmanager
 from unittest.mock import patch
 
-import sqlite3
 import numpy as np
 import pytest
 
@@ -84,12 +84,12 @@ def cache_db():
 
 class TestSemanticCache:
     def test_miss_on_empty_cache(self, cache_db):
-        cache, conn = cache_db
+        cache, _conn = cache_db
         result = cache.get([1.0, 0.0, 0.0])
         assert result is None
 
     def test_put_then_get_identical(self, cache_db):
-        cache, conn = cache_db
+        cache, _conn = cache_db
         emb = [1.0, 0.0, 0.0]
         expected = [(1, 0.9), (2, 0.8)]
         cache.put(emb, expected)
@@ -98,14 +98,14 @@ class TestSemanticCache:
         assert [list(t) for t in expected] == result
 
     def test_miss_on_dissimilar_query(self, cache_db):
-        cache, conn = cache_db
+        cache, _conn = cache_db
         cache.put([1.0, 0.0, 0.0], [(1, 0.9)])
         # Orthogonal vector — well below 0.92 threshold.
         result = cache.get([0.0, 1.0, 0.0])
         assert result is None
 
     def test_hit_on_similar_query(self, cache_db):
-        cache, conn = cache_db
+        cache, _conn = cache_db
         cache.put([1.0, 0.0, 0.0], [(1, 0.9)])
         # Very close vector — should exceed 0.92 threshold.
         result = cache.get([0.99, 0.01, 0.0])
@@ -142,7 +142,7 @@ class TestSemanticCache:
         assert result is None
 
     def test_min_candidates_filter(self, cache_db):
-        cache, conn = cache_db
+        cache, _conn = cache_db
         emb = [1.0, 0.0, 0.0]
         cache.put(emb, [(1, 0.9), (2, 0.8)])  # 2 candidates.
 

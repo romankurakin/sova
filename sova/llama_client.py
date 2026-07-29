@@ -3,11 +3,12 @@
 import json
 import math
 import plistlib
+import re
 import subprocess
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
 from collections import deque
 from collections.abc import Callable
 from pathlib import Path
@@ -37,10 +38,27 @@ _SERVICE_PORTS = {
     CONTEXT_SERVER_URL: 8083,
 }
 
-# llama.cpp model cache directory.
+# Recent llama.cpp builds store -hf downloads in the Hugging Face hub cache
+# layout (blobs/<sha>[.downloadInProgress] + snapshots/<rev>/<file> symlinks);
+# older builds used a flat directory with mangled file names. Check both.
+_HF_HUB_CACHE = Path.home() / ".cache" / "huggingface" / "hub"
 _LLAMA_CACHE = Path.home() / "Library" / "Caches" / "llama.cpp"
 
-# Map service labels to expected cache file basenames.
+# Map service labels to (hf repo, model file). File None means single-file
+# repo where any .gguf snapshot counts.
+_MODEL_SPECS: dict[str, tuple[str, str | None]] = {
+    "com.sova.embedding": (
+        "Qwen/Qwen3-Embedding-4B-GGUF",
+        "Qwen3-Embedding-4B-Q8_0.gguf",
+    ),
+    "com.sova.chat": (
+        "mistralai/Ministral-3-14B-Instruct-2512-GGUF",
+        "Ministral-3-14B-Instruct-2512-Q8_0.gguf",
+    ),
+    "com.sova.reranker": ("ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF", None),
+}
+
+# Legacy flat-cache file names per service label.
 _CACHE_FILES = {
     "com.sova.embedding": "Qwen_Qwen3-Embedding-4B-GGUF_Qwen3-Embedding-4B-Q8_0.gguf",
     "com.sova.chat": "mistralai_Ministral-3-14B-Instruct-2512-GGUF_Ministral-3-14B-Instruct-2512-Q8_0.gguf",
@@ -137,7 +155,7 @@ def _http_error_body(exc: urllib.error.HTTPError) -> str:
     """Best-effort extract of HTTP error body for diagnostics."""
     try:
         data = exc.read()
-    except Exception:
+    except OSError:
         return ""
     if not data:
         return ""
@@ -157,8 +175,8 @@ def _compact_http_error_body(raw: str) -> str:
                 msg = err.get("message")
                 if isinstance(msg, str) and msg.strip():
                     return " ".join(msg.split())[:220]
-    except Exception:
-        pass
+    except json.JSONDecodeError:
+        return text[:220]
     return text[:220]
 
 
@@ -216,7 +234,7 @@ def _configured_ubatch_size(label: str) -> int | None:
     plist = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
     try:
         data = plistlib.loads(plist.read_bytes())
-    except Exception:
+    except OSError, plistlib.InvalidFileException:
         return None
     args = data.get("ProgramArguments")
     if not isinstance(args, list):
@@ -235,7 +253,7 @@ def _configured_ctx_size(label: str) -> int | None:
     plist = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
     try:
         data = plistlib.loads(plist.read_bytes())
-    except Exception:
+    except OSError, plistlib.InvalidFileException:
         return None
     args = data.get("ProgramArguments")
     if not isinstance(args, list):
@@ -249,25 +267,74 @@ def _configured_ctx_size(label: str) -> int | None:
     return None
 
 
+def _hf_model_dir(repo: str) -> Path:
+    return _HF_HUB_CACHE / ("models--" + repo.replace("/", "--"))
+
+
+def _hf_snapshot_file(label: str) -> Path | None:
+    """Return a fully downloaded snapshot file for a service, if present."""
+    spec = _MODEL_SPECS.get(label)
+    if not spec:
+        return None
+    repo, filename = spec
+    snapshots = _hf_model_dir(repo) / "snapshots"
+    if not snapshots.is_dir():
+        return None
+    pattern = filename or "*.gguf"
+    for snapshot in sorted(snapshots.iterdir()):
+        if not snapshot.is_dir():
+            continue
+        for candidate in snapshot.glob(pattern):
+            # Snapshot entries are symlinks into blobs/; a dangling link
+            # means the blob is still downloading or was removed.
+            try:
+                if candidate.resolve().stat().st_size > 0:
+                    return candidate
+            except OSError:
+                continue
+    return None
+
+
+def _download_in_progress_bytes(label: str) -> int | None:
+    """Total bytes of partial model downloads, or None when none are active."""
+    total = 0
+    found = False
+    spec = _MODEL_SPECS.get(label)
+    if spec:
+        blobs = _hf_model_dir(spec[0]) / "blobs"
+        if blobs.is_dir():
+            for partial in blobs.glob("*.downloadInProgress"):
+                found = True
+                try:
+                    total += partial.stat().st_size
+                except OSError:
+                    pass
+    legacy = _CACHE_FILES.get(label)
+    if legacy:
+        partial = _LLAMA_CACHE / f"{legacy}.downloadInProgress"
+        if partial.exists():
+            found = True
+            try:
+                total += partial.stat().st_size
+            except OSError:
+                pass
+    return total if found else None
+
+
 def _server_status(label: str) -> str:
     """Return human-readable status for a service: downloading, loading, or waiting."""
-    cache_file = _CACHE_FILES.get(label)
-    if not cache_file:
+    if label not in _MODEL_SPECS and label not in _CACHE_FILES:
         return "waiting"
-    dl_path = _LLAMA_CACHE / f"{cache_file}.downloadInProgress"
-    cached_path = _LLAMA_CACHE / cache_file
-    if dl_path.exists():
-        try:
-            size_gb = dl_path.stat().st_size / (1024**3)
-            # Coarsen progress to avoid noisy status spam during long downloads.
-            bucketed = (
-                math.floor(size_gb / _DOWNLOAD_PROGRESS_STEP_GIB)
-                * _DOWNLOAD_PROGRESS_STEP_GIB
-            )
-            return f"downloading ({bucketed:.1f} GB)"
-        except OSError:
-            return "downloading"
-    if not cached_path.exists():
+    in_progress = _download_in_progress_bytes(label)
+    if in_progress is not None:
+        size_gb = in_progress / (1024**3)
+        # Coarsen progress to avoid noisy status spam during long downloads.
+        bucketed = (
+            math.floor(size_gb / _DOWNLOAD_PROGRESS_STEP_GIB)
+            * _DOWNLOAD_PROGRESS_STEP_GIB
+        )
+        return f"downloading ({bucketed:.1f} GB)"
+    if not is_model_cached(label):
         return "starting"
     return "loading"
 
@@ -276,31 +343,21 @@ def _ensure_server(url: str, timeout: float = 300.0) -> bool:
     """Start a launchd service if its server is not responding, then wait for health."""
     label = _SERVICE_LABELS.get(url)
 
-    try:
-        req = urllib.request.Request(f"{url}/health")
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            if json.loads(resp.read()).get("status") == "ok":
-                if label:
-                    _touch_activity(label)
-                return True
-    except Exception:
-        pass
+    if _health_ok(url, timeout=3):
+        if label:
+            _touch_activity(label)
+        return True
 
     if not label or not _plist_exists(label):
         return False
 
-    subprocess.run(["launchctl", "start", label], capture_output=True)
+    subprocess.run(["launchctl", "start", label], capture_output=True, check=False)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         time.sleep(2)
-        try:
-            req = urllib.request.Request(f"{url}/health")
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                if json.loads(resp.read()).get("status") == "ok":
-                    _touch_activity(label)
-                    return True
-        except Exception:
-            pass
+        if _health_ok(url, timeout=3):
+            _touch_activity(label)
+            return True
     return False
 
 
@@ -317,13 +374,16 @@ def stop_server(url: str, *, suppress_interrupt: bool = False) -> None:
     if label in _SEARCH_PAIR_LABELS:
         activity_labels.append(_SEARCH_ACTIVITY_LABEL)
     try:
-        subprocess.run(["launchctl", "stop", label], capture_output=True)
+        subprocess.run(["launchctl", "stop", label], capture_output=True, check=False)
         # Wait for the process to actually exit and free memory.
         wait_s = 10 if suppress_interrupt else 30
         deadline = time.monotonic() + wait_s
         while time.monotonic() < deadline:
             result = subprocess.run(
-                ["launchctl", "list", label], capture_output=True, text=True
+                ["launchctl", "list", label],
+                capture_output=True,
+                check=False,
+                text=True,
             )
             # PID column is "-" when the service is not running.
             if result.returncode != 0 or result.stdout.startswith("-"):
@@ -353,7 +413,7 @@ def _stop_and_unlink_if_still_idle(label: str, path: Path, now: float) -> None:
     """Stop a service and unlink its activity marker if it remained idle."""
     if not _is_file_idle(path, now):
         return
-    subprocess.run(["launchctl", "stop", label], capture_output=True)
+    subprocess.run(["launchctl", "stop", label], capture_output=True, check=False)
     try:
         if _is_file_idle(path, now):
             path.unlink(missing_ok=True)
@@ -372,7 +432,9 @@ def cleanup_idle_services() -> None:
     search_file = label_files.get(_SEARCH_ACTIVITY_LABEL)
     if search_file and _is_file_idle(search_file, now):
         for label in _SEARCH_PAIR_LABELS:
-            subprocess.run(["launchctl", "stop", label], capture_output=True)
+            subprocess.run(
+                ["launchctl", "stop", label], capture_output=True, check=False
+            )
         if _is_file_idle(search_file, now):
             try:
                 search_file.unlink(missing_ok=True)
@@ -449,7 +511,7 @@ def _health_ok(url: str, timeout: float = 1.0) -> bool:
         req = urllib.request.Request(f"{url}/health")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read()).get("status") == "ok"
-    except Exception:
+    except AttributeError, OSError, UnicodeError, json.JSONDecodeError:
         return False
 
 
@@ -459,9 +521,10 @@ def _pid_for_port(port: int) -> int | None:
         result = subprocess.run(
             ["lsof", "-n", "-P", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
             capture_output=True,
+            check=False,
             text=True,
         )
-    except Exception:
+    except OSError:
         return None
     if result.returncode != 0:
         return None
@@ -478,9 +541,10 @@ def _rss_mib_for_pid(pid: int) -> float | None:
         result = subprocess.run(
             ["ps", "-o", "rss=", "-p", str(pid)],
             capture_output=True,
+            check=False,
             text=True,
         )
-    except Exception:
+    except OSError:
         return None
     if result.returncode != 0:
         return None
@@ -565,8 +629,10 @@ def check_servers(
                 if effective_ubatch < _RERANK_MIN_UBATCH:
                     return (
                         False,
-                        "reranker service configured with too small --ubatch-size "
-                        f"({effective_ubatch}); run sova-install to update services",
+                        (
+                            "reranker service configured with too small --ubatch-size "
+                            f"({effective_ubatch}); run sova-install to update services"
+                        ),
                     )
 
     # Warm path: when required services are already healthy, skip launchctl and.
@@ -592,15 +658,10 @@ def check_servers(
     to_wait: list[tuple[str, str, str, bool]] = []  # (name, url, label, required).
     for name, url, required in all_servers:
         label = _SERVICE_LABELS.get(url, "")
-        try:
-            req = urllib.request.Request(f"{url}/health")
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                if json.loads(resp.read()).get("status") == "ok":
-                    if label:
-                        _touch_activity(label)
-                    continue
-        except Exception:
-            pass
+        if _health_ok(url, timeout=3):
+            if label:
+                _touch_activity(label)
+            continue
         if not label or not _plist_exists(label):
             if required:
                 return (
@@ -608,7 +669,7 @@ def check_servers(
                     f"{name} server not reachable at {url} (service not installed)",
                 )
             continue
-        subprocess.run(["launchctl", "start", label], capture_output=True)
+        subprocess.run(["launchctl", "start", label], capture_output=True, check=False)
         to_wait.append((name, url, label, required))
 
     # Poll all started services concurrently in a single loop.
@@ -633,14 +694,9 @@ def check_servers(
             for name, url, label, _req in to_wait:
                 if name in healthy:
                     continue
-                try:
-                    req = urllib.request.Request(f"{url}/health")
-                    with urllib.request.urlopen(req, timeout=3) as resp:
-                        if json.loads(resp.read()).get("status") == "ok":
-                            _touch_activity(label)
-                            healthy.add(name)
-                except Exception:
-                    pass
+                if _health_ok(url, timeout=3):
+                    _touch_activity(label)
+                    healthy.add(name)
 
     for name, url, _label, required in to_wait:
         if required and name not in healthy:
@@ -689,7 +745,7 @@ def _is_recoverable_embedding_error(reason: str) -> bool:
 def _embedding_token_budget() -> int:
     """Token budget per embedding input with context and stability margins."""
     ctx_size = _configured_ctx_size("com.sova.embedding") or 4096
-    margin = int(math.ceil(ctx_size * _EMBED_TOKEN_SAFETY_MARGIN_RATIO))
+    margin = math.ceil(ctx_size * _EMBED_TOKEN_SAFETY_MARGIN_RATIO)
     margin = max(_EMBED_TOKEN_SAFETY_MARGIN_MIN, margin)
     margin = min(_EMBED_TOKEN_SAFETY_MARGIN_MAX, margin)
     return min(_EMBED_STABLE_TOKEN_BUDGET, max(512, ctx_size - margin))
@@ -856,10 +912,12 @@ def _parse_embeddings_response(resp: dict, expected: int) -> list[list[float]]:
                 f"(expected={EMBEDDING_DIM}, got={len(ordered[idx])})"
             )
 
-    if any(v is None for v in ordered):
-        raise ServerError("invalid embedding response: incomplete data")
-
-    return ordered  # type: ignore[return-value]
+    complete: list[list[float]] = []
+    for v in ordered:
+        if v is None:
+            raise ServerError("invalid embedding response: incomplete data")
+        complete.append(v)
+    return complete
 
 
 def _embed_inputs_via_server(
@@ -948,7 +1006,7 @@ def get_service_diagnostics(url: str) -> str:
         return ""
     state = "stopped"
     status = subprocess.run(
-        ["launchctl", "list", label], capture_output=True, text=True
+        ["launchctl", "list", label], capture_output=True, check=False, text=True
     )
     if status.returncode == 0 and status.stdout.strip():
         first = status.stdout.splitlines()[0].split()
@@ -1034,7 +1092,7 @@ def get_embeddings_batch(
                                 raw_text,
                                 token_budget=budget_step,
                             )
-                        except Exception:
+                        except ServerError:
                             continue
                         if reduced != candidates[-1]:
                             candidates.append(reduced)
@@ -1077,7 +1135,7 @@ def get_embeddings_batch(
                                 run_embedding_canary(
                                     requests=_EMBED_RECOVERY_CANARY_REQUESTS
                                 )
-                            except Exception:
+                            except ServerError:
                                 pass
 
                     if embedded_vector is None:
@@ -1205,7 +1263,7 @@ def rerank(query: str, documents: list[str], top_n: int = 10) -> list[dict]:
     attempts: list[tuple[int, int | None]] = [(doc_count, None)]
 
     for keep_ratio in _RERANK_KEEP_RATIO_FALLBACKS:
-        keep_count = max(1, int(round(doc_count * keep_ratio)))
+        keep_count = max(1, round(doc_count * keep_ratio))
         keep_count = min(keep_count, doc_count)
         for budget in _RERANK_COMPACT_CHAR_BUDGETS:
             attempts.append((keep_count, budget))
@@ -1269,12 +1327,14 @@ def is_service_installed(label: str) -> bool:
 
 def is_model_cached(label: str) -> bool:
     """Return True if the model file for label is fully downloaded."""
-    cache_file = _CACHE_FILES.get(label)
-    if not cache_file:
+    if _download_in_progress_bytes(label) is not None:
         return False
-    cached = _LLAMA_CACHE / cache_file
-    in_progress = _LLAMA_CACHE / f"{cache_file}.downloadInProgress"
-    return cached.exists() and not in_progress.exists()
+    if _hf_snapshot_file(label) is not None:
+        return True
+    cache_file = _CACHE_FILES.get(label)
+    if cache_file:
+        return (_LLAMA_CACHE / cache_file).exists()
+    return False
 
 
 def get_model_status(label: str) -> str:
@@ -1282,7 +1342,18 @@ def get_model_status(label: str) -> str:
     return _server_status(label)
 
 
+def is_service_running(label: str) -> bool:
+    """Return True while launchd reports a live process for the label."""
+    result = subprocess.run(
+        ["launchctl", "list", label], capture_output=True, check=False, text=True
+    )
+    if result.returncode != 0:
+        return False
+    match = re.search(r'"PID"\s*=\s*(\d+)', result.stdout)
+    return match is not None and int(match.group(1)) > 0
+
+
 def start_service(label: str) -> None:
     """Start a launchd-managed service to trigger a model download."""
     if _plist_exists(label):
-        subprocess.run(["launchctl", "start", label], capture_output=True)
+        subprocess.run(["launchctl", "start", label], capture_output=True, check=False)

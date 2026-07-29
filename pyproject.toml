@@ -12,6 +12,7 @@ dependencies = [
     "pymupdf-layout>=1.27.1",
     "rich>=14.3.3",
     "sqliteai-vector>=0.9.92",
+    "typer>=0.16",
 ]
 
 [project.scripts]
@@ -34,6 +35,6 @@ package = true
 dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
-    "ruff>=0.15.4",
+    "ruff>=0.16.0",
     "ty>=0.0.20",
 ]

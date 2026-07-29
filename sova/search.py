@@ -125,7 +125,7 @@ def search_fts(
             (fts_query, limit),
         ).fetchall()
         return [(row[0], abs(row[1])) for row in rows]
-    except Exception:
+    except sqlite3.Error:
         return []
 
 
@@ -355,6 +355,19 @@ def fuse_and_rank(
             unreranked = [r for r in scored if "rerank_score" not in r]
             reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
             scored = reranked + unreranked
+
+    # Diversification must compare scores on one scale. rerank_score (~0..1)
+    # and final_score (rrf-weighted, often >1) are not comparable, so when the
+    # reranker covered only part of the candidates, keep the uncovered tail
+    # strictly below every reranked result while preserving its order.
+    for r in scored:
+        r["sort_score"] = r.get("rerank_score", r["final_score"])
+    covered = [r for r in scored if "rerank_score" in r]
+    uncovered = [r for r in scored if "rerank_score" not in r]
+    if covered and uncovered:
+        floor = min(r["rerank_score"] for r in covered)
+        for offset, r in enumerate(uncovered, start=1):
+            r["sort_score"] = floor - offset
 
     filtered = score_decay_diversify(scored, limit=limit, decay=diversity_decay)
 

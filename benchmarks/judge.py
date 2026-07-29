@@ -9,7 +9,8 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
 from sova.config import CONTEXT_MODEL
 
 from .search_interface import get_backend
@@ -262,8 +263,8 @@ def _is_permanent_error(exc: Exception) -> bool:
 
 def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
     """POST JSON and parse JSON response."""
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -276,7 +277,7 @@ def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
         body = ""
         try:
             body = e.read().decode("utf-8", errors="replace").strip()
-        except Exception:
+        except OSError:
             body = ""
 
         detail = body
@@ -285,8 +286,8 @@ def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
                 parsed = json.loads(body)
                 if isinstance(parsed, dict):
                     detail = str(parsed.get("error") or parsed)
-            except Exception:
-                pass
+            except json.JSONDecodeError:
+                detail = body
 
         message = f"HTTP Error {e.code}: {e.reason}"
         if detail:
@@ -426,7 +427,7 @@ def _parse_judgment_response(text: str) -> JudgmentResponse:
                 continue
             try:
                 return JudgmentResponse.model_validate_json(candidate)
-            except Exception as json_error:
+            except ValidationError as json_error:
                 last_error = json_error
 
             # Some models emit Python dict literals instead of strict JSON.
@@ -438,7 +439,7 @@ def _parse_judgment_response(text: str) -> JudgmentResponse:
                 if isinstance(parsed, dict):
                     try:
                         return JudgmentResponse.model_validate(parsed)
-                    except Exception as validate_error:
+                    except ValidationError as validate_error:
                         last_error = validate_error
 
     recovered = _recover_with_regex(text)
@@ -538,7 +539,7 @@ def judge_chunk_with_debiasing(
         result = _call_judge(padded_prompt)
         score2 = max(0, min(3, result.score))
         subs2 = result.subtopics[:5] if result.subtopics else []
-    except Exception:
+    except KeyError, RuntimeError, TypeError, ValueError:
         return score1, reason1, conf1, subs1, 0.0
 
     avg_score = round((score1 + score2) / 2)
@@ -607,7 +608,7 @@ def judge_query(
     verbose: bool = True,
     use_debiasing: bool = False,
     on_chunk_done: Callable[[], None] | None = None,
-    on_chunk_judged: Callable[["Judgment"], None] | None = None,
+    on_chunk_judged: Callable[[Judgment], None] | None = None,
     existing_judgments: dict[int, int] | None = None,
     k_per_strategy: int | None = None,
 ) -> QueryJudgments:

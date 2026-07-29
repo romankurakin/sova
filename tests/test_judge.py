@@ -1,21 +1,22 @@
 """Tests for benchmarks.judge module."""
 
 import io
-from email.message import Message
 import urllib.error
-from unittest.mock import patch, MagicMock
+from email.message import Message
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 import benchmarks.judge as judge_module
 from benchmarks.judge import (
-    Judgment,
+    QUERY_SET,
     JudgeError,
+    Judgment,
     QuerySpec,
+    _is_permanent_error,
     collect_query_subtopics,
     judge_chunk,
     judge_query,
-    _is_permanent_error,
-    QUERY_SET,
 )
 
 
@@ -62,16 +63,20 @@ class TestJudgeChunkErrorHandling:
         exc = Exception(
             "model 'ministral-3-14b-instruct-2512' not found (status code: 404)"
         )
-        with patch("benchmarks.judge._call_judge", side_effect=exc):
-            with pytest.raises(JudgeError, match="not found"):
-                judge_chunk("test query", "some chunk text")
+        with (
+            patch("benchmarks.judge._call_judge", side_effect=exc),
+            pytest.raises(JudgeError, match="not found"),
+        ):
+            judge_chunk("test query", "some chunk text")
 
     def test_transient_error_raises_judge_error(self):
         exc = Exception("connection reset by peer")
-        with patch("benchmarks.judge._call_judge", side_effect=exc):
-            with patch("benchmarks.judge.time.sleep"):
-                with pytest.raises(JudgeError, match="failed after"):
-                    judge_chunk("test query", "some text", max_retries=1)
+        with (
+            patch("benchmarks.judge._call_judge", side_effect=exc),
+            patch("benchmarks.judge.time.sleep"),
+            pytest.raises(JudgeError, match="failed after"),
+        ):
+            judge_chunk("test query", "some text", max_retries=1)
 
 
 class TestJudgeQueryPropagatesErrors:
@@ -81,36 +86,45 @@ class TestJudgeQueryPropagatesErrors:
         return QuerySpec("t01", "test query", "exact_lookup", [])
 
     def test_judge_error_propagates(self):
-        with patch(
-            "benchmarks.judge.collect_pool",
-            return_value=[
-                {"chunk_id": 1, "doc": "d", "text": "chunk text", "section_id": None}
-            ],
-        ):
-            with patch(
+        with (
+            patch(
+                "benchmarks.judge.collect_pool",
+                return_value=[
+                    {
+                        "chunk_id": 1,
+                        "doc": "d",
+                        "text": "chunk text",
+                        "section_id": None,
+                    }
+                ],
+            ),
+            patch(
                 "benchmarks.judge.judge_chunk",
                 side_effect=JudgeError("model not found"),
-            ):
-                with pytest.raises(JudgeError):
-                    judge_query(self._make_spec(), k_per_strategy=10)
+            ),
+            pytest.raises(JudgeError),
+        ):
+            judge_query(self._make_spec(), k_per_strategy=10)
 
     def test_on_chunk_judged_called_per_success(self):
         mock_response = (2, "relevant", 0.9, ["topic"])
         callback = MagicMock()
 
-        with patch(
-            "benchmarks.judge.collect_pool",
-            return_value=[
-                {"chunk_id": 1, "doc": "d", "text": "t1", "section_id": None},
-                {"chunk_id": 2, "doc": "d", "text": "t2", "section_id": None},
-            ],
+        with (
+            patch(
+                "benchmarks.judge.collect_pool",
+                return_value=[
+                    {"chunk_id": 1, "doc": "d", "text": "t1", "section_id": None},
+                    {"chunk_id": 2, "doc": "d", "text": "t2", "section_id": None},
+                ],
+            ),
+            patch("benchmarks.judge.judge_chunk", return_value=mock_response),
         ):
-            with patch("benchmarks.judge.judge_chunk", return_value=mock_response):
-                qj = judge_query(
-                    self._make_spec(),
-                    k_per_strategy=10,
-                    on_chunk_judged=callback,
-                )
+            qj = judge_query(
+                self._make_spec(),
+                k_per_strategy=10,
+                on_chunk_judged=callback,
+            )
         assert callback.call_count == 2
         assert len(qj.judgments) == 2
 
@@ -118,26 +132,28 @@ class TestJudgeQueryPropagatesErrors:
         """If chunk 1 succeeds and chunk 2 errors, callback fires once."""
         callback = MagicMock()
 
-        with patch(
-            "benchmarks.judge.collect_pool",
-            return_value=[
-                {"chunk_id": 1, "doc": "d", "text": "t1", "section_id": None},
-                {"chunk_id": 2, "doc": "d", "text": "t2", "section_id": None},
-            ],
-        ):
-            with patch(
+        with (
+            patch(
+                "benchmarks.judge.collect_pool",
+                return_value=[
+                    {"chunk_id": 1, "doc": "d", "text": "t1", "section_id": None},
+                    {"chunk_id": 2, "doc": "d", "text": "t2", "section_id": None},
+                ],
+            ),
+            patch(
                 "benchmarks.judge.judge_chunk",
                 side_effect=[
                     (2, "good", 0.9, ["topic"]),
                     JudgeError("server error"),
                 ],
-            ):
-                with pytest.raises(JudgeError):
-                    judge_query(
-                        self._make_spec(),
-                        k_per_strategy=10,
-                        on_chunk_judged=callback,
-                    )
+            ),
+            pytest.raises(JudgeError),
+        ):
+            judge_query(
+                self._make_spec(),
+                k_per_strategy=10,
+                on_chunk_judged=callback,
+            )
         # First chunk was judged and callback fired before error on second.
         assert callback.call_count == 1
 
@@ -217,18 +233,20 @@ class TestJudgeRuntimeAndParsing:
 
     def test_judge_query_error_includes_query_and_chunk_context(self):
         spec = QuerySpec("t99", "failing query", "conceptual", [])
-        with patch(
-            "benchmarks.judge.collect_pool",
-            return_value=[
-                {"chunk_id": 77, "doc": "doc-a", "text": "t", "section_id": None}
-            ],
-        ):
-            with patch(
+        with (
+            patch(
+                "benchmarks.judge.collect_pool",
+                return_value=[
+                    {"chunk_id": 77, "doc": "doc-a", "text": "t", "section_id": None}
+                ],
+            ),
+            patch(
                 "benchmarks.judge.judge_chunk",
                 side_effect=JudgeError("bad model output"),
-            ):
-                with pytest.raises(JudgeError, match=r"query t99 chunk 77"):
-                    judge_query(spec, k_per_strategy=10)
+            ),
+            pytest.raises(JudgeError, match=r"query t99 chunk 77"),
+        ):
+            judge_query(spec, k_per_strategy=10)
 
 
 class TestPostJsonErrors:

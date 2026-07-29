@@ -1,7 +1,7 @@
 """Tests for cli module."""
 
-import sys
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
@@ -172,27 +172,13 @@ class TestInterruptHandling:
             True,
         ) in stops
 
-    def test_search_uses_live_server_status_without_log_spam(self, monkeypatch):
+    def test_search_reports_server_status_changes(self, monkeypatch):
         from sova import cli
 
         reports: list[tuple[str, str]] = []
-        live_updates: list[str] = []
 
         class DummyProject:
             project_id = "proj"
-
-        class DummyLive:
-            def __init__(self, *args, **kwargs):
-                pass
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-            def update(self, renderable):
-                live_updates.append(str(renderable))
 
         def fake_check_servers(on_status=None, mode="search", **kwargs):
             if kwargs.get("fast_only"):
@@ -208,7 +194,6 @@ class TestInterruptHandling:
             "_activate_project_from_ref",
             lambda _ref, allow_create_from_dir=False: DummyProject(),
         )
-        monkeypatch.setattr(cli, "Live", DummyLive)
         monkeypatch.setattr(cli, "check_servers", fake_check_servers)
         monkeypatch.setattr(cli, "search_semantic", lambda *args, **kwargs: None)
         monkeypatch.setattr(
@@ -217,13 +202,10 @@ class TestInterruptHandling:
 
         cli.main()
 
-        # Intermediate server states should go through live update, not report().
-        assert any("downloading" in u for u in live_updates)
-        assert any("loading" in u for u in live_updates)
+        # Server status changes are reported as plain lines, once each.
+        assert reports.count(("server", "embedding: downloading (0.5 GB)")) == 1
+        assert reports.count(("server", "embedding: loading")) == 1
         assert ("server", "ready") in reports
-        assert not any(
-            n == "server" and ("downloading" in m or "loading" in m) for n, m in reports
-        )
 
     def test_search_defaults_to_reranker_off(self, monkeypatch):
         from sova import cli
@@ -295,59 +277,33 @@ def test_help_command_prints_global_help(monkeypatch, capsys):
     cli.main()
 
     out = capsys.readouterr().out
-    assert "usage: sova" in out
-    assert "{help,projects,download,remove,list,index}" in out
+    assert "Usage: sova" in out
+    for command in ("help", "projects", "download", "remove", "list", "index"):
+        assert command in out
+    assert "Download all model files" in out
+    # The hidden default-search command is documented via the epilog only.
+    assert "Default search:" in out
+
+
+def test_help_flag_prints_global_help(monkeypatch, capsys):
+    from sova import cli
+
+    monkeypatch.setattr(sys, "argv", ["sova", "--help"])
+    cli.main()
+
+    out = capsys.readouterr().out
+    assert "Usage: sova" in out
     assert "Download all model files" in out
 
 
-def test_help_flag_is_unknown_option(monkeypatch):
+def test_subcommand_help_flag_prints_command_help(monkeypatch, capsys):
     from sova import cli
 
-    captured: dict[str, str] = {}
-    monkeypatch.setattr(sys, "argv", ["sova", "--help"])
-    monkeypatch.setattr(
-        cli,
-        "_report_error_block",
-        lambda summary, **kw: captured.update(
-            {
-                "summary": summary,
-                "cause": kw.get("cause", ""),
-                "action": kw.get("action", ""),
-            }
-        ),
-    )
-
-    with pytest.raises(SystemExit) as exc:
-        cli.main()
-
-    assert exc.value.code == 2
-    assert captured["summary"] == "unknown option"
-    assert captured["action"] == "use: sova help"
-
-
-def test_subcommand_help_flag_is_unknown_option(monkeypatch):
-    from sova import cli
-
-    captured: dict[str, str] = {}
     monkeypatch.setattr(sys, "argv", ["sova", "projects", "--help"])
-    monkeypatch.setattr(
-        cli,
-        "_report_error_block",
-        lambda summary, **kw: captured.update(
-            {
-                "summary": summary,
-                "cause": kw.get("cause", ""),
-                "action": kw.get("action", ""),
-            }
-        ),
-    )
+    cli.main()
 
-    with pytest.raises(SystemExit) as exc:
-        cli.main()
-
-    assert exc.value.code == 2
-    assert captured["summary"] == "unknown option"
-    assert captured["action"] == "use: sova help"
+    out = capsys.readouterr().out
+    assert "Usage: sova projects" in out
 
 
 class TestRuntimeReporting:
@@ -362,7 +318,7 @@ class TestRuntimeReporting:
         monkeypatch.setattr(
             cli,
             "_service_status_line",
-            lambda _service, with_memory=False: "chat [green]running[/green]",
+            lambda _service, with_memory=False: "chat running",
         )
         monkeypatch.setattr(cli, "report", lambda name, msg: lines.append((name, msg)))
 
@@ -371,7 +327,7 @@ class TestRuntimeReporting:
         assert ("phase", "index.context (updated 12:34:56)") in lines
         assert (
             "runtime",
-            "free-for-model 3.4 GiB | chat [green]running[/green]",
+            "free-for-model 3.4 GiB | chat running",
         ) in lines
 
     def test_runtime_reporter_re_emits_after_refresh_interval(self, monkeypatch):
@@ -403,50 +359,22 @@ class TestRuntimeReporting:
         ]
 
 
-class TestIndexLiveView:
-    def test_replaces_context_progress_line_in_place(self):
+class TestProgressReporter:
+    def test_progress_reporter_throttles_and_always_emits_final(self, monkeypatch):
         from sova import cli
 
-        view = cli._IndexLiveView()
-        view.emit("doc", "arm_profile_architecture_reference_manual")
-        view.emit("extract", "603,867 lines")
-        view.emit("context", "1/15,531 chunks")
-        view.emit("context", "3/15,531 chunks")
-        view.emit("context", "5/15,531 chunks")
+        lines: list[tuple[str, str]] = []
+        monkeypatch.setattr(cli, "report", lambda name, msg: lines.append((name, msg)))
+        monkeypatch.setattr(cli.time, "monotonic", lambda: 100.0)
 
-        events = list(view._events)
-        assert len(events) == 3
-        assert events[0].endswith("arm_profile_architecture_reference_manual")
-        assert events[1].endswith("603,867 lines")
-        assert events[2].endswith("5/15,531 chunks")
+        emit = cli._make_progress_reporter("context", 1000)
+        for done in range(1, 1001):
+            emit(done)
 
-    def test_replaces_embed_progress_line_in_place(self):
-        from sova import cli
-
-        view = cli._IndexLiveView()
-        view.emit("doc", "arm_profile_architecture_reference_manual")
-        view.emit("embed", "12/15,531 chunks")
-        view.emit("embed", "24/15,531 chunks")
-        view.emit("embed", "36/15,531 chunks")
-
-        events = list(view._events)
-        assert len(events) == 2
-        assert events[0].endswith("arm_profile_architecture_reference_manual")
-        assert events[1].endswith("36/15,531 chunks")
-
-    def test_replaces_server_status_line_in_place(self):
-        from sova import cli
-
-        view = cli._IndexLiveView()
-        view.emit("event", "starting services")
-        view.emit("server", "chat: downloading (1.5 GB)")
-        view.emit("server", "chat: downloading (2.0 GB)")
-        view.emit("server", "chat: loading")
-
-        events = list(view._events)
-        assert len(events) == 2
-        assert events[0].endswith("starting services")
-        assert events[1].endswith("chat: loading")
+        # Throttled by percent step: far fewer lines than updates.
+        assert 0 < len(lines) <= 60
+        assert lines[-1][0] == "context"
+        assert "1,000/1,000 chunks" in lines[-1][1]
 
 
 def test_generate_contexts_is_idempotent_on_duplicate_chunk_start_lines(monkeypatch):
@@ -479,7 +407,6 @@ def test_generate_contexts_is_idempotent_on_duplicate_chunk_start_lines(monkeypa
 
     monkeypatch.setattr(cli, "generate_context", lambda *args, **kwargs: "ctx")
     monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
-    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
 
     cli._generate_contexts("doc", 1, chunks, sections, conn)
     count = conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
@@ -748,7 +675,6 @@ def test_generate_contexts_retries_on_empty_response(monkeypatch):
     )
     monkeypatch.setattr(cli, "stop_server", lambda url, **kwargs: stops.append(url))
     monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
-    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
 
     cli._generate_contexts("doc", 1, chunks, sections, conn)
 
@@ -832,7 +758,7 @@ def test_list_mode_reports_structured_error_on_sqlite_operational_error(monkeypa
 
     lines: list[tuple[str, str]] = []
 
-    monkeypatch.setattr(cli, "find_docs", lambda: [])
+    monkeypatch.setattr(cli, "find_docs", list)
     monkeypatch.setattr(
         cli,
         "list_docs",
@@ -923,7 +849,6 @@ def test_embed_doc_persists_partial_window_progress_on_failure(monkeypatch):
     monkeypatch.setattr(cli, "run_embedding_canary", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
     monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
-    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
 
     with pytest.raises(RuntimeError, match="embedding failed for doc"):
         cli._embed_doc("doc", 1, chunks, [], conn)
@@ -1001,7 +926,6 @@ def test_embed_doc_retry_only_embeds_unfinished_tail(monkeypatch):
     monkeypatch.setattr(cli, "run_embedding_canary", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
     monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
-    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
 
     cli._embed_doc("doc", 1, chunks, [], conn)
 
@@ -1065,7 +989,6 @@ def test_embed_doc_reports_absolute_progress(monkeypatch):
     monkeypatch.setattr(cli, "get_embeddings_batch", fake_get_embeddings_batch)
     monkeypatch.setattr(cli, "embedding_to_blob", lambda _emb: b"emb")
     monkeypatch.setattr(cli, "report", lambda name, msg: reports.append((name, msg)))
-    monkeypatch.setattr(cli, "_ACTIVE_INDEX_VIEW", object())
 
     cli._embed_doc("doc", 1, chunks, [], conn)
 

@@ -1,6 +1,6 @@
 """Run benchmark against ground truth."""
 
-from .search_interface import get_backend, SearchResult
+from .search_interface import SearchResult, get_backend
 
 
 def results_to_dicts(results: list[SearchResult]) -> list[dict]:

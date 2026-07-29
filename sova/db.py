@@ -3,8 +3,8 @@
 import math
 import sqlite3
 import struct
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 from sova import config
 from sova.config import EMBEDDING_DIM, VECTOR_EXT
@@ -175,7 +175,7 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
 
 
 @contextmanager
-def get_connection(readonly: bool = False) -> Generator[sqlite3.Connection, None, None]:
+def get_connection(readonly: bool = False) -> Generator[sqlite3.Connection]:
     """Context manager for database connections."""
     conn = connect_readonly() if readonly else init_db()
     try:
@@ -226,7 +226,7 @@ def get_doc_status(conn, name: str) -> dict:
         """,
             (doc_id,),
         ).fetchone()[0]
-    except Exception:
+    except sqlite3.Error:
         contextualized = 0
 
     complete = expected is not None and chunk_count >= expected

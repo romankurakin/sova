@@ -160,13 +160,10 @@ class TestChunkContextsTable:
         conn.commit()
 
         # Inserting a second context for the same chunk should fail (PK constraint).
-        try:
+        with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
                 "INSERT INTO chunk_contexts (chunk_id, context, model) VALUES (1, 'ctx2', 'gemma3:12b')"
             )
-            assert False, "Should have raised IntegrityError"
-        except Exception:
-            pass
         conn.close()
 
     def test_missing_context_returns_none(self):

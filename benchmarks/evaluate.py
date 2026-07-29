@@ -12,7 +12,6 @@ Implements metrics from TREC, BEIR, and MTEB benchmarks:
 import math
 from dataclasses import dataclass, field
 
-
 # Standard cutoffs used in BEIR/MTEB.
 STANDARD_K = [1, 3, 5, 10]
 

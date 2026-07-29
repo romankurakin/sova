@@ -23,8 +23,11 @@ def score_decay_diversify(
     for r in results:
         doc = r["doc"]
         count = doc_counts.get(doc, 0)
-        raw = r.get("rerank_score", r.get("final_score", 0))
-        adjusted = raw * (decay**count)
+        raw = r.get("sort_score", r.get("rerank_score", r.get("final_score", 0)))
+        # For negative scores multiplying by decay would raise them; divide
+        # instead so repeats are always penalized regardless of sign.
+        factor = decay**count
+        adjusted = raw * factor if raw >= 0 else raw / factor
         scored.append((adjusted, count, r))
         doc_counts[doc] = count + 1
 

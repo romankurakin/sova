@@ -12,7 +12,7 @@ fi
 UV_CACHE_DIR="${UV_CACHE_DIR:-$ROOT_DIR/.uv-cache}"
 PYINSTALLER_CONFIG_DIR="${PYINSTALLER_CONFIG_DIR:-$ROOT_DIR/.pyinstaller}"
 PYINSTALLER_SPEC="${PYINSTALLER_SPEC:-pyinstaller==6.18.0}"
-SITE_PACKAGES="$ROOT_DIR/.venv/lib/python3.13/site-packages"
+SITE_PACKAGES="$(echo "$ROOT_DIR"/.venv/lib/python3.*/site-packages)"
 PYTHONPATH_VALUE="$SITE_PACKAGES:$ROOT_DIR"
 if [[ -n "${PYTHONPATH:-}" ]]; then
   PYTHONPATH_VALUE="$PYTHONPATH_VALUE:$PYTHONPATH"
@@ -28,6 +28,7 @@ PYI_ARGS=(
   --distpath "$ROOT_DIR/dist"
   --collect-all sqlite_vector
   --collect-all rich
+  --collect-all shellingham
   --collect-all pymupdf
   --collect-all pymupdf.layout
   --collect-all pymupdf4llm

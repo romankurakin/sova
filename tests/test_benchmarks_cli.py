@@ -23,9 +23,8 @@ class _DummyLive:
 
 def test_cmd_judge_closes_backend_on_early_stop(monkeypatch, tmp_path: Path):
     import benchmarks.__main__ as bench_cli
-    import benchmarks.judge as judge
-    import benchmarks.search_interface as search_interface
-    import sova.config as config
+    from benchmarks import judge, search_interface
+    from sova import config
 
     db_path = tmp_path / "sova.db"
     db_path.write_text("")
@@ -55,8 +54,7 @@ def test_cmd_judge_closes_backend_on_early_stop(monkeypatch, tmp_path: Path):
 
 def test_cmd_run_closes_backend_on_interrupt(monkeypatch, tmp_path: Path):
     import benchmarks.__main__ as bench_cli
-    import benchmarks.run_benchmark as run_benchmark
-    import benchmarks.search_interface as search_interface
+    from benchmarks import run_benchmark, search_interface
 
     bench_dir = tmp_path / "bench"
     bench_dir.mkdir(parents=True, exist_ok=True)
@@ -97,8 +95,7 @@ def test_cmd_run_closes_backend_on_interrupt(monkeypatch, tmp_path: Path):
 
 def test_cmd_run_fails_on_unjudged_without_autofill(monkeypatch, tmp_path: Path):
     import benchmarks.__main__ as bench_cli
-    import benchmarks.run_benchmark as run_benchmark
-    import benchmarks.search_interface as search_interface
+    from benchmarks import run_benchmark, search_interface
 
     bench_dir = tmp_path / "bench"
     bench_dir.mkdir(parents=True, exist_ok=True)
@@ -144,9 +141,7 @@ def test_cmd_run_fails_on_unjudged_without_autofill(monkeypatch, tmp_path: Path)
 
 def test_cmd_run_autofill_flag_adds_missing_judgments(monkeypatch, tmp_path: Path):
     import benchmarks.__main__ as bench_cli
-    import benchmarks.judge as judge
-    import benchmarks.run_benchmark as run_benchmark
-    import benchmarks.search_interface as search_interface
+    from benchmarks import judge, run_benchmark, search_interface
 
     bench_dir = tmp_path / "bench"
     bench_dir.mkdir(parents=True, exist_ok=True)
@@ -217,8 +212,7 @@ def test_cmd_run_autofill_flag_adds_missing_judgments(monkeypatch, tmp_path: Pat
 
 def test_cmd_run_averages_three_passes_by_default(monkeypatch, tmp_path: Path):
     import benchmarks.__main__ as bench_cli
-    import benchmarks.run_benchmark as run_benchmark
-    import benchmarks.search_interface as search_interface
+    from benchmarks import run_benchmark, search_interface
 
     bench_dir = tmp_path / "bench"
     bench_dir.mkdir(parents=True, exist_ok=True)
@@ -283,8 +277,7 @@ def test_cmd_run_averages_three_passes_by_default(monkeypatch, tmp_path: Path):
 
 def test_cmd_run_respects_internal_runs_override(monkeypatch, tmp_path: Path):
     import benchmarks.__main__ as bench_cli
-    import benchmarks.run_benchmark as run_benchmark
-    import benchmarks.search_interface as search_interface
+    from benchmarks import run_benchmark, search_interface
 
     bench_dir = tmp_path / "bench"
     bench_dir.mkdir(parents=True, exist_ok=True)
@@ -337,8 +330,7 @@ def test_cmd_run_respects_internal_runs_override(monkeypatch, tmp_path: Path):
 
 def test_cmd_run_forwards_reranker_flag(monkeypatch, tmp_path: Path):
     import benchmarks.__main__ as bench_cli
-    import benchmarks.run_benchmark as run_benchmark
-    import benchmarks.search_interface as search_interface
+    from benchmarks import run_benchmark, search_interface
 
     bench_dir = tmp_path / "bench"
     bench_dir.mkdir(parents=True, exist_ok=True)

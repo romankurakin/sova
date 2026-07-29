@@ -69,8 +69,8 @@ def _read_config() -> dict:
     if _CONFIG_PATH.exists():
         try:
             return json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+        except OSError, UnicodeError, json.JSONDecodeError:
+            return {}
     return {}
 
 
@@ -188,19 +188,21 @@ def _probe_total_ram_gib() -> float:
             result = subprocess.run(
                 ["sysctl", "-n", "hw.memsize"],
                 capture_output=True,
+                check=False,
                 text=True,
                 timeout=2,
             )
             if result.returncode == 0:
                 mem_bytes = int(result.stdout.strip())
                 return mem_bytes / (1024**3)
-        except Exception:
+        except OSError, subprocess.SubprocessError, ValueError:
+            # Fall through to the portable sysconf probe below.
             pass
     try:
         page_size = os.sysconf("SC_PAGE_SIZE")
         pages = os.sysconf("SC_PHYS_PAGES")
         return float(page_size * pages) / (1024**3)
-    except Exception:
+    except OSError, ValueError:
         return 0.0
 
 
@@ -211,6 +213,7 @@ def _probe_available_ram_gib() -> float:
             result = subprocess.run(
                 ["vm_stat"],
                 capture_output=True,
+                check=False,
                 text=True,
                 timeout=2,
             )
@@ -237,8 +240,8 @@ def _probe_available_ram_gib() -> float:
                 )
                 if available_pages > 0:
                     return float(available_pages * page_size) / (1024**3)
-        except Exception:
-            pass
+        except OSError, subprocess.SubprocessError, ValueError:
+            return _probe_total_ram_gib()
     return _probe_total_ram_gib()
 
 
@@ -249,6 +252,7 @@ def _probe_free_swap_gib() -> float:
             result = subprocess.run(
                 ["sysctl", "vm.swapusage"],
                 capture_output=True,
+                check=False,
                 text=True,
                 timeout=2,
             )
@@ -266,8 +270,8 @@ def _probe_free_swap_gib() -> float:
                         "P": 1024.0 * 1024.0,
                     }
                     return value * scale.get(unit, 0.0)
-        except Exception:
-            pass
+        except OSError, subprocess.SubprocessError, ValueError:
+            return 0.0
     return 0.0
 
 
@@ -282,10 +286,11 @@ def _probe_metal_ceiling_gib() -> float | None:
         result = subprocess.run(
             [llama_server, "--help"],
             capture_output=True,
+            check=False,
             text=True,
             timeout=8,
         )
-    except Exception:
+    except OSError, subprocess.SubprocessError:
         return None
     combined = f"{result.stdout}\n{result.stderr}"
     m = re.search(r"recommendedMaxWorkingSetSize\s*=\s*([0-9.]+)\s*MB", combined)
@@ -501,7 +506,7 @@ def _resolve_vector_extension() -> Path:
         candidate = Path(str(files("sqlite_vector").joinpath("binaries", filename)))
         if candidate.exists():
             return candidate
-    except Exception:
+    except AttributeError, ModuleNotFoundError, OSError, TypeError:
         pass
 
     # Last fallback for frozen bootloaders that unpack under _MEIPASS.

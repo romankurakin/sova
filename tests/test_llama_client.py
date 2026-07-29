@@ -3,10 +3,11 @@
 import io
 import json
 import os
-from email.message import Message
-import pytest
 import urllib.error
+from email.message import Message
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 def _mock_urlopen(response_body: dict, status: int = 200):
@@ -315,6 +316,7 @@ class TestGetQueryEmbedding:
 def test_server_status_download_progress_is_bucketed(tmp_path, monkeypatch):
     from sova import llama_client
 
+    monkeypatch.setattr(llama_client, "_HF_HUB_CACHE", tmp_path / "hf")
     monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path)
     monkeypatch.setitem(llama_client._CACHE_FILES, "com.sova.chat", "chat.gguf")
     dl_path = tmp_path / "chat.gguf.downloadInProgress"
@@ -329,6 +331,61 @@ def test_server_status_download_progress_is_bucketed(tmp_path, monkeypatch):
     with dl_path.open("wb") as f:
         f.truncate(int(2.01 * (1024**3)))
     assert llama_client._server_status("com.sova.chat") == "downloading (2.0 GB)"
+
+
+def _hf_model_layout(root, repo: str, filename: str, *, complete: bool):
+    """Create a Hugging Face hub cache layout for a model download."""
+    model_dir = root / ("models--" + repo.replace("/", "--"))
+    blobs = model_dir / "blobs"
+    snapshots = model_dir / "snapshots" / "rev0"
+    blobs.mkdir(parents=True)
+    snapshots.mkdir(parents=True)
+    if complete:
+        blob = blobs / "sha256abc"
+        blob.write_bytes(b"gguf")
+        (snapshots / filename).symlink_to(blob)
+    else:
+        (blobs / "sha256abc.downloadInProgress").write_bytes(b"gg")
+    return model_dir
+
+
+def test_is_model_cached_detects_hf_hub_layout(tmp_path, monkeypatch):
+    from sova import llama_client
+
+    monkeypatch.setattr(llama_client, "_HF_HUB_CACHE", tmp_path / "hf")
+    monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path / "legacy")
+
+    repo, filename = llama_client._MODEL_SPECS["com.sova.embedding"]
+    assert llama_client.is_model_cached("com.sova.embedding") is False
+
+    _hf_model_layout(tmp_path / "hf", repo, filename or "model.gguf", complete=True)
+    assert llama_client.is_model_cached("com.sova.embedding") is True
+    assert llama_client._server_status("com.sova.embedding") == "loading"
+
+
+def test_is_model_cached_false_while_hf_download_in_progress(tmp_path, monkeypatch):
+    from sova import llama_client
+
+    monkeypatch.setattr(llama_client, "_HF_HUB_CACHE", tmp_path / "hf")
+    monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path / "legacy")
+
+    repo, filename = llama_client._MODEL_SPECS["com.sova.embedding"]
+    _hf_model_layout(tmp_path / "hf", repo, filename or "model.gguf", complete=False)
+
+    assert llama_client.is_model_cached("com.sova.embedding") is False
+    assert llama_client._server_status("com.sova.embedding").startswith("downloading")
+
+
+def test_is_model_cached_falls_back_to_legacy_flat_cache(tmp_path, monkeypatch):
+    from sova import llama_client
+
+    monkeypatch.setattr(llama_client, "_HF_HUB_CACHE", tmp_path / "hf")
+    monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path / "legacy")
+    (tmp_path / "legacy").mkdir()
+    legacy_name = llama_client._CACHE_FILES["com.sova.reranker"]
+    (tmp_path / "legacy" / legacy_name).write_bytes(b"gguf")
+
+    assert llama_client.is_model_cached("com.sova.reranker") is True
 
 
 def test_embedding_token_budget_uses_dynamic_margin():
@@ -419,9 +476,9 @@ class TestGetEmbeddingsBatch:
                 side_effect=embed_side_effect,
             ),
             patch("sova.llama_client._EMBED_BATCH_SIZE", 2),
+            pytest.raises(ServerError, match="embedding server failed"),
         ):
-            with pytest.raises(ServerError, match="embedding server failed"):
-                get_embeddings_batch(["ok1", "ok2", "boom", "ok3"])
+            get_embeddings_batch(["ok1", "ok2", "boom", "ok3"])
 
     def test_on_batch_callback(self):
         from sova.llama_client import get_embeddings_batch
@@ -527,9 +584,9 @@ class TestGetEmbeddingsBatch:
                 side_effect=lambda batch, timeout=None: [[0.1] for _ in batch],
             ),
             patch("sova.llama_client._EMBED_BATCH_SIZE", 2),
+            pytest.raises(ServerError, match="embedding preflight failed"),
         ):
-            with pytest.raises(ServerError, match="embedding preflight failed"):
-                get_embeddings_batch(["ok1", "ok2", "boom", "ok3"])
+            get_embeddings_batch(["ok1", "ok2", "boom", "ok3"])
 
     def test_compacts_long_header_path_when_needed(self):
         from sova.llama_client import _prepare_embedding_text
@@ -710,9 +767,11 @@ class TestRerank:
     def test_connection_failure_raises(self):
         from sova.llama_client import ServerError, rerank
 
-        with patch("sova.llama_client._ensure_server", return_value=False):
-            with pytest.raises(ServerError, match="reranker server not reachable"):
-                rerank("query", ["doc1", "doc2"])
+        with (
+            patch("sova.llama_client._ensure_server", return_value=False),
+            pytest.raises(ServerError, match="reranker server not reachable"),
+        ):
+            rerank("query", ["doc1", "doc2"])
 
     def test_timeout_raises(self):
         from sova.llama_client import ServerError, rerank
@@ -726,11 +785,11 @@ class TestRerank:
                 "sova.llama_client.urllib.request.urlopen",
                 side_effect=urlopen_side_effect,
             ),
-        ):
-            with pytest.raises(
+            pytest.raises(
                 ServerError, match="timed out even after adaptive compaction"
-            ):
-                rerank("query", ["doc1"])
+            ),
+        ):
+            rerank("query", ["doc1"])
 
     def test_invalid_response_raises(self):
         from sova.llama_client import ServerError, rerank
@@ -744,9 +803,9 @@ class TestRerank:
                 "sova.llama_client.urllib.request.urlopen",
                 side_effect=urlopen_side_effect,
             ),
+            pytest.raises(ServerError, match="invalid rerank response"),
         ):
-            with pytest.raises(ServerError, match="invalid rerank response"):
-                rerank("query", ["doc1"])
+            rerank("query", ["doc1"])
 
     def test_sends_full_documents_in_request(self):
         from sova.llama_client import rerank
@@ -781,11 +840,11 @@ class TestRerank:
                     "increase the physical batch size (current batch size: 512)"
                 ),
             ),
-        ):
-            with pytest.raises(
+            pytest.raises(
                 ServerError, match="increase com.sova.reranker --ubatch-size"
-            ):
-                rerank("query", ["doc1"], top_n=1)
+            ),
+        ):
+            rerank("query", ["doc1"], top_n=1)
 
     def test_retries_with_compaction_on_physical_batch_limit(self):
         from sova.llama_client import ServerError, rerank
@@ -1000,7 +1059,7 @@ class TestCleanupIdleServices:
 
 class TestRunEmbeddingCanary:
     def test_sends_canary_requests(self):
-        from sova.llama_client import run_embedding_canary, _EMBED_CANARY_REQUESTS
+        from sova.llama_client import _EMBED_CANARY_REQUESTS, run_embedding_canary
 
         call_count = 0
 
@@ -1023,9 +1082,11 @@ class TestRunEmbeddingCanary:
     def test_raises_when_server_unreachable(self):
         from sova.llama_client import ServerError, run_embedding_canary
 
-        with patch("sova.llama_client._ensure_server", return_value=False):
-            with pytest.raises(ServerError, match="embedding server not reachable"):
-                run_embedding_canary()
+        with (
+            patch("sova.llama_client._ensure_server", return_value=False),
+            pytest.raises(ServerError, match="embedding server not reachable"),
+        ):
+            run_embedding_canary()
 
     def test_supports_custom_request_count(self):
         from sova.llama_client import run_embedding_canary

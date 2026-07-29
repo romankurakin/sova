@@ -272,17 +272,19 @@ class TestFuseAndRankReranker:
 
         conn = self._make_db()
         try:
-            with patch(
-                "sova.search.rerank", side_effect=ServerError("server error 500")
+            with (
+                patch(
+                    "sova.search.rerank", side_effect=ServerError("server error 500")
+                ),
+                pytest.raises(ServerError, match="server error 500"),
             ):
-                with pytest.raises(ServerError, match="server error 500"):
-                    fuse_and_rank(
-                        conn,
-                        vector_results=[(1, 0.9), (2, 0.8)],
-                        query_text="timer",
-                        limit=2,
-                        use_reranker=True,
-                    )
+                fuse_and_rank(
+                    conn,
+                    vector_results=[(1, 0.9), (2, 0.8)],
+                    query_text="timer",
+                    limit=2,
+                    use_reranker=True,
+                )
         finally:
             conn.close()
 
