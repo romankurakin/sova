@@ -1,96 +1,78 @@
-# Sova Benchmark
+# Search Benchmark
 
-Measure search quality against LLM-judged ground truth.
+`suite.json` is the single active, frozen search benchmark. It contains 25
+queries and 506 blinded pooled judgments for the
+`operating-system-documents` corpus.
 
-## Usage
+## Recorded results
 
-```bash
-sova index /path/to/pdfs                                         # Index docs first
-sova projects                                                    # Find project id
-uv run python -m benchmarks judge <project-id>                   # Generate ground truth
-uv run python -m benchmarks run <project-id> my-test             # Run benchmark
-uv run python -m benchmarks run <project-id> my-test --reranker  # Enable reranker
-uv run python -m benchmarks run <project-id> my-test --autofill  # Fill missing judgments
-uv run python -m benchmarks show <project-id>                    # View results
-uv run python -m benchmarks --help                               # Full CLI help
-```
+- `results/baseline.json` — the production hybrid search: vector retrieval,
+  FTS, reciprocal-rank fusion, exact-match bonuses, index penalties, and
+  diversity selection.
+- `results/multilingual-reranker-candidate.json` — an evaluated GTE
+  multilingual reranker candidate. It met the latency budget but was rejected
+  because it did not improve quality over the baseline.
 
-## Methodology
+Both files use the same suite hash, corpus hash, `k`, and query IDs. The
+candidate includes paired deltas and a bootstrap confidence interval against
+the baseline.
 
-1. **Ground Truth** - LLM judge (configured in `benchmarks/judge.py`) scores relevance 0-3 for pooled candidates per query
-2. **Benchmark Run** - Search retrieves results, compared against ground truth
-3. **Metrics** - Standard IR metrics computed as a 3-run mean, saved to `results/{name}.json`
-
-Compare runs: refactor sova -> run benchmark -> compare to previous run.
-
-## Judge Model
-
-`benchmarks/judge.py` defaults to the local llama-server context model
-(`sova.config.CONTEXT_MODEL`).
-
-Optional model override:
+## Run
 
 ```bash
-export SOVA_BENCH_JUDGE_MODEL=ministral-3-14b-instruct-2512
+uv run python -m benchmarks run operating-system-documents <result-name> \
+  --description "What changed and why this run exists"
+
+# Compare a future candidate with the recorded baseline.
+uv run python -m benchmarks run operating-system-documents <candidate-name> \
+  --baseline baseline \
+  --description "Candidate algorithm and its important settings"
 ```
 
-Debiasing default is `enabled`. Override with:
+The runner performs one deterministic quality pass. It warms the embedding
+model with two untimed requests, then measures latency over every suite query.
+An unjudged top-10 chunk is an error. Existing result files are never
+overwritten.
 
-```bash
-export SOVA_BENCH_USE_DEBIASING=true|false
-```
+Each result stores `experiment` as one plain-text sentence describing what was
+tested. The frozen suite hash is the only technical identity needed for a fair
+comparison.
 
-`bench run` defaults to strict mode and executes 3 passes:
-- if retrieved chunks are missing in ground truth, run fails
-- final metrics are mean-aggregated across 3 runs into one JSON file
-- reranker is **disabled by default**; pass `--reranker` to enable it
-- use `--autofill` to allow on-the-fly judgments (slower, uses judge model)
+## What is frozen
 
-## Query Categories
+The suite records:
 
-30 queries across 5 categories testing broader corpus coverage:
+- exact, conceptual, cross-document, natural-language, and negative queries;
+- English and Russian slices;
+- blinded 0–3 relevance judgments;
+- the exact corpus database SHA-256 and counts;
+- acceptance criteria and a suite SHA-256 copied into every result.
 
-| Category | Tests | Example |
-|----------|-------|---------|
-| **Exact lookup** | Identifier-heavy lexical retrieval | "mcause CSR" |
-| **Conceptual** | Mechanism-level semantic retrieval | "how trap delegation moves exceptions from machine mode to supervisor mode" |
-| **Cross-doc** | Topics that should match multiple specs/books | "interrupt handling path from external signal to handler return" |
-| **Natural** | Debug-style user phrasing | "my trap handler returns to the wrong instruction address" |
-| **Negative** | False positive resistance | "x86 APIC ICR delivery mode" |
+Judgment candidates were pooled from multiple retrieval methods and evaluated
+without their system provenance. Pooling only makes the qrels sufficiently
+complete; the benchmark evaluates each submitted top 10 solely against the
+frozen judgments.
 
-## Metrics
+## Metrics and acceptance
 
-| Metric | Question | How it works | Baseline |
-|--------|----------|--------------|----------|
-| **Latency P50** | Typical speed? | Median query time. User is waiting. | 310ms |
-| **Latency P95** | Worst case? | 95th percentile - slowest 5% | 2125ms |
-| **nDCG@10** | Best at top? | Rewards highly-relevant results ranked higher | 0.705 |
-| **MRR@10** | First good result? | 1 / rank of first relevant result | 0.708 |
-| **Precision@10** | How much junk? | (relevant in top-k) / k | 0.538 |
-| **MAP@10** | Consistent ranking? | Avg precision at each relevant hit | 0.455 |
-| **Recall@10** | Found them all? | (relevant in top-k) / total relevant | 0.539 |
-| **Hit Rate@10** | At least one? | 1 if any relevant in top-k, else 0 | 1.000 |
-| **Doc-Cov@10** | Multiple sources? | Unique documents in top-k. Shows breadth. | 0.356 |
-| **S-Recall@10** | Diverse topics? | Results cover different aspects | 0.546 |
-| **α-nDCG@10** | Novel results? | nDCG with redundancy penalty | 0.991 |
-| **FP Rate@10** | False positives? | Precision on negative queries (should be 0) | 0.000 |
+Primary metric: nDCG@10. Secondary metrics: MRR@10, MAP@10, Precision@10, and
+pooled Recall@10. Results also contain category/language slices and per-query
+ranks for paired comparison.
 
-## Relevance Scale
+A candidate is accepted only if:
 
-| Score | Meaning |
-|-------|---------|
-| 3 | Directly answers the query |
-| 2 | Contains useful related info |
-| 1 | Mentions topic but no detail |
-| 0 | Unrelated |
+- mean nDCG@10 improves by at least `+0.03`;
+- the lower bound of the paired 95% bootstrap CI is above `0`;
+- P50 latency is no more than `500 ms`;
+- P95 latency is no more than `750 ms`.
 
-## Files
+## Maintaining the suite
 
-```text
-benchmarks/
-├── search_interface.py   # <== Update this when refactoring sova
-├── judge.py              # LLM judge + query portfolio
-├── evaluate.py           # Metrics computation
-├── run_benchmark.py      # Search runner
-└── results/              # Output JSONs and reports
-```
+Never edit a frozen suite or an existing result to accommodate an algorithm.
+If a future system returns an unjudged chunk, create and review a new suite,
+then rerun every system being compared. Results are comparable only when suite
+hash, initial database hash, `k`, and query IDs all match.
+
+`build_suite.py` validates blinded judgment shards against SQLite in read-only
+mode and refuses to overwrite its output. `judge` writes only
+`draft-suite.json`; it cannot replace the active frozen suite.

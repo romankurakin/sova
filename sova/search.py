@@ -8,18 +8,16 @@ from array import array
 
 from sova.config import (
     EMBEDDING_DIM,
-    RERANK_FACTOR,
     SEARCH_DIVERSITY_DECAY,
     SEARCH_EXACT_PHRASE_BONUS,
     SEARCH_EXACT_TERM_BONUS,
+    SEARCH_FUSION_CANDIDATE_FACTOR,
     SEARCH_INDEX_PENALTY,
     SEARCH_RRF_K,
     SEARCH_RRF_WEIGHT,
-    SEARCH_USE_RERANKER,
 )
 from sova.db import embedding_to_blob
 from sova.diversity import score_decay_diversify
-from sova.llama_client import rerank
 
 
 def search_vector(
@@ -247,7 +245,6 @@ def fuse_and_rank(
     vector_results: list[tuple[int, float]],
     query_text: str,
     limit: int,
-    use_reranker: bool | None = None,
 ) -> tuple[list[dict], int, int]:
     """Fuse vector results with FTS and rank. Returns (results, n_vector, n_fts)."""
     if not vector_results:
@@ -271,10 +268,9 @@ def fuse_and_rank(
         fused_ids = [r[0] for r in vector_results]
         rrf_scores = {r[0]: r[1] for r in vector_results}
 
-    candidate_count = limit * RERANK_FACTOR
+    candidate_count = limit * SEARCH_FUSION_CANDIDATE_FACTOR
 
-    # Keep a wider candidate pool for fusion/diversity, then rerank a smaller.
-    # target subset for latency and memory stability.
+    # Keep a wider candidate pool before diversity selects the final results.
     top_ids = fused_ids[:candidate_count]
     if not top_ids:
         return [], 0, 0
@@ -327,47 +323,8 @@ def fuse_and_rank(
 
     scored.sort(key=lambda x: x["final_score"], reverse=True)
 
-    reranker_enabled = SEARCH_USE_RERANKER if use_reranker is None else use_reranker
-    if reranker_enabled:
-        # Quality-first default: rerank more than final output to let cross-encoder.
-        # rescue relevant chunks that were just below the first-stage cutoff.
-        rerank_count = min(len(scored), candidate_count)
-        rerank_top = scored[:rerank_count]
-        rerank_ids = [r["chunk_id"] for r in rerank_top]
-        if rerank_ids:
-            ph = ",".join("?" * len(rerank_ids))
-            text_rows = {
-                r[0]: r[1]
-                for r in conn.execute(
-                    f"SELECT id, text FROM chunks WHERE id IN ({ph})",
-                    tuple(rerank_ids),
-                ).fetchall()
-            }
-            texts = [text_rows.get(cid, "") for cid in rerank_ids]
-            rerank_results = rerank(query_text, texts, top_n=len(texts))
-            for rr in rerank_results:
-                idx = rr["index"]
-                if idx < len(rerank_top):
-                    rerank_top[idx]["rerank_score"] = rr["relevance_score"]
-            # Re-sort only the reranked portion by rerank_score, then append.
-            # the rest (which keep their original final_score order).
-            reranked = [r for r in scored if "rerank_score" in r]
-            unreranked = [r for r in scored if "rerank_score" not in r]
-            reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
-            scored = reranked + unreranked
-
-    # Diversification must compare scores on one scale. rerank_score (~0..1)
-    # and final_score (rrf-weighted, often >1) are not comparable, so when the
-    # reranker covered only part of the candidates, keep the uncovered tail
-    # strictly below every reranked result while preserving its order.
     for r in scored:
-        r["sort_score"] = r.get("rerank_score", r["final_score"])
-    covered = [r for r in scored if "rerank_score" in r]
-    uncovered = [r for r in scored if "rerank_score" not in r]
-    if covered and uncovered:
-        floor = min(r["rerank_score"] for r in covered)
-        for offset, r in enumerate(uncovered, start=1):
-            r["sort_score"] = floor - offset
+        r["sort_score"] = r["final_score"]
 
     filtered = score_decay_diversify(scored, limit=limit, decay=diversity_decay)
 
@@ -408,14 +365,7 @@ def hybrid_search(
     query_emb: list[float],
     query_text: str,
     limit: int,
-    use_reranker: bool | None = None,
 ) -> tuple[list[dict], int, int]:
     """Perform hybrid vector + FTS search with RRF fusion."""
     vector_results = get_vector_candidates(conn, query_emb, limit)
-    return fuse_and_rank(
-        conn,
-        vector_results,
-        query_text,
-        limit,
-        use_reranker=use_reranker,
-    )
+    return fuse_and_rank(conn, vector_results, query_text, limit)

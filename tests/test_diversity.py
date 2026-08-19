@@ -59,11 +59,11 @@ class TestScoreDecayDiversify:
         docs = [r["doc"] for r in filtered]
         assert docs == ["a", "a", "a", "b"]
 
-    def test_uses_rerank_score_when_available(self):
-        """Should prefer rerank_score over final_score."""
+    def test_uses_explicit_sort_score_when_available(self):
+        """The search pipeline can provide an explicit pre-diversity score."""
         results = [
-            {"doc": "a", "final_score": 5, "rerank_score": 10},
-            {"doc": "b", "final_score": 9, "rerank_score": 2},
+            {"doc": "a", "final_score": 5, "sort_score": 10},
+            {"doc": "b", "final_score": 9, "sort_score": 2},
         ]
         filtered = score_decay_diversify(results, limit=2, decay=0.8)
         assert filtered[0]["doc"] == "a"

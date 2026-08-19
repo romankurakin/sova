@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from sova.config import CONTEXT_MODEL_HF_FILE, CONTEXT_MODEL_HF_REPO
 from sova.ui import report, report_error, report_mode, report_step
 
 SERVICES: list[dict[str, Any]] = [
@@ -43,40 +44,28 @@ SERVICES: list[dict[str, Any]] = [
         "keep_alive": False,
     },
     {
-        "name": "reranker",
-        "label": "com.sova.reranker",
-        "port": 8082,
-        "hf_repo": "ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF",
-        "extra_args": [
-            "--rerank",
-            "--ctx-size",
-            "4096",
-            "--batch-size",
-            "4096",
-            "--ubatch-size",
-            "4096",
-            "--parallel",
-            "1",
-            "--cache-ram",
-            "0",
-            "--sleep-idle-seconds",
-            "600",
-        ],
-        "keep_alive": False,
-    },
-    {
         "name": "chat",
         "label": "com.sova.chat",
         "port": 8083,
-        "hf_repo": "mistralai/Ministral-3-14B-Instruct-2512-GGUF",
-        "hf_file": "Ministral-3-14B-Instruct-2512-Q8_0.gguf",
+        "hf_repo": CONTEXT_MODEL_HF_REPO,
+        "hf_file": CONTEXT_MODEL_HF_FILE,
         "extra_args": [
+            # Context generation is text-only. On the target 32 GiB Mac,
+            # parallel=2 and MTP both reduced measured throughput under memory
+            # pressure, so keep one slot and the model's native decode path.
+            "--no-mmproj",
             "--ctx-size",
             "4096",
             "--parallel",
             "1",
             "--cache-ram",
             "0",
+            "--reasoning",
+            "on",
+            "--reasoning-effort",
+            "low",
+            "--reasoning-budget",
+            "64",
             "--sleep-idle-seconds",
             "900",
         ],

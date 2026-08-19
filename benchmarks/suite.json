@@ -1,0 +1,3367 @@
+{
+  "suite": {
+    "id": "search",
+    "schema_version": 2,
+    "created": "2026-08-20",
+    "description": "Frozen regression benchmark for local document search.",
+    "corpus": {
+      "project": "operating-system-documents",
+      "database_sha256": "9c1d4b6ca7032de602bc866c88985d5d5080ec7a5bf1b808b00480d46840f8e3",
+      "documents": 11,
+      "chunks": 28793,
+      "contextualized_chunks": 28793
+    },
+    "query_count": 25,
+    "language_counts": {
+      "en": 19,
+      "ru": 6
+    },
+    "category_counts": {
+      "exact_lookup": 5,
+      "conceptual": 6,
+      "cross_doc": 6,
+      "natural": 6,
+      "negative": 2
+    },
+    "judgment_count": 506,
+    "score_counts": {
+      "0": 173,
+      "1": 117,
+      "2": 119,
+      "3": 97
+    },
+    "relevance_threshold": 2,
+    "unjudged_policy": "error",
+    "judging": "Blinded pooled judgments; candidate-system provenance is not stored.",
+    "acceptance": {
+      "minimum_mean_ndcg_delta_at_10": 0.03,
+      "ndcg_bootstrap_ci_lower_must_exceed": 0.0,
+      "maximum_latency_p50_ms": 500,
+      "maximum_latency_p95_ms": 750
+    },
+    "comparison_rule": "Suite SHA-256, initial database SHA-256, k, and query IDs must match."
+  },
+  "queries": [
+    {
+      "id": "q01",
+      "query": "hgatp VMID field",
+      "category": "exact_lookup",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 7255,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 16665,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 274,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 7246,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 28222,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 25125,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 601,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "VMIDLEN discovery",
+            "VMID reuse fencing"
+          ]
+        },
+        {
+          "chunk_id": 16670,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 7242,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 275,
+          "doc": "riscv-sbi",
+          "score": 1
+        },
+        {
+          "chunk_id": 26443,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 613,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 7250,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 7249,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 19364,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 625,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "VMID-qualified VS translations"
+          ]
+        },
+        {
+          "chunk_id": 20195,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 26444,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 20172,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 26290,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 600,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "hgatp field layout",
+            "VMID width"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q02",
+      "query": "GICD_CTLR ARE_NS bit",
+      "category": "exact_lookup",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 4681,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 6544,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 4913,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 4783,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 5137,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "legacy-operation behavior"
+          ]
+        },
+        {
+          "chunk_id": 4784,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 4519,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 6558,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 4782,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 4682,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4102,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "affinity-routing default"
+          ]
+        },
+        {
+          "chunk_id": 4785,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 4680,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "subtopics": [
+            "Non-secure alias bit position"
+          ]
+        },
+        {
+          "chunk_id": 4679,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "subtopics": [
+            "ARE_NS meaning",
+            "programming constraints"
+          ]
+        },
+        {
+          "chunk_id": 4126,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "permanently enabled affinity routing"
+          ]
+        },
+        {
+          "chunk_id": 4138,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "subtopics": [
+            "safe enable conditions",
+            "unpredictable transitions"
+          ]
+        },
+        {
+          "chunk_id": 4135,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "subtopics": [
+            "affinity-routing purpose"
+          ]
+        },
+        {
+          "chunk_id": 18938,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 4678,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "GICD_CTLR field layout"
+          ]
+        },
+        {
+          "chunk_id": 4823,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "id": "q03",
+      "query": "SBI debug console write extension DBCN",
+      "category": "exact_lookup",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 5548,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 304,
+          "doc": "riscv-sbi",
+          "score": 3,
+          "subtopics": [
+            "DBCN function IDs",
+            "DBCN extension ID"
+          ]
+        },
+        {
+          "chunk_id": 301,
+          "doc": "riscv-sbi",
+          "score": 3,
+          "subtopics": [
+            "console write parameters",
+            "return values and errors"
+          ]
+        },
+        {
+          "chunk_id": 248,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 302,
+          "doc": "riscv-sbi",
+          "score": 2,
+          "subtopics": [
+            "DBCN console read"
+          ]
+        },
+        {
+          "chunk_id": 352,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 300,
+          "doc": "riscv-sbi",
+          "score": 3,
+          "subtopics": [
+            "DBCN purpose",
+            "console write function"
+          ]
+        },
+        {
+          "chunk_id": 28450,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 245,
+          "doc": "riscv-sbi",
+          "score": 1
+        },
+        {
+          "chunk_id": 263,
+          "doc": "riscv-sbi",
+          "score": 1
+        },
+        {
+          "chunk_id": 26254,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 26251,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 303,
+          "doc": "riscv-sbi",
+          "score": 2,
+          "subtopics": [
+            "single-byte console write"
+          ]
+        },
+        {
+          "chunk_id": 26187,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 343,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 346,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 236,
+          "doc": "riscv-sbi",
+          "score": 1
+        },
+        {
+          "chunk_id": 27856,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 26191,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 26301,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q04",
+      "query": "AArch64 x18 platform register",
+      "category": "exact_lookup",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 5657,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 16123,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 126,
+          "doc": "arm_aapcs64",
+          "score": 3,
+          "subtopics": [
+            "x18 platform-register role",
+            "AAPCS64 register usage"
+          ]
+        },
+        {
+          "chunk_id": 28711,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 5667,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 5314,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 125,
+          "doc": "arm_aapcs64",
+          "score": 2,
+          "subtopics": [
+            "general-purpose register bank"
+          ]
+        },
+        {
+          "chunk_id": 8393,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 94,
+          "doc": "arm_aapcs64",
+          "score": 1
+        },
+        {
+          "chunk_id": 28721,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 15077,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 28712,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 19286,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 95,
+          "doc": "arm_aapcs64",
+          "score": 1
+        },
+        {
+          "chunk_id": 28716,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 127,
+          "doc": "arm_aapcs64",
+          "score": 3,
+          "subtopics": [
+            "portable-code warning",
+            "virtualization treatment"
+          ]
+        },
+        {
+          "chunk_id": 5104,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 5103,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 129,
+          "doc": "arm_aapcs64",
+          "score": 0
+        },
+        {
+          "chunk_id": 5659,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "id": "q05",
+      "query": "RISC-V scounteren register",
+      "category": "exact_lookup",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 2275,
+          "doc": "riscv-unprivileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 582,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 27173,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 292,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 2270,
+          "doc": "riscv-unprivileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 27203,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 27187,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 27174,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 2276,
+          "doc": "riscv-unprivileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 286,
+          "doc": "riscv-sbi",
+          "score": 1
+        },
+        {
+          "chunk_id": 26502,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 428,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 20411,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 498,
+          "doc": "riscv-privileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 293,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 534,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "supervisor counter facility"
+          ]
+        },
+        {
+          "chunk_id": 535,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "scounteren bit layout",
+            "U-mode access control",
+            "mcounteren interaction"
+          ]
+        },
+        {
+          "chunk_id": 27188,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 387,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "CSR address and description"
+          ]
+        },
+        {
+          "chunk_id": 499,
+          "doc": "riscv-privileged",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q06",
+      "query": "how address-space identifiers avoid full TLB flushes during context switches",
+      "category": "conceptual",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 3505,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "context-switch translation hazard"
+          ]
+        },
+        {
+          "chunk_id": 7220,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 6663,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 6828,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 3508,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "MIPS ASID-tagged TLB example"
+          ]
+        },
+        {
+          "chunk_id": 7203,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 6836,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 17082,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "subtopics": [
+            "ASID-tagged non-global entries",
+            "switching without eviction"
+          ]
+        },
+        {
+          "chunk_id": 7184,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 24844,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "ASID and VMID reduce maintenance"
+          ]
+        },
+        {
+          "chunk_id": 3504,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "ASID field in TLB entries"
+          ]
+        },
+        {
+          "chunk_id": 6897,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 547,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "hart-local ASIDs",
+            "reduced shootdowns"
+          ]
+        },
+        {
+          "chunk_id": 6943,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 17081,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "context-switch TLB maintenance reduction"
+          ]
+        },
+        {
+          "chunk_id": 7178,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 7226,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 6781,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 6795,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 3506,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "flush cost",
+            "ASID tagging across processes",
+            "current-ASID selection"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q07",
+      "query": "how GIC priority masking and interrupt preemption interact",
+      "category": "conceptual",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 4184,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4178,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "binary-point preemption control"
+          ]
+        },
+        {
+          "chunk_id": 4889,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4168,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "priority ordering and grouping"
+          ]
+        },
+        {
+          "chunk_id": 4468,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4884,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4521,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "binary-point selection"
+          ]
+        },
+        {
+          "chunk_id": 4177,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "subtopics": [
+            "PMR eligibility",
+            "running-priority preemption test"
+          ]
+        },
+        {
+          "chunk_id": 4630,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4185,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 5232,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "subtopics": [
+            "CanSignalInterrupt algorithm",
+            "PMR and preemption-level checks"
+          ]
+        },
+        {
+          "chunk_id": 4119,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "subtopics": [
+            "priority-mask comparison",
+            "running-priority comparison"
+          ]
+        },
+        {
+          "chunk_id": 4143,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "CPU-interface prioritization controls"
+          ]
+        },
+        {
+          "chunk_id": 5035,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "virtual priority-mask threshold"
+          ]
+        },
+        {
+          "chunk_id": 4990,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "physical priority-mask threshold"
+          ]
+        },
+        {
+          "chunk_id": 4997,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4470,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4172,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4179,
+          "doc": "gic_architecture_specification",
+          "score": 3,
+          "subtopics": [
+            "ICC_PMR threshold semantics",
+            "masked-priority rule"
+          ]
+        },
+        {
+          "chunk_id": 4169,
+          "doc": "gic_architecture_specification",
+          "score": 2,
+          "subtopics": [
+            "highest-priority delivery guarantee",
+            "preemption overview"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q08",
+      "query": "how copy-on-write fork handles the first write fault",
+      "category": "conceptual",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 3591,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "Linux lazy COW fork"
+          ]
+        },
+        {
+          "chunk_id": 1568,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 746,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 3578,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "read-only shared mapping",
+            "write-fault trap",
+            "private-page allocation and remap"
+          ]
+        },
+        {
+          "chunk_id": 708,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 7677,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 3844,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0
+        },
+        {
+          "chunk_id": 3300,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 640,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "COW write-fault handling",
+            "PTE update after copying"
+          ]
+        },
+        {
+          "chunk_id": 1217,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 3947,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0
+        },
+        {
+          "chunk_id": 1375,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 7700,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 624,
+          "doc": "riscv-privileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 3579,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "fork/exec COW benefit"
+          ]
+        },
+        {
+          "chunk_id": 1151,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 7684,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 7685,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 17078,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 7845,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q09",
+      "query": "why capability-based protection differs from access control lists",
+      "category": "conceptual",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 1317,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3,
+          "subtopics": [
+            "capability lists",
+            "object capabilities",
+            "row-oriented access matrix"
+          ]
+        },
+        {
+          "chunk_id": 1319,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3,
+          "subtopics": [
+            "ACL versus capability tradeoffs",
+            "revocation",
+            "least privilege"
+          ]
+        },
+        {
+          "chunk_id": 1314,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3,
+          "subtopics": [
+            "access control lists",
+            "object-oriented access matrix",
+            "principal permissions"
+          ]
+        },
+        {
+          "chunk_id": 1318,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "cryptographic capabilities",
+            "capability delegation",
+            "capability revocation"
+          ]
+        },
+        {
+          "chunk_id": 28297,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 1316,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "ACL revocation",
+            "ordered ACL entries"
+          ]
+        },
+        {
+          "chunk_id": 3262,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 485,
+          "doc": "riscv-privileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 24850,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 17182,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 479,
+          "doc": "riscv-privileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 1401,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 27501,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 1429,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 24785,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 28330,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 1311,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 17140,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 1297,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 20028,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 1315,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "ACL groups",
+            "roles",
+            "ACL wildcards"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q10",
+      "query": "как sfence.vma делает изменения таблиц страниц видимыми процессору",
+      "category": "conceptual",
+      "language": "ru",
+      "judgments": [
+        {
+          "chunk_id": 546,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "SFENCE.VMA after PTE updates",
+            "ASID reuse",
+            "leaf and non-leaf PTEs"
+          ]
+        },
+        {
+          "chunk_id": 545,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "translation-cache invalidation",
+            "implicit page-table reads",
+            "SFENCE.VMA ordering"
+          ]
+        },
+        {
+          "chunk_id": 265,
+          "doc": "riscv-sbi",
+          "score": 2,
+          "subtopics": [
+            "remote SFENCE.VMA",
+            "multi-hart invalidation"
+          ]
+        },
+        {
+          "chunk_id": 273,
+          "doc": "riscv-sbi",
+          "score": 2,
+          "subtopics": [
+            "SBI remote fence",
+            "virtual-address range"
+          ]
+        },
+        {
+          "chunk_id": 625,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "virtualized SFENCE.VMA",
+            "VS-stage translations",
+            "VMID"
+          ]
+        },
+        {
+          "chunk_id": 274,
+          "doc": "riscv-sbi",
+          "score": 2,
+          "subtopics": [
+            "remote SFENCE.VMA by ASID"
+          ]
+        },
+        {
+          "chunk_id": 566,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "Svinval",
+            "batched translation invalidation",
+            "ordering fences"
+          ]
+        },
+        {
+          "chunk_id": 266,
+          "doc": "riscv-sbi",
+          "score": 2,
+          "subtopics": [
+            "legacy remote SFENCE.VMA",
+            "ASID-scoped invalidation"
+          ]
+        },
+        {
+          "chunk_id": 464,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "PMP and translation-cache synchronization",
+            "global SFENCE.VMA"
+          ]
+        },
+        {
+          "chunk_id": 3147,
+          "doc": "riscv-unprivileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 612,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "HFENCE.VVMA",
+            "guest page-table ordering"
+          ]
+        },
+        {
+          "chunk_id": 554,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "incoherent translation cache",
+            "PTE write visibility",
+            "stale translations"
+          ]
+        },
+        {
+          "chunk_id": 544,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "supervisor memory-management fence",
+            "implicit-reference ordering",
+            "local TLB invalidation"
+          ]
+        },
+        {
+          "chunk_id": 272,
+          "doc": "riscv-sbi",
+          "score": 1
+        },
+        {
+          "chunk_id": 659,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 291,
+          "doc": "riscv-sbi",
+          "score": 1
+        },
+        {
+          "chunk_id": 658,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 543,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "satp updates",
+            "page-table write ordering",
+            "ASID reuse"
+          ]
+        },
+        {
+          "chunk_id": 568,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "PTE validity changes",
+            "translation-cache coherence",
+            "Svvptc"
+          ]
+        },
+        {
+          "chunk_id": 412,
+          "doc": "riscv-privileged",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "id": "q11",
+      "query": "как шлюз PLIC удерживает и повторно активирует внешнее прерывание",
+      "category": "conceptual",
+      "language": "ru",
+      "judgments": [
+        {
+          "chunk_id": 225,
+          "doc": "riscv-plic",
+          "score": 3,
+          "subtopics": [
+            "PLIC interrupt flow",
+            "gateway completion",
+            "pending-bit lifecycle"
+          ]
+        },
+        {
+          "chunk_id": 220,
+          "doc": "riscv-plic",
+          "score": 1
+        },
+        {
+          "chunk_id": 222,
+          "doc": "riscv-plic",
+          "score": 3,
+          "subtopics": [
+            "interrupt gateway holdoff",
+            "level-triggered reassertion",
+            "edge-triggered pending events"
+          ]
+        },
+        {
+          "chunk_id": 223,
+          "doc": "riscv-plic",
+          "score": 2,
+          "subtopics": [
+            "interrupt notification",
+            "EIP state",
+            "claim races"
+          ]
+        },
+        {
+          "chunk_id": 229,
+          "doc": "riscv-plic",
+          "score": 2,
+          "subtopics": [
+            "PLIC pending bits",
+            "claim clears pending"
+          ]
+        },
+        {
+          "chunk_id": 226,
+          "doc": "riscv-plic",
+          "score": 2,
+          "subtopics": [
+            "claim and completion registers",
+            "interrupt pending state"
+          ]
+        },
+        {
+          "chunk_id": 230,
+          "doc": "riscv-plic",
+          "score": 1
+        },
+        {
+          "chunk_id": 232,
+          "doc": "riscv-plic",
+          "score": 1
+        },
+        {
+          "chunk_id": 228,
+          "doc": "riscv-plic",
+          "score": 1
+        },
+        {
+          "chunk_id": 221,
+          "doc": "riscv-plic",
+          "score": 2,
+          "subtopics": [
+            "interrupt gateways",
+            "hart-context notifications"
+          ]
+        },
+        {
+          "chunk_id": 227,
+          "doc": "riscv-plic",
+          "score": 1
+        },
+        {
+          "chunk_id": 233,
+          "doc": "riscv-plic",
+          "score": 2,
+          "subtopics": [
+            "interrupt claim",
+            "pending-bit clearing"
+          ]
+        },
+        {
+          "chunk_id": 234,
+          "doc": "riscv-plic",
+          "score": 3,
+          "subtopics": [
+            "interrupt completion message",
+            "gateway reactivation",
+            "claim-complete register"
+          ]
+        },
+        {
+          "chunk_id": 4108,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 219,
+          "doc": "riscv-plic",
+          "score": 0
+        },
+        {
+          "chunk_id": 377,
+          "doc": "riscv-privileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 216,
+          "doc": "riscv-plic",
+          "score": 0
+        },
+        {
+          "chunk_id": 4147,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 26266,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 5063,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q12",
+      "query": "atomic compare-and-swap used to build mutual exclusion",
+      "category": "cross_doc",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 3742,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "compare-and-swap",
+            "lock-free synchronization",
+            "atomic retry loop"
+          ]
+        },
+        {
+          "chunk_id": 3644,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "CAS spin lock",
+            "atomic lock acquisition",
+            "mutual exclusion"
+          ]
+        },
+        {
+          "chunk_id": 2310,
+          "doc": "riscv-unprivileged",
+          "score": 2,
+          "subtopics": [
+            "RISC-V CAS",
+            "thread synchronization",
+            "ABA avoidance"
+          ]
+        },
+        {
+          "chunk_id": 3643,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 7437,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "Arm compare-and-swap",
+            "atomic memory update",
+            "acquire-release semantics"
+          ]
+        },
+        {
+          "chunk_id": 7457,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "unprivileged compare-and-swap",
+            "atomic memory update"
+          ]
+        },
+        {
+          "chunk_id": 3633,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "hardware lock primitives",
+            "mutual exclusion"
+          ]
+        },
+        {
+          "chunk_id": 2307,
+          "doc": "riscv-unprivileged",
+          "score": 2,
+          "subtopics": [
+            "atomic memory operations",
+            "spin-lock critical section",
+            "acquire-release ordering"
+          ]
+        },
+        {
+          "chunk_id": 5967,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "Arm atomic instructions",
+            "compare-and-swap",
+            "memory ordering"
+          ]
+        },
+        {
+          "chunk_id": 3642,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "spin-lock correctness",
+            "compare-and-swap pseudocode"
+          ]
+        },
+        {
+          "chunk_id": 8556,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 27422,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 8536,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 17739,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 3640,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "atomic test-and-set",
+            "spin lock",
+            "mutual exclusion"
+          ]
+        },
+        {
+          "chunk_id": 2313,
+          "doc": "riscv-unprivileged",
+          "score": 2,
+          "subtopics": [
+            "AMOCAS",
+            "nonblocking queue",
+            "ABA avoidance"
+          ]
+        },
+        {
+          "chunk_id": 17738,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 773,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "mutex",
+            "critical-region exclusion"
+          ]
+        },
+        {
+          "chunk_id": 764,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "Peterson mutual exclusion",
+            "critical regions"
+          ]
+        },
+        {
+          "chunk_id": 3636,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 3241,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q13",
+      "query": "page replacement when physical memory is overcommitted",
+      "category": "cross_doc",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 3549,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "memory pressure",
+            "page eviction",
+            "replacement policy"
+          ]
+        },
+        {
+          "chunk_id": 3566,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "memory oversubscription",
+            "thrashing",
+            "admission control"
+          ]
+        },
+        {
+          "chunk_id": 1151,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3,
+          "subtopics": [
+            "page-fault eviction",
+            "dirty-page writeback",
+            "replacement algorithms"
+          ]
+        },
+        {
+          "chunk_id": 3539,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "full physical memory",
+            "page-out",
+            "page-replacement policy"
+          ]
+        },
+        {
+          "chunk_id": 1154,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "FIFO page replacement",
+            "victim selection"
+          ]
+        },
+        {
+          "chunk_id": 3548,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 552,
+          "doc": "riscv-privileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 672,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 1135,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3,
+          "subtopics": [
+            "virtual-memory overcommit",
+            "disk-backed pages",
+            "multiprogramming"
+          ]
+        },
+        {
+          "chunk_id": 3230,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 3529,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "page-table swapping",
+            "memory pressure"
+          ]
+        },
+        {
+          "chunk_id": 1139,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "present bit",
+            "unmapped virtual pages",
+            "page fault"
+          ]
+        },
+        {
+          "chunk_id": 1240,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "swapping",
+            "page replacement",
+            "working set"
+          ]
+        },
+        {
+          "chunk_id": 3545,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "page-fault handler",
+            "disk-to-memory transfer",
+            "victim replacement"
+          ]
+        },
+        {
+          "chunk_id": 1152,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "optimal page replacement",
+            "victim selection"
+          ]
+        },
+        {
+          "chunk_id": 3535,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 1131,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "memory exhaustion",
+            "process swapping",
+            "swap-area exhaustion"
+          ]
+        },
+        {
+          "chunk_id": 3544,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "page daemon",
+            "memory watermarks",
+            "background eviction"
+          ]
+        },
+        {
+          "chunk_id": 1241,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 3563,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "clock replacement",
+            "reference bits",
+            "LRU approximation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q14",
+      "query": "exception return restores privilege state and resumes execution",
+      "category": "cross_doc",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 635,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "RISC-V xRET",
+            "trap-state restoration",
+            "landing-pad state"
+          ]
+        },
+        {
+          "chunk_id": 24328,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "exception return",
+            "PE state transition"
+          ]
+        },
+        {
+          "chunk_id": 415,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 24425,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "subtopics": [
+            "AArch32 exception return",
+            "PC restoration",
+            "PSTATE restoration"
+          ]
+        },
+        {
+          "chunk_id": 530,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "SRET",
+            "trap-state recovery",
+            "double-trap control"
+          ]
+        },
+        {
+          "chunk_id": 24414,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "subtopics": [
+            "return address",
+            "saved PSTATE",
+            "resume point"
+          ]
+        },
+        {
+          "chunk_id": 24327,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 16148,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "illegal exception return",
+            "ELR and SPSR state"
+          ]
+        },
+        {
+          "chunk_id": 17171,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "saved exception state",
+            "protected return state"
+          ]
+        },
+        {
+          "chunk_id": 16147,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "subtopics": [
+            "AArch64 ERET",
+            "PSTATE from SPSR",
+            "PC from ELR"
+          ]
+        },
+        {
+          "chunk_id": 24424,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 24416,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3,
+          "subtopics": [
+            "AArch32 ERET",
+            "execution resume",
+            "link-register return address"
+          ]
+        },
+        {
+          "chunk_id": 443,
+          "doc": "riscv-privileged",
+          "score": 3,
+          "subtopics": [
+            "MRET and SRET",
+            "privilege-stack restore",
+            "EPC resume address"
+          ]
+        },
+        {
+          "chunk_id": 16149,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "PSTATE restoration",
+            "PC restoration",
+            "context synchronization"
+          ]
+        },
+        {
+          "chunk_id": 25460,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "saved PSTATE.IL",
+            "exception return state"
+          ]
+        },
+        {
+          "chunk_id": 24422,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "illegal return behavior",
+            "PSTATE restore",
+            "PC restore"
+          ]
+        },
+        {
+          "chunk_id": 16326,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 16325,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 25509,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 24419,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "id": "q15",
+      "query": "stack alignment and frame records across ARM64 and RISC-V calling conventions",
+      "category": "cross_doc",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 142,
+          "doc": "arm_aapcs64",
+          "score": 3,
+          "subtopics": [
+            "AAPCS64 stack alignment",
+            "frame-record chain",
+            "FP and LR"
+          ]
+        },
+        {
+          "chunk_id": 60,
+          "doc": "riscv-abi",
+          "score": 3,
+          "subtopics": [
+            "RISC-V stack alignment",
+            "ABI object attribute"
+          ]
+        },
+        {
+          "chunk_id": 143,
+          "doc": "arm_aapcs64",
+          "score": 3,
+          "subtopics": [
+            "Arm frame-pointer policy",
+            "frame-chain conformance"
+          ]
+        },
+        {
+          "chunk_id": 59,
+          "doc": "riscv-abi",
+          "score": 2,
+          "subtopics": [
+            "RISC-V stack-alignment attribute"
+          ]
+        },
+        {
+          "chunk_id": 7282,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "AArch64 SP alignment",
+            "SP alignment fault"
+          ]
+        },
+        {
+          "chunk_id": 10,
+          "doc": "riscv-abi",
+          "score": 3,
+          "subtopics": [
+            "RISC-V 128-bit stack alignment",
+            "stack arguments",
+            "callee-saved registers"
+          ]
+        },
+        {
+          "chunk_id": 106,
+          "doc": "arm_aapcs64",
+          "score": 2,
+          "subtopics": [
+            "AAPCS64 conformance",
+            "public-interface stack rules"
+          ]
+        },
+        {
+          "chunk_id": 5660,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "AArch64 stack pointer",
+            "16-byte alignment"
+          ]
+        },
+        {
+          "chunk_id": 2250,
+          "doc": "riscv-unprivileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 27418,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2,
+          "subtopics": [
+            "AArch64 SP alignment check",
+            "alignment fault"
+          ]
+        },
+        {
+          "chunk_id": 1,
+          "doc": "riscv-abi",
+          "score": 1
+        },
+        {
+          "chunk_id": 99,
+          "doc": "arm_aapcs64",
+          "score": 2,
+          "subtopics": [
+            "activation record",
+            "call-frame stack"
+          ]
+        },
+        {
+          "chunk_id": 23374,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 12,
+          "doc": "riscv-abi",
+          "score": 2,
+          "subtopics": [
+            "ILP32E stack alignment",
+            "callee-saved registers"
+          ]
+        },
+        {
+          "chunk_id": 85,
+          "doc": "arm_aapcs64",
+          "score": 1
+        },
+        {
+          "chunk_id": 24129,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 89,
+          "doc": "arm_aapcs64",
+          "score": 1
+        },
+        {
+          "chunk_id": 5,
+          "doc": "riscv-abi",
+          "score": 3,
+          "subtopics": [
+            "RISC-V register convention",
+            "frame pointer",
+            "callee-saved registers"
+          ]
+        },
+        {
+          "chunk_id": 141,
+          "doc": "arm_aapcs64",
+          "score": 3,
+          "subtopics": [
+            "Arm stack constraints",
+            "16-byte SP alignment"
+          ]
+        },
+        {
+          "chunk_id": 8964,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q16",
+      "query": "как таймерное прерывание приводит к переключению выполняемого процесса",
+      "category": "cross_doc",
+      "language": "ru",
+      "judgments": [
+        {
+          "chunk_id": 3314,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "timer interrupt",
+            "scheduler decision",
+            "context switch"
+          ]
+        },
+        {
+          "chunk_id": 3313,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "timer-based preemption",
+            "kernel control recovery",
+            "hardware context save"
+          ]
+        },
+        {
+          "chunk_id": 750,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "scheduler transitions",
+            "interrupt-driven process switch"
+          ]
+        },
+        {
+          "chunk_id": 938,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 3319,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "non-cooperative scheduling",
+            "timer interrupt",
+            "context switch"
+          ]
+        },
+        {
+          "chunk_id": 571,
+          "doc": "riscv-privileged",
+          "score": 2,
+          "subtopics": [
+            "supervisor timer interrupts",
+            "timer interrupt delivery"
+          ]
+        },
+        {
+          "chunk_id": 261,
+          "doc": "riscv-sbi",
+          "score": 2,
+          "subtopics": [
+            "SBI timer programming",
+            "pending timer interrupt"
+          ]
+        },
+        {
+          "chunk_id": 1203,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 3315,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "interrupt register save",
+            "process context restore",
+            "return-from-trap"
+          ]
+        },
+        {
+          "chunk_id": 935,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "clock interrupt handler",
+            "scheduling trigger"
+          ]
+        },
+        {
+          "chunk_id": 3311,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "regaining CPU control",
+            "process switching"
+          ]
+        },
+        {
+          "chunk_id": 925,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 3320,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 1204,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 3332,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "round-robin scheduling",
+            "time slice",
+            "timer interrupt period"
+          ]
+        },
+        {
+          "chunk_id": 1234,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 3316,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2,
+          "subtopics": [
+            "context-switch assembly",
+            "register save and restore",
+            "stack switch"
+          ]
+        },
+        {
+          "chunk_id": 1230,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 3436,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "timer interrupt",
+            "switch from process A to B",
+            "limited direct execution"
+          ]
+        },
+        {
+          "chunk_id": 760,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2,
+          "subtopics": [
+            "clock-interrupt process switch",
+            "interrupt masking"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q17",
+      "query": "machine firmware exposes hardware interrupt services to a supervisor kernel",
+      "category": "cross_doc",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 524,
+          "doc": "riscv-privileged",
+          "score": 3
+        },
+        {
+          "chunk_id": 533,
+          "doc": "riscv-privileged",
+          "score": 2
+        },
+        {
+          "chunk_id": 889,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 4186,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 25535,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 340,
+          "doc": "riscv-sbi",
+          "score": 2
+        },
+        {
+          "chunk_id": 24344,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2
+        },
+        {
+          "chunk_id": 4100,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 1650,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 423,
+          "doc": "riscv-privileged",
+          "score": 2
+        },
+        {
+          "chunk_id": 270,
+          "doc": "riscv-sbi",
+          "score": 3
+        },
+        {
+          "chunk_id": 918,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 20708,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 424,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 4483,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 291,
+          "doc": "riscv-sbi",
+          "score": 2
+        },
+        {
+          "chunk_id": 16172,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 865,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 0
+        },
+        {
+          "chunk_id": 571,
+          "doc": "riscv-privileged",
+          "score": 3
+        },
+        {
+          "chunk_id": 5062,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "id": "q18",
+      "query": "an interrupt fires once but remains active after my handler completes",
+      "category": "natural",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 910,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2
+        },
+        {
+          "chunk_id": 4112,
+          "doc": "gic_architecture_specification",
+          "score": 3
+        },
+        {
+          "chunk_id": 892,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3
+        },
+        {
+          "chunk_id": 222,
+          "doc": "riscv-plic",
+          "score": 3
+        },
+        {
+          "chunk_id": 4753,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 444,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 234,
+          "doc": "riscv-plic",
+          "score": 3
+        },
+        {
+          "chunk_id": 890,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 3771,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 4154,
+          "doc": "gic_architecture_specification",
+          "score": 3
+        },
+        {
+          "chunk_id": 975,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 5222,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 4892,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 1047,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2
+        },
+        {
+          "chunk_id": 4248,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 1507,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2
+        },
+        {
+          "chunk_id": 4758,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 995,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 4147,
+          "doc": "gic_architecture_specification",
+          "score": 3
+        },
+        {
+          "chunk_id": 963,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "id": "q19",
+      "query": "my new process sees corrupted arguments immediately after exec",
+      "category": "natural",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 1192,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3
+        },
+        {
+          "chunk_id": 3288,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2
+        },
+        {
+          "chunk_id": 1190,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3
+        },
+        {
+          "chunk_id": 3287,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2
+        },
+        {
+          "chunk_id": 1222,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2
+        },
+        {
+          "chunk_id": 1193,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3
+        },
+        {
+          "chunk_id": 3300,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 18418,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 1224,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3
+        },
+        {
+          "chunk_id": 201,
+          "doc": "arm_aapcs64",
+          "score": 1
+        },
+        {
+          "chunk_id": 1221,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3
+        },
+        {
+          "chunk_id": 24461,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 101,
+          "doc": "arm_aapcs64",
+          "score": 0
+        },
+        {
+          "chunk_id": 1575,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2
+        },
+        {
+          "chunk_id": 18417,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 3289,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2
+        },
+        {
+          "chunk_id": 712,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 3
+        },
+        {
+          "chunk_id": 3303,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 708,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 3424,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q20",
+      "query": "two threads increment a shared counter and some updates disappear",
+      "category": "natural",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 3605,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 3254,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2
+        },
+        {
+          "chunk_id": 3606,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 3255,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 3607,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 2278,
+          "doc": "riscv-unprivileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 755,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2
+        },
+        {
+          "chunk_id": 18213,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 3253,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 2279,
+          "doc": "riscv-unprivileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 28513,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 3608,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 17274,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 17311,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 3666,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 17266,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 3665,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 3614,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2
+        },
+        {
+          "chunk_id": 3662,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3
+        },
+        {
+          "chunk_id": 3661,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 3,
+          "subtopics": [
+            "lost updates",
+            "thread-safe counters"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q21",
+      "query": "the TLB still uses an old mapping after I changed a page-table entry",
+      "category": "natural",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 1147,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2
+        },
+        {
+          "chunk_id": 24832,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3
+        },
+        {
+          "chunk_id": 3505,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 2
+        },
+        {
+          "chunk_id": 24837,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3
+        },
+        {
+          "chunk_id": 1146,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 1
+        },
+        {
+          "chunk_id": 3507,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 24830,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2
+        },
+        {
+          "chunk_id": 17098,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2
+        },
+        {
+          "chunk_id": 3504,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 1148,
+          "doc": "operating_systems_design_and_implementation",
+          "score": 2
+        },
+        {
+          "chunk_id": 24855,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3
+        },
+        {
+          "chunk_id": 3536,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 3496,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 24838,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3
+        },
+        {
+          "chunk_id": 3495,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 28652,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3
+        },
+        {
+          "chunk_id": 24839,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 3
+        },
+        {
+          "chunk_id": 3527,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 3596,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 1
+        },
+        {
+          "chunk_id": 17081,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "id": "q22",
+      "query": "после mret пользовательский процесс сразу получает illegal instruction",
+      "category": "natural",
+      "language": "ru",
+      "judgments": [
+        {
+          "chunk_id": 443,
+          "doc": "riscv-privileged",
+          "score": 3
+        },
+        {
+          "chunk_id": 419,
+          "doc": "riscv-privileged",
+          "score": 2
+        },
+        {
+          "chunk_id": 24424,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 28385,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 635,
+          "doc": "riscv-privileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 24423,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 24422,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 408,
+          "doc": "riscv-privileged",
+          "score": 2
+        },
+        {
+          "chunk_id": 25518,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 661,
+          "doc": "riscv-privileged",
+          "score": 2
+        },
+        {
+          "chunk_id": 25460,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 6487,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 632,
+          "doc": "riscv-privileged",
+          "score": 3
+        },
+        {
+          "chunk_id": 6457,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 434,
+          "doc": "riscv-privileged",
+          "score": 2
+        },
+        {
+          "chunk_id": 6510,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 2340,
+          "doc": "riscv-unprivileged",
+          "score": 1
+        },
+        {
+          "chunk_id": 16147,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 27335,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 28384,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q23",
+      "query": "почему более приоритетное прерывание GIC не вытесняет текущий обработчик",
+      "category": "natural",
+      "language": "ru",
+      "judgments": [
+        {
+          "chunk_id": 5221,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 4263,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4089,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4185,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 5317,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 1
+        },
+        {
+          "chunk_id": 24990,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 4184,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 4168,
+          "doc": "gic_architecture_specification",
+          "score": 3
+        },
+        {
+          "chunk_id": 18514,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 4244,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 4169,
+          "doc": "gic_architecture_specification",
+          "score": 3
+        },
+        {
+          "chunk_id": 4119,
+          "doc": "gic_architecture_specification",
+          "score": 3
+        },
+        {
+          "chunk_id": 4167,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 4306,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 5229,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 4177,
+          "doc": "gic_architecture_specification",
+          "score": 3
+        },
+        {
+          "chunk_id": 4087,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 4147,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 4146,
+          "doc": "gic_architecture_specification",
+          "score": 1
+        },
+        {
+          "chunk_id": 4992,
+          "doc": "gic_architecture_specification",
+          "score": 3
+        },
+        {
+          "chunk_id": 4166,
+          "doc": "gic_architecture_specification",
+          "score": 2
+        },
+        {
+          "chunk_id": 4255,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 4105,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q24",
+      "query": "CUDA warp occupancy limited by register pressure",
+      "category": "negative",
+      "language": "en",
+      "judgments": [
+        {
+          "chunk_id": 3204,
+          "doc": "riscv-unprivileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 23355,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 22885,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 307,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 23371,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 2430,
+          "doc": "riscv-unprivileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 309,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 23404,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 2617,
+          "doc": "riscv-unprivileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 24127,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 17728,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 18499,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 21071,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 21104,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 24116,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 24118,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 21098,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 21100,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 24120,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 8206,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        }
+      ]
+    },
+    {
+      "id": "q25",
+      "query": "Kubernetes pod disruption budget при rolling update",
+      "category": "negative",
+      "language": "ru",
+      "judgments": [
+        {
+          "chunk_id": 16988,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 4185,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 28464,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 484,
+          "doc": "riscv-privileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 217,
+          "doc": "riscv-plic",
+          "score": 0
+        },
+        {
+          "chunk_id": 2554,
+          "doc": "riscv-unprivileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 4071,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0
+        },
+        {
+          "chunk_id": 62,
+          "doc": "riscv-abi",
+          "score": 0
+        },
+        {
+          "chunk_id": 4287,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 244,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 219,
+          "doc": "riscv-plic",
+          "score": 0
+        },
+        {
+          "chunk_id": 16980,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 238,
+          "doc": "riscv-sbi",
+          "score": 0
+        },
+        {
+          "chunk_id": 4284,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 3348,
+          "doc": "operating_systems_three_easy_pieces",
+          "score": 0
+        },
+        {
+          "chunk_id": 2840,
+          "doc": "riscv-unprivileged",
+          "score": 0
+        },
+        {
+          "chunk_id": 11334,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        },
+        {
+          "chunk_id": 4129,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 5243,
+          "doc": "gic_architecture_specification",
+          "score": 0
+        },
+        {
+          "chunk_id": 18269,
+          "doc": "arm_profile_architecture_reference_manual",
+          "score": 0
+        }
+      ]
+    }
+  ]
+}

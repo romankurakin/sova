@@ -1,10 +1,7 @@
 """Tests for llama_client module."""
 
-import io
 import json
 import os
-import urllib.error
-from email.message import Message
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,7 +36,6 @@ class TestCheckServers:
         self,
         *up_ports: str,
         mode: str = "search",
-        use_reranker: bool = True,
     ):
         from sova.llama_client import check_servers
 
@@ -52,7 +48,7 @@ class TestCheckServers:
             patch("sova.llama_client._plist_exists", return_value=False),
             patch("sova.llama_client._touch_activity"),
         ):
-            return check_servers(mode=mode, use_reranker=use_reranker)
+            return check_servers(mode=mode)
 
     def test_index_context_healthy(self):
         ok, msg = self._run_check("8083", mode="index_context")
@@ -65,12 +61,7 @@ class TestCheckServers:
         assert msg == "ready"
 
     def test_search_all_healthy(self):
-        ok, msg = self._run_check("8081", "8082", mode="search")
-        assert ok is True
-        assert msg == "ready"
-
-    def test_search_without_reranker_only_requires_embedding(self):
-        ok, msg = self._run_check("8081", mode="search", use_reranker=False)
+        ok, msg = self._run_check("8081", mode="search")
         assert ok is True
         assert msg == "ready"
 
@@ -91,53 +82,9 @@ class TestCheckServers:
         assert "embedding" in msg
 
     def test_embedding_down_for_search(self):
-        ok, msg = self._run_check("8082", mode="search")
+        ok, msg = self._run_check(mode="search")
         assert ok is False
         assert "embedding" in msg
-
-    def test_reranker_down_no_plist_is_error(self):
-        """Search requires reranker; missing service should fail."""
-        ok, msg = self._run_check("8081", mode="search")
-        assert ok is False
-        assert "reranker" in msg
-
-    def test_reranker_down_with_plist_is_error(self):
-        """Search requires reranker; startup timeout should fail."""
-        from sova.llama_client import check_servers
-
-        with (
-            patch(
-                "sova.llama_client.urllib.request.urlopen",
-                side_effect=_mock_urlopen_for_health("8081"),
-            ),
-            patch("sova.llama_client.get_memory_hard_cap_gib", return_value=100.0),
-            patch("sova.llama_client._plist_exists", return_value=True),
-            patch("sova.llama_client.subprocess.run"),
-            patch("sova.llama_client._touch_activity"),
-            patch("sova.llama_client.time.monotonic", side_effect=[0, 0, 301]),
-            patch("sova.llama_client.time.sleep"),
-        ):
-            ok, msg = check_servers(mode="search")
-            assert ok is False
-            assert "reranker" in msg
-
-    def test_reranker_ubatch_too_small_fails_preflight(self):
-        from sova.llama_client import check_servers
-
-        with (
-            patch(
-                "sova.llama_client.urllib.request.urlopen",
-                side_effect=_mock_urlopen_for_health("8081", "8082"),
-            ),
-            patch("sova.llama_client.get_memory_hard_cap_gib", return_value=100.0),
-            patch("sova.llama_client._plist_exists", return_value=True),
-            patch("sova.llama_client._configured_ubatch_size", return_value=512),
-            patch("sova.llama_client._touch_activity"),
-        ):
-            ok, msg = check_servers(mode="search")
-
-        assert ok is False
-        assert "--ubatch-size" in msg
 
     def test_admission_rejects_required_service(self):
         from sova.llama_client import check_servers
@@ -181,25 +128,6 @@ class TestCheckServers:
         assert admitted == [("embedding", "http://127.0.0.1:8081", True)]
         assert note is None
 
-    def test_search_skips_strict_required_admission_for_reranker(self):
-        from sova.llama_client import _admit_services_for_mode
-
-        with patch("sova.llama_client.get_memory_hard_cap_gib", return_value=2.0):
-            admitted, note = _admit_services_for_mode(
-                "search",
-                [
-                    ("embedding", "http://127.0.0.1:8081", True),
-                    ("reranker", "http://127.0.0.1:8082", True),
-                ],
-            )
-
-        assert admitted == [
-            ("embedding", "http://127.0.0.1:8081", True),
-            ("reranker", "http://127.0.0.1:8082", True),
-        ]
-        assert note is None
-
-
 class TestPostJson:
     def test_touches_activity_for_known_service_url(self):
         from sova.llama_client import _post_json
@@ -240,7 +168,7 @@ class TestServiceRuntimeStatus:
             ),
             patch(
                 "sova.llama_client._plist_exists",
-                side_effect=lambda label: label != "com.sova.reranker",
+                return_value=True,
             ),
         ):
             rows = get_services_runtime_status()
@@ -249,8 +177,8 @@ class TestServiceRuntimeStatus:
         assert rows[0]["state"] == "running"
         assert rows[0]["pid"] == 1234
         assert rows[0]["rss_mib"] == 512.0
-        assert rows[1]["name"] == "reranker"
-        assert rows[1]["state"] == "not installed"
+        assert rows[1]["name"] == "chat"
+        assert rows[1]["state"] == "stopped"
 
     def test_reports_starting_when_pid_exists_but_health_is_down(self):
         from sova.llama_client import get_services_runtime_status
@@ -258,7 +186,7 @@ class TestServiceRuntimeStatus:
         with (
             patch(
                 "sova.llama_client._pid_for_port",
-                side_effect=lambda port: 2222 if port == 8082 else None,
+                side_effect=lambda port: 2222 if port == 8083 else None,
             ),
             patch("sova.llama_client._rss_mib_for_pid", return_value=256.0),
             patch("sova.llama_client._health_ok", return_value=False),
@@ -266,9 +194,9 @@ class TestServiceRuntimeStatus:
         ):
             rows = get_services_runtime_status()
 
-        reranker = next(r for r in rows if r["name"] == "reranker")
-        assert reranker["state"] == "starting"
-        assert reranker["pid"] == 2222
+        chat = next(r for r in rows if r["name"] == "chat")
+        assert chat["state"] == "starting"
+        assert chat["pid"] == 2222
 
 
 class TestGetQueryEmbedding:
@@ -317,10 +245,10 @@ def test_server_status_download_progress_is_bucketed(tmp_path, monkeypatch):
     from sova import llama_client
 
     monkeypatch.setattr(llama_client, "_HF_HUB_CACHE", tmp_path / "hf")
-    monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path)
-    monkeypatch.setitem(llama_client._CACHE_FILES, "com.sova.chat", "chat.gguf")
-    dl_path = tmp_path / "chat.gguf.downloadInProgress"
-    dl_path.touch()
+    repo, _ = llama_client._MODEL_SPECS["com.sova.chat"]
+    blobs = tmp_path / "hf" / ("models--" + repo.replace("/", "--")) / "blobs"
+    blobs.mkdir(parents=True)
+    dl_path = blobs / "chat.downloadInProgress"
 
     # 1.64 GiB should be shown as 1.5 GiB (0.5 GiB step).
     with dl_path.open("wb") as f:
@@ -353,7 +281,6 @@ def test_is_model_cached_detects_hf_hub_layout(tmp_path, monkeypatch):
     from sova import llama_client
 
     monkeypatch.setattr(llama_client, "_HF_HUB_CACHE", tmp_path / "hf")
-    monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path / "legacy")
 
     repo, filename = llama_client._MODEL_SPECS["com.sova.embedding"]
     assert llama_client.is_model_cached("com.sova.embedding") is False
@@ -367,25 +294,12 @@ def test_is_model_cached_false_while_hf_download_in_progress(tmp_path, monkeypat
     from sova import llama_client
 
     monkeypatch.setattr(llama_client, "_HF_HUB_CACHE", tmp_path / "hf")
-    monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path / "legacy")
 
     repo, filename = llama_client._MODEL_SPECS["com.sova.embedding"]
     _hf_model_layout(tmp_path / "hf", repo, filename or "model.gguf", complete=False)
 
     assert llama_client.is_model_cached("com.sova.embedding") is False
     assert llama_client._server_status("com.sova.embedding").startswith("downloading")
-
-
-def test_is_model_cached_falls_back_to_legacy_flat_cache(tmp_path, monkeypatch):
-    from sova import llama_client
-
-    monkeypatch.setattr(llama_client, "_HF_HUB_CACHE", tmp_path / "hf")
-    monkeypatch.setattr(llama_client, "_LLAMA_CACHE", tmp_path / "legacy")
-    (tmp_path / "legacy").mkdir()
-    legacy_name = llama_client._CACHE_FILES["com.sova.reranker"]
-    (tmp_path / "legacy" / legacy_name).write_bytes(b"gguf")
-
-    assert llama_client.is_model_cached("com.sova.reranker") is True
 
 
 def test_embedding_token_budget_uses_dynamic_margin():
@@ -622,11 +536,19 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "  This chunk covers auth.  "}}]}
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"context":"Authentication rules govern account access."}'
+                            }
+                        }
+                    ]
+                }
             ),
         ):
             result = generate_context("doc1", "Auth", "chunk text here")
-            assert result == "This chunk covers auth."
+            assert result == "Authentication rules govern account access."
 
     def test_prompt_contains_doc_and_section(self):
         from sova.llama_client import generate_context
@@ -636,7 +558,8 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "Context."}}]}, captured
+                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                captured,
             ),
         ):
             generate_context("my-doc", "Introduction", "some text")
@@ -652,7 +575,8 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "Context."}}]}, captured
+                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                captured,
             ),
         ):
             generate_context("doc1", None, "text")
@@ -667,7 +591,8 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "Context."}}]}, captured
+                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                captured,
             ),
         ):
             generate_context("doc1", "Sec", "main", "prev text", "next text")
@@ -683,7 +608,8 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "Context."}}]}, captured
+                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                captured,
             ),
         ):
             generate_context("doc1", "Sec", "text", "", "")
@@ -699,199 +625,33 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "Context."}}]}, captured
+                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                captured,
             ),
         ):
             generate_context("doc1", "Sec", "text")
-            assert captured["body"]["model"] == "ministral-3-14b-instruct-2512"
+            assert captured["body"]["model"] == "qwen3.8-27b"
             assert captured["body"]["temperature"] == 0.0
-            assert captured["body"]["max_tokens"] == 96
+            assert captured["body"]["max_tokens"] == 192
+            assert captured["body"]["reasoning_effort"] == "low"
+            assert captured["body"]["response_format"]["type"] == "json_schema"
             assert captured["body"]["messages"][0]["role"] == "system"
 
-    def test_parse_error_falls_back_to_completion_endpoint(self):
-        from sova.llama_client import generate_context
+    def test_rejects_markup_and_meta_openings(self):
+        from sova.llama_client import ServerError, _validate_context_response
 
-        def side_effect(req, timeout=None):
-            url = req.full_url if hasattr(req, "full_url") else str(req)
-            if "/health" in url:
-                return _mock_urlopen({"status": "ok"})
-            if "/v1/chat/completions" in url:
-                raise urllib.error.HTTPError(
-                    url=url,
-                    code=500,
-                    msg="Internal Server Error",
-                    hdrs=Message(),
-                    fp=io.BytesIO(
-                        b'{"error":{"code":500,"message":"Failed to parse input at pos 0","type":"server_error"}}'
-                    ),
-                )
-            if "/completion" in url:
-                return _mock_urlopen({"content": "Fallback plain sentence."})
-            raise AssertionError(f"unexpected url: {url}")
-
-        with patch(
-            "sova.llama_client.urllib.request.urlopen",
-            side_effect=side_effect,
-        ):
-            result = generate_context("doc1", "Sec", "text")
-
-        assert result == "Fallback plain sentence."
-
-
-class TestRerank:
-    def test_success(self):
-        from sova.llama_client import rerank
-
-        def urlopen_side_effect(req, timeout=None):
-            return _mock_urlopen(
-                {
-                    "results": [
-                        {"index": 0, "relevance_score": 0.99},
-                        {"index": 1, "relevance_score": 0.42},
-                    ]
-                }
+        with pytest.raises(ServerError, match="meta opening"):
+            _validate_context_response("This chunk explains account access rules.")
+        with pytest.raises(ServerError, match="meta opening"):
+            _validate_context_response("The target passage defines register operands.")
+        with pytest.raises(ServerError, match="markup"):
+            _validate_context_response("Account **access** follows explicit rules.")
+        assert (
+            _validate_context_response(
+                "In the RISC-V specification, sbi_nacl_sync_sret handles values < 100."
             )
-
-        with (
-            patch("sova.llama_client._ensure_server", return_value=True),
-            patch(
-                "sova.llama_client.urllib.request.urlopen",
-                side_effect=urlopen_side_effect,
-            ),
-        ):
-            result = rerank("query", ["doc1", "doc2"], top_n=2)
-            assert result is not None
-            assert len(result) == 2
-            assert result[0]["relevance_score"] == 0.99
-
-    def test_connection_failure_raises(self):
-        from sova.llama_client import ServerError, rerank
-
-        with (
-            patch("sova.llama_client._ensure_server", return_value=False),
-            pytest.raises(ServerError, match="reranker server not reachable"),
-        ):
-            rerank("query", ["doc1", "doc2"])
-
-    def test_timeout_raises(self):
-        from sova.llama_client import ServerError, rerank
-
-        def urlopen_side_effect(req, timeout=None):
-            raise TimeoutError("timed out")
-
-        with (
-            patch("sova.llama_client._ensure_server", return_value=True),
-            patch(
-                "sova.llama_client.urllib.request.urlopen",
-                side_effect=urlopen_side_effect,
-            ),
-            pytest.raises(
-                ServerError, match="timed out even after adaptive compaction"
-            ),
-        ):
-            rerank("query", ["doc1"])
-
-    def test_invalid_response_raises(self):
-        from sova.llama_client import ServerError, rerank
-
-        def urlopen_side_effect(req, timeout=None):
-            return _mock_urlopen({"results": "not a list"})
-
-        with (
-            patch("sova.llama_client._ensure_server", return_value=True),
-            patch(
-                "sova.llama_client.urllib.request.urlopen",
-                side_effect=urlopen_side_effect,
-            ),
-            pytest.raises(ServerError, match="invalid rerank response"),
-        ):
-            rerank("query", ["doc1"])
-
-    def test_sends_full_documents_in_request(self):
-        from sova.llama_client import rerank
-
-        captured = {}
-
-        def urlopen_side_effect(req, timeout=None):
-            captured["body"] = json.loads(req.data.decode())
-            return _mock_urlopen({"results": [{"index": 0, "relevance_score": 0.5}]})
-
-        with (
-            patch("sova.llama_client._ensure_server", return_value=True),
-            patch(
-                "sova.llama_client.urllib.request.urlopen",
-                side_effect=urlopen_side_effect,
-            ),
-        ):
-            rerank("query", ["x" * 8000], top_n=1)
-
-        sent_doc = captured["body"]["documents"][0]
-        assert len(sent_doc) == 8000
-
-    def test_returns_actionable_error_for_physical_batch_limit(self):
-        from sova.llama_client import ServerError, rerank
-
-        with (
-            patch("sova.llama_client._ensure_server", return_value=True),
-            patch(
-                "sova.llama_client._post_json",
-                side_effect=ServerError(
-                    "server error 500: input (567 tokens) is too large to process. "
-                    "increase the physical batch size (current batch size: 512)"
-                ),
-            ),
-            pytest.raises(
-                ServerError, match="increase com.sova.reranker --ubatch-size"
-            ),
-        ):
-            rerank("query", ["doc1"], top_n=1)
-
-    def test_retries_with_compaction_on_physical_batch_limit(self):
-        from sova.llama_client import ServerError, rerank
-
-        calls: list[dict] = []
-
-        def post_side_effect(_url, payload, timeout=None):
-            calls.append(payload)
-            if len(calls) == 1:
-                raise ServerError(
-                    "server error 500: input (20662 tokens) is too large to process. "
-                    "increase the physical batch size (current batch size: 4096)"
-                )
-            return {"results": [{"index": 0, "relevance_score": 0.91}]}
-
-        with (
-            patch("sova.llama_client._ensure_server", return_value=True),
-            patch("sova.llama_client._post_json", side_effect=post_side_effect),
-        ):
-            result = rerank("query", ["x" * 8000], top_n=1)
-
-        assert result[0]["relevance_score"] == 0.91
-        assert len(calls) == 2
-        assert len(calls[0]["documents"][0]) == 8000
-        assert len(calls[1]["documents"][0]) < 8000
-
-    def test_retries_with_compaction_on_timeout(self):
-        from sova.llama_client import ServerError, rerank
-
-        calls: list[dict] = []
-
-        def post_side_effect(_url, payload, timeout=None):
-            calls.append(payload)
-            if len(calls) == 1:
-                raise ServerError("server timeout from http://127.0.0.1:8082/v1/rerank")
-            return {"results": [{"index": 0, "relevance_score": 0.88}]}
-
-        with (
-            patch("sova.llama_client._ensure_server", return_value=True),
-            patch("sova.llama_client._post_json", side_effect=post_side_effect),
-        ):
-            result = rerank("query", ["x" * 8000], top_n=1)
-
-        assert result[0]["relevance_score"] == 0.88
-        assert len(calls) == 2
-        assert len(calls[1]["documents"][0]) < len(calls[0]["documents"][0])
-
+            == "In the RISC-V specification, sbi_nacl_sync_sret handles values < 100."
+        )
 
 class TestStopServer:
     def test_stops_known_service(self):
@@ -1002,11 +762,11 @@ class TestStopServer:
 
 
 class TestCleanupIdleServices:
-    def test_stops_search_pair_together_with_shared_activity(self, tmp_path):
+    def test_stops_each_idle_service(self, tmp_path):
         from sova.llama_client import cleanup_idle_services
 
         now = 10_000.0
-        labels = ["com.sova.search", "com.sova.embedding", "com.sova.reranker"]
+        labels = ["com.sova.embedding", "com.sova.chat"]
         for label in labels:
             path = tmp_path / label
             path.write_bytes(b"")
@@ -1026,22 +786,17 @@ class TestCleanupIdleServices:
             if len(call.args) == 1 and len(call.args[0]) >= 3
         }
         assert "com.sova.embedding" in stopped
-        assert "com.sova.reranker" in stopped
+        assert "com.sova.chat" in stopped
         for label in labels:
             assert not (tmp_path / label).exists()
 
-    def test_keeps_search_pair_when_shared_activity_is_fresh(self, tmp_path):
+    def test_keeps_fresh_service(self, tmp_path):
         from sova.llama_client import cleanup_idle_services
 
         now = 10_000.0
-        search = tmp_path / "com.sova.search"
         embedding = tmp_path / "com.sova.embedding"
-        reranker = tmp_path / "com.sova.reranker"
-        for path in (search, embedding, reranker):
-            path.write_bytes(b"")
-        os.utime(search, (now - 100.0, now - 100.0))
-        os.utime(embedding, (now - 2_000.0, now - 2_000.0))
-        os.utime(reranker, (now - 2_000.0, now - 2_000.0))
+        embedding.write_bytes(b"")
+        os.utime(embedding, (now - 100.0, now - 100.0))
 
         with (
             patch("sova.llama_client._ACTIVITY_DIR", tmp_path),
@@ -1052,9 +807,7 @@ class TestCleanupIdleServices:
             cleanup_idle_services()
 
         mock_run.assert_not_called()
-        assert search.exists()
         assert embedding.exists()
-        assert reranker.exists()
 
 
 class TestRunEmbeddingCanary:

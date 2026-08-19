@@ -1,0 +1,425 @@
+{
+  "benchmark_schema_version": 2,
+  "name": "baseline",
+  "experiment": "Production search: vector and FTS retrieval, RRF fusion, exact-match bonuses, index penalties, and diversity selection; no second-stage model.",
+  "benchmark_suite": {
+    "id": "search",
+    "schema_version": 2,
+    "sha256": "e50c282909ade931fe2e609fce8a65ef563faefd06d830a863d00e8a05aaacd9"
+  },
+  "k": 10,
+  "runs": 1,
+  "created": "2026-08-20 02:05:06",
+  "unjudged_policy": "error",
+  "latency_ms": {
+    "p50": 136.0,
+    "p95": 143.4
+  },
+  "context_payload": {
+    "median_chars_per_top10": 20035
+  },
+  "metrics": {
+    "ndcg": {
+      "1": 0.8509316770186336,
+      "3": 0.757029722831317,
+      "5": 0.7400063045287074,
+      "10": 0.7629099615303213
+    },
+    "mrr": {
+      "1": 1.0,
+      "3": 1.0,
+      "5": 1.0,
+      "10": 1.0
+    },
+    "precision": {
+      "1": 1.0,
+      "3": 0.8115942028985508,
+      "5": 0.7478260869565218,
+      "10": 0.6043478260869566
+    },
+    "map": {
+      "1": 1.0,
+      "3": 0.8067632850241545,
+      "5": 0.7539130434782608,
+      "10": 0.6839121808143548
+    },
+    "recall": {
+      "1": 0.13977170172822345,
+      "3": 0.31367593758898105,
+      "5": 0.46491202034680296,
+      "10": 0.6817795730839209
+    },
+    "hit_rate": {
+      "1": 1.0,
+      "3": 1.0,
+      "5": 1.0,
+      "10": 1.0
+    }
+  },
+  "by_category": {
+    "exact_lookup": {
+      "ndcg": 0.8225767745128294,
+      "mrr": 1.0,
+      "map": 0.7335714285714285,
+      "precision": 0.38,
+      "recall": 0.8416666666666666,
+      "count": 5
+    },
+    "conceptual": {
+      "ndcg": 0.7768122207962106,
+      "mrr": 1.0,
+      "map": 0.6963128306878307,
+      "precision": 0.5666666666666667,
+      "recall": 0.7062590187590189,
+      "count": 6
+    },
+    "cross_doc": {
+      "ndcg": 0.7738746072608254,
+      "mrr": 1.0,
+      "map": 0.6720965608465609,
+      "precision": 0.75,
+      "recall": 0.5990028490028491,
+      "count": 6
+    },
+    "natural": {
+      "ndcg": 0.6883207123818377,
+      "mrr": 1.0,
+      "map": 0.6419444444444444,
+      "precision": 0.6833333333333332,
+      "recall": 0.6068376068376068,
+      "count": 6
+    },
+    "negative": {
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "map": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "count": 2
+    }
+  },
+  "by_language": {
+    "en": {
+      "ndcg": 0.7924257619686305,
+      "mrr": 1.0,
+      "map": 0.7188425925925926,
+      "precision": 0.6055555555555556,
+      "recall": 0.7083117499784167,
+      "count": 18
+    },
+    "ru": {
+      "ndcg": 0.6566530799524082,
+      "mrr": 1.0,
+      "map": 0.5581626984126984,
+      "precision": 0.6,
+      "recall": 0.5862637362637362,
+      "count": 5
+    }
+  },
+  "per_query": [
+    {
+      "id": "q01",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9615215457514801,
+        "mrr": 1.0,
+        "map": 1.0,
+        "precision": 0.3,
+        "recall": 1.0
+      }
+    },
+    {
+      "id": "q02",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9284117487045969,
+        "mrr": 1.0,
+        "map": 0.875,
+        "precision": 0.7,
+        "recall": 0.875
+      }
+    },
+    {
+      "id": "q03",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9247283649395048,
+        "mrr": 1.0,
+        "map": 0.8261904761904761,
+        "precision": 0.5,
+        "recall": 1.0
+      }
+    },
+    {
+      "id": "q04",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.7437735139792749,
+        "mrr": 1.0,
+        "map": 0.5,
+        "precision": 0.2,
+        "recall": 0.6666666666666666
+      }
+    },
+    {
+      "id": "q05",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.5544486991892904,
+        "mrr": 1.0,
+        "map": 0.4666666666666666,
+        "precision": 0.2,
+        "recall": 0.6666666666666666
+      }
+    },
+    {
+      "id": "q06",
+      "category": "conceptual",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.6362099283634699,
+        "mrr": 1.0,
+        "map": 0.24107142857142858,
+        "precision": 0.3,
+        "recall": 0.375
+      }
+    },
+    {
+      "id": "q07",
+      "category": "conceptual",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.8279105787453314,
+        "mrr": 1.0,
+        "map": 0.7,
+        "precision": 0.7,
+        "recall": 0.6363636363636364
+      }
+    },
+    {
+      "id": "q08",
+      "category": "conceptual",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.7747662705954262,
+        "mrr": 1.0,
+        "map": 0.95,
+        "precision": 0.4,
+        "recall": 1.0
+      }
+    },
+    {
+      "id": "q09",
+      "category": "conceptual",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9096870239812596,
+        "mrr": 1.0,
+        "map": 0.8055555555555555,
+        "precision": 0.5,
+        "recall": 0.8333333333333334
+      }
+    },
+    {
+      "id": "q10",
+      "category": "conceptual",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.7270892982868864,
+        "mrr": 1.0,
+        "map": 0.9,
+        "precision": 0.9,
+        "recall": 0.6428571428571429
+      }
+    },
+    {
+      "id": "q11",
+      "category": "conceptual",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.7852102248048897,
+        "mrr": 1.0,
+        "map": 0.5812499999999999,
+        "precision": 0.6,
+        "recall": 0.75
+      }
+    },
+    {
+      "id": "q12",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9572622730947203,
+        "mrr": 1.0,
+        "map": 0.8154365079365078,
+        "precision": 0.9,
+        "recall": 0.6923076923076923
+      }
+    },
+    {
+      "id": "q13",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.8217041300880478,
+        "mrr": 1.0,
+        "map": 0.645,
+        "precision": 0.7,
+        "recall": 0.5
+      }
+    },
+    {
+      "id": "q14",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.6398472482191608,
+        "mrr": 1.0,
+        "map": 0.671111111111111,
+        "precision": 0.8,
+        "recall": 0.6153846153846154
+      }
+    },
+    {
+      "id": "q15",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.8566725792983159,
+        "mrr": 1.0,
+        "map": 0.9,
+        "precision": 0.9,
+        "recall": 0.6923076923076923
+      }
+    },
+    {
+      "id": "q16",
+      "category": "cross_doc",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.7670273138075928,
+        "mrr": 1.0,
+        "map": 0.6042063492063492,
+        "precision": 0.7,
+        "recall": 0.5384615384615384
+      }
+    },
+    {
+      "id": "q17",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.6007340990571146,
+        "mrr": 1.0,
+        "map": 0.3968253968253968,
+        "precision": 0.5,
+        "recall": 0.5555555555555556
+      }
+    },
+    {
+      "id": "q18",
+      "category": "natural",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.7632619768234256,
+        "mrr": 1.0,
+        "map": 0.6634920634920635,
+        "precision": 0.7,
+        "recall": 0.5384615384615384
+      }
+    },
+    {
+      "id": "q19",
+      "category": "natural",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.8109527683719899,
+        "mrr": 1.0,
+        "map": 0.866388888888889,
+        "precision": 0.9,
+        "recall": 0.75
+      }
+    },
+    {
+      "id": "q20",
+      "category": "natural",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9206500320722546,
+        "mrr": 1.0,
+        "map": 1.0,
+        "precision": 1.0,
+        "recall": 0.7692307692307693
+      }
+    },
+    {
+      "id": "q21",
+      "category": "natural",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.6311209341606839,
+        "mrr": 1.0,
+        "map": 0.6164285714285714,
+        "precision": 0.7,
+        "recall": 0.5833333333333334
+      }
+    },
+    {
+      "id": "q22",
+      "category": "natural",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.6492389135871514,
+        "mrr": 1.0,
+        "map": 0.46249999999999997,
+        "precision": 0.4,
+        "recall": 0.6666666666666666
+      }
+    },
+    {
+      "id": "q23",
+      "category": "natural",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.3546996492755205,
+        "mrr": 1.0,
+        "map": 0.24285714285714288,
+        "precision": 0.4,
+        "recall": 0.3333333333333333
+      }
+    },
+    {
+      "id": "q24",
+      "category": "negative",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "map": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      }
+    },
+    {
+      "id": "q25",
+      "category": "negative",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "map": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      }
+    }
+  ],
+  "decision": {
+    "status": "baseline",
+    "reason": "Reference production system for future search experiments."
+  }
+}

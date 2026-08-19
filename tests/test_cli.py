@@ -207,11 +207,11 @@ class TestInterruptHandling:
         assert reports.count(("server", "embedding: loading")) == 1
         assert ("server", "ready") in reports
 
-    def test_search_defaults_to_reranker_off(self, monkeypatch):
+    def test_search_uses_single_embedding_service_path(self, monkeypatch):
         from sova import cli
 
         check_calls: list[dict[str, object]] = []
-        search_calls: list[bool] = []
+        search_calls: list[tuple[str, int]] = []
 
         class DummyProject:
             project_id = "proj"
@@ -220,14 +220,9 @@ class TestInterruptHandling:
             check_calls.append(kwargs)
             return True, "ready"
 
-        def fake_search_semantic(
-            _query: str,
-            _limit: int,
-            verbose: bool = False,
-            use_reranker: bool = False,
-        ):
+        def fake_search_semantic(query: str, limit: int, verbose: bool = False):
             del verbose
-            search_calls.append(use_reranker)
+            search_calls.append((query, limit))
 
         monkeypatch.setattr(sys, "argv", ["sova", "proj", "q"])
         monkeypatch.setattr(
@@ -240,8 +235,8 @@ class TestInterruptHandling:
 
         cli.main()
 
-        assert check_calls[0].get("use_reranker") is False
-        assert search_calls == [False]
+        assert check_calls[0] == {"mode": "search", "fast_only": True}
+        assert search_calls == [("q", 10)]
 
 
 def test_index_reserved_token_fails_before_project_lookup(monkeypatch):

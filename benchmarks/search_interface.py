@@ -41,19 +41,12 @@ class SovaBackend:
         query: str,
         limit: int = 10,
         embedding: list[float] | None = None,
-        use_reranker: bool | None = None,
     ) -> list[SearchResult]:
         from sova.search import hybrid_search
 
         if embedding is None:
             embedding = self._embed_query(query)
-        hits, _, _ = hybrid_search(
-            self.conn,
-            embedding,
-            query,
-            limit,
-            use_reranker=use_reranker,
-        )
+        hits, _, _ = hybrid_search(self.conn, embedding, query, limit)
 
         return [
             SearchResult(
@@ -143,28 +136,30 @@ def close_backend():
         _backend = None
 
 
-def measure_latency(queries: list[str], *, use_reranker: bool | None = None) -> dict:
+def measure_latency(queries: list[str]) -> dict:
     """Returns embed_times, search_times, total_times (ms)."""
     import time
 
     backend = get_backend()
-    embed_times, search_times, total_times = [], [], []
+    embed_times, search_times, total_times, result_chars = [], [], [], []
 
     for q in queries:
         t0 = time.perf_counter()
         emb = backend._embed_query(q)
         t1 = time.perf_counter()
-        backend.search(q, limit=10, embedding=emb, use_reranker=use_reranker)
+        results = backend.search(q, limit=10, embedding=emb)
         t2 = time.perf_counter()
 
         embed_times.append((t1 - t0) * 1000)
         search_times.append((t2 - t1) * 1000)
         total_times.append((t2 - t0) * 1000)
+        result_chars.append(sum(len(result.text) for result in results))
 
     return {
         "embed_times": embed_times,
         "search_times": search_times,
         "total_times": total_times,
+        "result_chars": result_chars,
     }
 
 

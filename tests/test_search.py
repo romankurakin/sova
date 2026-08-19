@@ -1,7 +1,6 @@
 """Tests for search module."""
 
 import sqlite3
-from unittest.mock import patch
 
 import pytest
 
@@ -177,7 +176,7 @@ class TestSearchFtsSingleChar:
         conn.close()
 
 
-class TestFuseAndRankReranker:
+class TestFuseAndRank:
     @staticmethod
     def _make_db(n_chunks: int = 2):
         conn = sqlite3.connect(":memory:")
@@ -227,86 +226,16 @@ class TestFuseAndRankReranker:
         conn.commit()
         return conn
 
-    def test_calls_rerank_in_search_pipeline(self):
+    def test_fuses_and_diversifies_without_a_second_model(self):
         conn = self._make_db()
         try:
-            with patch(
-                "sova.search.rerank",
-                return_value=[
-                    {"index": 0, "relevance_score": 0.9},
-                    {"index": 1, "relevance_score": 0.4},
-                ],
-            ) as rerank_mock:
-                results, _, _ = fuse_and_rank(
-                    conn,
-                    vector_results=[(1, 0.9), (2, 0.8)],
-                    query_text="timer",
-                    limit=2,
-                    use_reranker=True,
-                )
-            assert rerank_mock.call_count == 1
+            results, _, _ = fuse_and_rank(
+                conn,
+                vector_results=[(1, 0.9), (2, 0.8)],
+                query_text="timer",
+                limit=2,
+            )
             assert len(results) == 2
-            assert "rerank_score" in results[0]
-        finally:
-            conn.close()
-
-    def test_skips_rerank_when_disabled(self):
-        conn = self._make_db()
-        try:
-            with patch("sova.search.rerank") as rerank_mock:
-                results, _, _ = fuse_and_rank(
-                    conn,
-                    vector_results=[(1, 0.9), (2, 0.8)],
-                    query_text="timer",
-                    limit=2,
-                    use_reranker=False,
-                )
-            assert rerank_mock.call_count == 0
-            assert len(results) == 2
-            assert "rerank_score" not in results[0]
-        finally:
-            conn.close()
-
-    def test_propagates_rerank_errors(self):
-        from sova.llama_client import ServerError
-
-        conn = self._make_db()
-        try:
-            with (
-                patch(
-                    "sova.search.rerank", side_effect=ServerError("server error 500")
-                ),
-                pytest.raises(ServerError, match="server error 500"),
-            ):
-                fuse_and_rank(
-                    conn,
-                    vector_results=[(1, 0.9), (2, 0.8)],
-                    query_text="timer",
-                    limit=2,
-                    use_reranker=True,
-                )
-        finally:
-            conn.close()
-
-    def test_reranks_expanded_subset_for_limit_10(self):
-        conn = self._make_db(n_chunks=20)
-        try:
-            with patch(
-                "sova.search.rerank",
-                return_value=[
-                    {"index": i, "relevance_score": 1.0 - i * 0.01} for i in range(20)
-                ],
-            ) as rerank_mock:
-                fuse_and_rank(
-                    conn,
-                    vector_results=[(i, 1.0 / i) for i in range(1, 21)],
-                    query_text="timer",
-                    limit=10,
-                    use_reranker=True,
-                )
-            assert rerank_mock.call_count == 1
-            _, kwargs = rerank_mock.call_args
-            assert kwargs["top_n"] == 20
-            assert len(rerank_mock.call_args.args[1]) == 20
+            assert all(result["sort_score"] == result["final_score"] for result in results)
         finally:
             conn.close()

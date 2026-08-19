@@ -19,8 +19,14 @@ def test_get_db_path_default():
 
 def test_server_urls_use_literal_loopback():
     assert config.EMBEDDING_SERVER_URL == "http://127.0.0.1:8081"
-    assert config.RERANKER_SERVER_URL == "http://127.0.0.1:8082"
     assert config.CONTEXT_SERVER_URL == "http://127.0.0.1:8083"
+
+
+def test_context_model_is_qwen38_q4_k_m_from_unsloth():
+    assert config.CONTEXT_MODEL == "qwen3.8-27b"
+    assert config.CONTEXT_MODEL_HF_REPO == "unsloth/Qwen3.8-27B-GGUF"
+    assert config.CONTEXT_MODEL_HF_FILE == "Qwen3.8-27B-UD-Q4_K_M.gguf"
+    assert config.get_model_memory_estimate_gib("chat") == 18.0
 
 
 def test_get_memory_settings_runtime_snapshot(monkeypatch, isolated_config):

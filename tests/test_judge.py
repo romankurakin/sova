@@ -60,9 +60,7 @@ class TestJudgeChunkErrorHandling:
     """judge_chunk must raise on errors, never return score 0 for failures."""
 
     def test_model_not_found_raises_judge_error(self):
-        exc = Exception(
-            "model 'ministral-3-14b-instruct-2512' not found (status code: 404)"
-        )
+        exc = Exception("model 'qwen3.8-27b' not found (status code: 404)")
         with (
             patch("benchmarks.judge._call_judge", side_effect=exc),
             pytest.raises(JudgeError, match="not found"),

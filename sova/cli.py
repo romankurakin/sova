@@ -182,8 +182,6 @@ def _infer_service_name(message: str) -> str | None:
     low = message.lower()
     if ":8081" in low or "embedding" in low:
         return "embedding"
-    if ":8082" in low or "rerank" in low:
-        return "reranker"
     if ":8083" in low or "context" in low or "chat" in low:
         return "chat"
     return None
@@ -196,12 +194,6 @@ def _classify_error(message: str) -> tuple[str, str | None, str | None]:
             "model does not fit current memory budget",
             message,
             "close extra apps and retry, or reduce reserve for this mode",
-        )
-    if "physical batch size" in low or "too large to process" in low:
-        return (
-            "reranker request exceeds server batch capacity",
-            message,
-            "run sova-install to update reranker service settings, then retry",
         )
     if "server not reachable at" in low:
         svc = _infer_service_name(message)
@@ -250,8 +242,6 @@ def _report_service_diag(url: str) -> None:
     name = (
         "embedding"
         if url == config.EMBEDDING_SERVER_URL
-        else "reranker"
-        if url == config.RERANKER_SERVER_URL
         else "chat"
         if url == config.CONTEXT_SERVER_URL
         else "service"
@@ -264,22 +254,16 @@ def _report_service_diag(url: str) -> None:
 def _report_relevant_service_diags(
     exc: BaseException,
     mode: str,
-    *,
-    include_reranker: bool = True,
 ) -> None:
     text = _format_error_chain(exc).lower()
     urls: list[str] = []
     if "8081" in text or "embedding" in text:
         urls.append(config.EMBEDDING_SERVER_URL)
-    if include_reranker and ("8082" in text or "rerank" in text):
-        urls.append(config.RERANKER_SERVER_URL)
     if "8083" in text or "context" in text or "chat" in text:
         urls.append(config.CONTEXT_SERVER_URL)
     if not urls:
         if mode == "search":
             urls = [config.EMBEDDING_SERVER_URL]
-            if include_reranker:
-                urls.append(config.RERANKER_SERVER_URL)
         elif mode == "index_context":
             urls = [config.CONTEXT_SERVER_URL]
         elif mode == "index_embed":
@@ -975,8 +959,7 @@ def show_stats(mode: str = "list") -> None:
             report(
                 "search",
                 f"cap {_fmt_gib(cap_search)} | "
-                f"{_service_status_line('embedding', with_memory=False)} | "
-                f"{_service_status_line('reranker', with_memory=False)}",
+                f"{_service_status_line('embedding', with_memory=False)}",
             )
         except OSError, RuntimeError, TypeError, ValueError:
             pass
@@ -998,7 +981,6 @@ def search_semantic(
     query: str,
     limit: int = 10,
     verbose: bool = False,
-    use_reranker: bool = config.SEARCH_USE_RERANKER,
 ) -> None:
     """Perform semantic search and display results."""
     if not config.get_db_path().exists():
@@ -1035,7 +1017,6 @@ def search_semantic(
             vector_results,
             query,
             limit,
-            use_reranker=use_reranker,
         )
     finally:
         conn.close()
@@ -1062,13 +1043,9 @@ def search_semantic(
             if r.get("is_idx"):
                 tags.append("idx")
             tag_str = "  ".join(tags)
-            rerank_str = (
-                f"  rerank {r['rerank_score']:.2f}" if "rerank_score" in r else ""
-            )
             print(
                 f"  vec {r['embed_score']:.2f}"
                 f"  rrf {r['rrf_score']:.4f}"
-                f"{rerank_str}"
                 f"  {tag_str}".rstrip()
             )
         else:
@@ -1134,20 +1111,17 @@ def _activate_project_from_ref(
     return project
 
 
-def _run_search_mode(query: str, limit: int, use_reranker: bool) -> None:
-    rerank_state = "on" if use_reranker else "off"
-    report("mode", f'search | "{_preview(query)}" | reranker {rerank_state}')
+def _run_search_mode(query: str, limit: int) -> None:
+    report("mode", f'search | "{_preview(query)}"')
     try:
         ok, msg = check_servers(
             mode="search",
             fast_only=True,
-            use_reranker=use_reranker,
         )
         if not ok:
             ok, msg = check_servers(
                 on_status=lambda s: report("server", s),
                 mode="search",
-                use_reranker=use_reranker,
             )
     except KeyboardInterrupt:
         report("status", "interrupted")
@@ -1155,31 +1129,22 @@ def _run_search_mode(query: str, limit: int, use_reranker: bool) -> None:
 
     if not ok:
         _report_error(RuntimeError(msg))
-        _report_relevant_service_diags(
-            RuntimeError(msg),
-            mode="search",
-            include_reranker=use_reranker,
-        )
+        _report_relevant_service_diags(RuntimeError(msg), mode="search")
         sys.exit(1)
     report("server", msg)
     try:
-        search_semantic(query, limit, verbose=False, use_reranker=use_reranker)
+        search_semantic(query, limit, verbose=False)
     except KeyboardInterrupt:
         report("status", "interrupted")
         sys.exit(130)
     except (OSError, RuntimeError, sqlite3.Error, ValueError) as e:
         _report_error(e)
-        _report_relevant_service_diags(
-            e,
-            mode="search",
-            include_reranker=use_reranker,
-        )
+        _report_relevant_service_diags(e, mode="search")
         sys.exit(1)
 
 
 _DOWNLOAD_SERVICES = [
     ("embedding", "com.sova.embedding", config.EMBEDDING_SERVER_URL),
-    ("reranker", "com.sova.reranker", config.RERANKER_SERVER_URL),
     ("chat", "com.sova.chat", config.CONTEXT_SERVER_URL),
 ]
 _DOWNLOAD_NAME_WIDTH = max(len(name) for name, _, _ in _DOWNLOAD_SERVICES)
@@ -1189,7 +1154,7 @@ _DOWNLOAD_STALL_TIMEOUT_S = 30.0
 
 
 def _run_download_mode() -> None:
-    """Download all three model files by briefly starting each service."""
+    """Download both model files by briefly starting each service."""
     report("mode", "download")
     needs_install = False
     downloaded_any = False
@@ -1298,7 +1263,6 @@ def _run_index_mode() -> None:
         # Phase 1: extract + context.
         report("event", "stopping search services")
         stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-        stop_server(config.RERANKER_SERVER_URL, suppress_interrupt=True)
         ok, msg = check_servers(
             on_status=lambda s: report("server", s),
             mode="index_context",
@@ -1400,7 +1364,6 @@ def _run_index_mode() -> None:
         if interrupted:
             stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
             stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-            stop_server(config.RERANKER_SERVER_URL, suppress_interrupt=True)
             report("status", "services stopped")
     finally:
         conn.close()
@@ -1465,7 +1428,7 @@ app = typer.Typer(
     add_completion=True,
     rich_markup_mode=None,
     help="sova project CLI (default search: sova <project> <query>)",
-    epilog='Default search: sova <project> "<query>" [-n LIMIT] [--reranker]',
+    epilog='Default search: sova <project> "<query>" [-n LIMIT]',
 )
 
 
@@ -1543,15 +1506,10 @@ def search_command(
     ],
     query: Annotated[list[str], typer.Argument(help="Search query text")],
     limit: int = typer.Option(10, "-n", "--limit", help="Max results (default: 10)"),
-    reranker: bool = typer.Option(
-        config.SEARCH_USE_RERANKER,
-        "--reranker",
-        help="Enable cross-encoder reranker (off by default)",
-    ),
 ) -> None:
     resolved = _activate_project_from_ref(project)
     report("project", resolved.project_id)
-    _run_search_mode(" ".join(query), limit, use_reranker=bool(reranker))
+    _run_search_mode(" ".join(query), limit)
 
 
 _COMMAND_NAMES = {"help", "projects", "download", "remove", "list", "index", "search"}
@@ -1571,7 +1529,6 @@ def _handle_interrupt() -> None:
     report("status", "interrupt received, stopping services")
     stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
     stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-    stop_server(config.RERANKER_SERVER_URL, suppress_interrupt=True)
     report("status", "services stopped")
     report("status", "interrupted")
     sys.exit(130)

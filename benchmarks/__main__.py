@@ -1,10 +1,10 @@
 """Benchmark CLI with Rich UI matching sova style."""
 
+import hashlib
 import re
 import sys
 import time
 from pathlib import Path
-from typing import cast
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -25,6 +25,8 @@ from sova.ui import (
 )
 
 _BENCH_DIR = Path(__file__).parent
+_SUITE_FILENAME = "suite.json"
+_DRAFT_SUITE_FILENAME = "draft-suite.json"
 DATA_DIR = config.DATA_DIR
 
 # Benchmarks keep their own Rich console for live judging progress;
@@ -46,6 +48,14 @@ def _metric_at(values: dict, k: int) -> float:
         return float(raw)
     except TypeError, ValueError:
         return 0.0
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _format_error_chain(exc: BaseException) -> str:
@@ -94,19 +104,13 @@ def _classify_error(message: str) -> tuple[str, str | None, str | None]:
         return (
             "ground truth has unjudged chunks",
             message,
-            "rerun judge first, or run benchmark with --autofill",
+            "create a reviewed suite with complete pooled judgments",
         )
     if "memory hard-cap exceeded" in low:
         return (
             "model does not fit current memory budget",
             message,
             "close extra apps and retry",
-        )
-    if "physical batch size" in low or "too large to process" in low:
-        return (
-            "reranker request exceeds server batch capacity",
-            message,
-            "run sova-install to refresh reranker service settings",
         )
     if "server not reachable at" in low:
         return (
@@ -137,8 +141,6 @@ def _report_relevant_service_diags(exc: BaseException) -> None:
     urls: list[str] = []
     if "8081" in text or "embedding" in text:
         urls.append(config.EMBEDDING_SERVER_URL)
-    if "8082" in text or "rerank" in text:
-        urls.append(config.RERANKER_SERVER_URL)
     if "8083" in text or "context" in text or "chat" in text or "judge" in text:
         urls.append(config.CONTEXT_SERVER_URL)
     if not urls:
@@ -147,8 +149,6 @@ def _report_relevant_service_diags(exc: BaseException) -> None:
     def _svc_name(url: str) -> str:
         if url == config.EMBEDDING_SERVER_URL:
             return "embedding"
-        if url == config.RERANKER_SERVER_URL:
-            return "reranker"
         if url == config.CONTEXT_SERVER_URL:
             return "chat"
         return "service"
@@ -180,18 +180,9 @@ def _load_ground_truth(path: Path) -> dict | None:
         loaded = json.loads(path.read_text())
     except OSError, UnicodeError, json.JSONDecodeError:
         return None
-    return _normalize_ground_truth(loaded)
-
-
-def _normalize_ground_truth(raw: object) -> dict | None:
-    """Normalize old/new ground truth envelopes to a stable in-memory schema."""
-    if not isinstance(raw, dict):
+    if not isinstance(loaded, dict) or not isinstance(loaded.get("queries"), list):
         return None
-    raw_dict = cast(dict[str, object], raw)
-    queries = raw_dict.get("queries")
-    if not isinstance(queries, list):
-        return None
-    return {"queries": queries}
+    return loaded
 
 
 def _save_ground_truth(path: Path, gt: dict):
@@ -233,7 +224,7 @@ def cmd_judge():
     report_mode("bench.judge")
 
     checkpoint_path = get_data_dir() / "ground_truth_partial.json"
-    output_path = _BENCH_DIR / "ground_truth.json"
+    output_path = _BENCH_DIR / _DRAFT_SUITE_FILENAME
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     k_per_strategy = 20
@@ -454,29 +445,25 @@ def cmd_judge():
 def cmd_run(
     name: str | None = None,
     *,
-    autofill: bool = False,
-    runs: int = 3,
-    use_reranker: bool = config.SEARCH_USE_RERANKER,
+    runs: int = 1,
+    description: str = "",
+    baseline_name: str | None = None,
 ):
-    """Run benchmark as a 3-pass averaged baseline."""
+    """Run deterministic quality evaluation plus corpus-wide latency probes."""
     import json
     import statistics
-    from pathlib import Path
 
     from .evaluate import (
         STANDARD_K,
         QueryResult,
         aggregate_by_category,
         aggregate_metrics,
-        compute_diversity_metrics,
         compute_metrics,
     )
-    from .judge import judge_single_chunk, should_use_debiasing
     from .run_benchmark import run_search
     from .search_interface import (
         clear_cache,
         close_backend,
-        get_backend,
         measure_latency,
     )
 
@@ -487,13 +474,20 @@ def cmd_run(
         )
         sys.exit(1)
 
+    results_dir = _BENCH_DIR / "results"
+    json_path = results_dir / f"{name}.json"
+    if json_path.exists():
+        raise RuntimeError(
+            f"benchmark result already exists: {json_path.name}; choose a new name"
+        )
+
     report_mode("bench.run", name)
 
-    gt_path = _BENCH_DIR / "ground_truth.json"
+    gt_path = _BENCH_DIR / _SUITE_FILENAME
     if not gt_path.exists():
         report_error(
-            "ground truth is missing",
-            action="run judge first",
+            "benchmark suite is missing",
+            action=f"create {_SUITE_FILENAME} before running the benchmark",
         )
         sys.exit(1)
 
@@ -501,18 +495,43 @@ def cmd_run(
         ground_truth = json.loads(gt_path.read_text())
     except (OSError, UnicodeError, json.JSONDecodeError) as e:
         report_error(
-            "ground truth is invalid",
+            "benchmark suite is invalid",
             cause=f"{gt_path.name}: {e}",
-            action="rerun judge to regenerate ground_truth.json",
+            action=f"regenerate {_SUITE_FILENAME}",
         )
         sys.exit(1)
     if not isinstance(ground_truth, dict) or not isinstance(
         ground_truth.get("queries"), list
     ):
         report_error(
-            "ground truth schema is invalid",
+            "benchmark suite schema is invalid",
             cause=gt_path.name,
-            action="rerun judge to regenerate ground_truth.json",
+            action=f"regenerate {_SUITE_FILENAME}",
+        )
+        sys.exit(1)
+
+    suite = ground_truth.get("suite")
+    if not isinstance(suite, dict) or suite.get("id") != "search":
+        report_error(
+            "benchmark suite identity is invalid",
+            cause=f"{_SUITE_FILENAME} must declare suite.id=search",
+        )
+        sys.exit(1)
+
+    # Capture corpus identity before loading the vector extension/searching.
+    # Some native backends may update on-disk optimization metadata even when
+    # the SQL connection itself is read-only.
+    db_path = config.get_db_path()
+    initial_database_sha256 = _sha256_file(db_path) if db_path.exists() else None
+    expected_database_sha256 = suite.get("corpus", {}).get("database_sha256")
+    if (
+        expected_database_sha256 is not None
+        and expected_database_sha256 != initial_database_sha256
+    ):
+        report_error(
+            "benchmark corpus does not match the frozen suite",
+            cause=f"expected {expected_database_sha256}, got {initial_database_sha256}",
+            action="run against the database snapshot recorded by the suite",
         )
         sys.exit(1)
 
@@ -521,10 +540,8 @@ def cmd_run(
     run_count = max(1, int(runs))
 
     report("queries", str(len(ground_truth["queries"])))
-    report("autofill", "enabled" if autofill else "disabled")
-    report("reranker", "enabled" if use_reranker else "disabled")
     report("runs", f"{run_count} (mean)")
-    autofill_use_debiasing = should_use_debiasing()
+    report("unjudged-policy", "error")
 
     def _p95(arr: list[float]) -> float:
         s = sorted(arr)
@@ -537,9 +554,6 @@ def cmd_run(
         "map",
         "recall",
         "hit_rate",
-        "doc_coverage",
-        "subtopic_recall",
-        "alpha_ndcg",
     ]
     category_metric_names = [
         "ndcg",
@@ -547,8 +561,6 @@ def cmd_run(
         "map",
         "precision",
         "recall",
-        "subtopic_recall",
-        "doc_coverage",
     ]
 
     def _average_metrics(samples: list[dict]) -> dict[str, dict[int, float]]:
@@ -566,14 +578,6 @@ def cmd_run(
                     / n
                 )
         return out
-
-    def _average_neg_fp(samples: list[dict]) -> dict[int, float]:
-        if not samples:
-            return {}
-        n = len(samples)
-        return {
-            kv: sum(_metric_at(sample, kv) for sample in samples) / n for kv in k_values
-        }
 
     def _average_by_category(samples: list[dict]) -> dict[str, dict[str, float]]:
         if not samples:
@@ -608,102 +612,43 @@ def cmd_run(
         run_start = time.time()
         try:
             clear_cache()
-            latency_queries = [
-                "ARM exception handling",
-                "RISC-V trap handling",
-                "memory protection unit",
-                "process scheduling algorithm",
-                "GIC interrupt priority",
-            ]
+            latency_queries = [q["query"] for q in ground_truth["queries"]]
 
             report("phase", f"latency probe ({run_idx}/{run_count})")
-            latency_data = measure_latency(latency_queries, use_reranker=use_reranker)
+            # Two untimed requests warm model kernels and allocator state. The
+            # reported distribution then covers every suite query, rather than
+            # treating a five-query maximum as P95.
+            measure_latency(latency_queries[:2])
+            latency_data = measure_latency(latency_queries)
             latency_times = latency_data["total_times"]
             latency_p50 = statistics.median(latency_times)
             latency_p95 = _p95(latency_times)
+            result_chars_p50 = statistics.median(latency_data.get("result_chars", [0]))
 
             results = []
-
-            # Track auto-fill stats.
-            autofill_count = 0
-            unjudged_count = 0
-            gt_modified = False
+            per_query: list[dict] = []
 
             report("phase", f"evaluation ({run_idx}/{run_count})")
             with report_progress("evaluating") as progress:
                 task = progress.add_task("", total=len(ground_truth["queries"]))
 
                 for q in ground_truth["queries"]:
-                    hits = run_search(
-                        q["query"],
-                        limit=max(k_values),
-                        use_reranker=use_reranker,
-                    )
+                    hits = run_search(q["query"], limit=max(k_values))
 
                     judgments = {j["chunk_id"]: j["score"] for j in q["judgments"]}
-                    judgment_list = q["judgments"]
-
                     missing_chunk_ids = [
                         h["chunk_id"] for h in hits if h["chunk_id"] not in judgments
                     ]
-                    if missing_chunk_ids and not autofill:
+                    if missing_chunk_ids:
                         preview = ", ".join(str(cid) for cid in missing_chunk_ids[:5])
                         raise RuntimeError(
                             "ground truth contains unjudged chunks "
-                            f"for {q['id']} ({q['query']}): {len(missing_chunk_ids)} missing "
-                            f"(sample: {preview})"
+                            f"for {q['id']} ({q['query']}): "
+                            f"{len(missing_chunk_ids)} missing (sample: {preview})"
                         )
-
-                    if autofill:
-                        for h in hits:
-                            chunk_id = h["chunk_id"]
-                            if chunk_id not in judgments:
-                                # Auto-fill: judge on the fly.
-                                backend = get_backend()
-                                chunk_info = backend.get_chunk_text(chunk_id)
-                                if chunk_info is None:
-                                    unjudged_count += 1
-                                    continue
-
-                                doc, text = chunk_info
-                                j = judge_single_chunk(
-                                    q["query"],
-                                    chunk_id,
-                                    text,
-                                    doc,
-                                    use_debiasing=autofill_use_debiasing,
-                                )
-
-                                # Add to in-memory ground truth.
-                                new_judgment = {
-                                    "chunk_id": j.chunk_id,
-                                    "doc": j.doc,
-                                    "score": j.score,
-                                    "confidence": j.confidence,
-                                    "subtopics": j.subtopics,
-                                    "reason": j.reason,
-                                    "auto_filled": True,
-                                }
-                                judgment_list.append(new_judgment)
-                                judgments[chunk_id] = j.score
-                                autofill_count += 1
-                                gt_modified = True
-
-                    subtopics = {
-                        j["chunk_id"]: j.get("subtopics", [])
-                        for j in judgment_list
-                        if j["score"] >= 2
-                    }
 
                     result_ids = [h["chunk_id"] for h in hits]
                     metrics = compute_metrics(result_ids, judgments, k_values=k_values)
-                    div_metrics = compute_diversity_metrics(
-                        hits, judgments, subtopics, k_values=k_values
-                    )
-
-                    metrics.subtopic_recall = div_metrics.subtopic_recall
-                    metrics.alpha_ndcg = div_metrics.alpha_ndcg
-                    metrics.doc_coverage = div_metrics.doc_coverage
 
                     results.append(
                         QueryResult(
@@ -713,25 +658,28 @@ def cmd_run(
                             metrics=metrics,
                         )
                     )
+                    per_query.append(
+                        {
+                            "id": q["id"],
+                            "category": q["category"],
+                            "language": q.get("language", "unknown"),
+                            "metrics_at_10": {
+                                "ndcg": metrics.ndcg.get(10, 0.0),
+                                "mrr": metrics.mrr.get(10, 0.0),
+                                "map": metrics.map.get(10, 0.0),
+                                "precision": metrics.precision.get(10, 0.0),
+                                "recall": metrics.recall.get(10, 0.0),
+                            },
+                        }
+                    )
                     progress.update(task, advance=1)
 
-            # Save updated ground truth if auto-fill added judgments.
-            if gt_modified:
-                _save_ground_truth(gt_path, ground_truth)
         finally:
             close_backend()
 
         # Separate negative queries from main metrics.
         positive_results = [r for r in results if r.category != "negative"]
-        negative_results = [r for r in results if r.category == "negative"]
-
         agg = aggregate_metrics(positive_results) if positive_results else {}
-
-        neg_fp_rate = {}
-        if negative_results:
-            for kv in k_values:
-                fp_counts = [r.metrics.precision.get(kv, 0) for r in negative_results]
-                neg_fp_rate[kv] = sum(fp_counts) / len(fp_counts) if fp_counts else 0
 
         by_cat = aggregate_by_category(results, k=k)
         run_duration = time.time() - run_start
@@ -745,35 +693,44 @@ def cmd_run(
             {
                 "duration_s": run_duration,
                 "latency_ms": {"p50": latency_p50, "p95": latency_p95},
+                "result_context_chars_p50": result_chars_p50,
                 "metrics": agg,
-                "negative_fp_rate": neg_fp_rate,
                 "by_category": by_cat,
-                "auto_filled": autofill_count,
-                "unjudged": unjudged_count,
+                "per_query": per_query,
             }
         )
 
     latency_p50 = statistics.mean(r["latency_ms"]["p50"] for r in run_outputs)
     latency_p95 = statistics.mean(r["latency_ms"]["p95"] for r in run_outputs)
+    result_context_chars_p50 = statistics.mean(
+        r["result_context_chars_p50"] for r in run_outputs
+    )
     p50_values = [r["latency_ms"]["p50"] for r in run_outputs]
     p95_values = [r["latency_ms"]["p95"] for r in run_outputs]
 
     agg = _average_metrics([r["metrics"] for r in run_outputs])
-    neg_fp_rate = _average_neg_fp([r["negative_fp_rate"] for r in run_outputs])
     by_cat = _average_by_category([r["by_category"] for r in run_outputs])
-    autofill_count = sum(int(r["auto_filled"]) for r in run_outputs)
-    unjudged_count = sum(int(r["unjudged"]) for r in run_outputs)
-
+    per_query_output = run_outputs[0]["per_query"]
+    by_language: dict[str, dict[str, float | int]] = {}
+    for language in sorted({item["language"] for item in per_query_output}):
+        items = [
+            item
+            for item in per_query_output
+            if item["language"] == language and item["category"] != "negative"
+        ]
+        if not items:
+            continue
+        by_language[language] = {
+            metric: sum(item["metrics_at_10"][metric] for item in items) / len(items)
+            for metric in ("ndcg", "mrr", "map", "precision", "recall")
+        }
+        by_language[language]["count"] = len(items)
     report("evaluated", f"in {fmt_duration(time.time() - all_start).strip()}")
     report(
         "latency-spread",
         f"P50 {min(p50_values):.0f}-{max(p50_values):.0f}ms | "
         f"P95 {min(p95_values):.0f}-{max(p95_values):.0f}ms",
     )
-    if autofill_count > 0:
-        report("auto-fill", f"judged {autofill_count} new chunks")
-    if unjudged_count > 0:
-        report("unjudged", f"{unjudged_count} chunks (no judgments)")
     report(
         "summary",
         " | ".join(
@@ -786,7 +743,7 @@ def cmd_run(
     )
     print_gap()
     blank = "\u2014"
-    table = make_table(title="Results (3-run mean)")
+    table = make_table(title=f"Results ({run_count}-run mean)")
     table.add_column("Metric")
     for kv in k_values:
         table.add_column(f"@{kv}", justify="right")
@@ -794,6 +751,11 @@ def cmd_run(
     # Latency — single values in @10 column.
     table.add_row("Latency P50", *[blank] * (len(k_values) - 1), f"{latency_p50:.0f}ms")
     table.add_row("Latency P95", *[blank] * (len(k_values) - 1), f"{latency_p95:.0f}ms")
+    table.add_row(
+        "Context chars",
+        *[blank] * (len(k_values) - 1),
+        f"{result_context_chars_p50:.0f}",
+    )
     table.add_section()
 
     # IR metrics at all k cutoffs.
@@ -804,21 +766,11 @@ def cmd_run(
         ("map", "MAP"),
         ("recall", "Recall"),
         ("hit_rate", "Hit Rate"),
-        ("doc_coverage", "Doc-Cov"),
-        ("subtopic_recall", "S-Recall"),
-        ("alpha_ndcg", "\u03b1-nDCG"),
     ]:
         row = [label] + [
             f"{_metric_at(agg.get(metric, {}), kv):.3f}" for kv in k_values
         ]
         table.add_row(*row)
-
-    # FP rate at bottom.
-    if neg_fp_rate:
-        table.add_section()
-        table.add_row(
-            "FP Rate", *[f"{_metric_at(neg_fp_rate, kv):.3f}" for kv in k_values]
-        )
 
     render_table(table)
 
@@ -840,23 +792,89 @@ def cmd_run(
         render_table(cat_table, gap_before=True)
 
     output = {
+        "benchmark_schema_version": 2,
         "name": name,
+        "experiment": description,
+        "benchmark_suite": {
+            "id": suite["id"],
+            "schema_version": suite.get("schema_version"),
+            "sha256": _sha256_file(gt_path),
+        },
         "k": k,
         "runs": run_count,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "reranker_enabled": use_reranker,
+        "unjudged_policy": "error",
         "latency_ms": {"p50": round(latency_p50, 1), "p95": round(latency_p95, 1)},
+        "context_payload": {
+            "median_chars_per_top10": round(result_context_chars_p50, 1),
+        },
         "metrics": agg,
-        "negative_fp_rate": neg_fp_rate,
         "by_category": by_cat,
-        "auto_filled": autofill_count,
-        "unjudged": unjudged_count,
+        "by_language": by_language,
+        "per_query": per_query_output,
     }
 
-    results_dir = Path(__file__).parent / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    json_path = results_dir / f"{name}.json"
+    if baseline_name:
+        import random
+
+        baseline_path = results_dir / f"{baseline_name}.json"
+        if not baseline_path.exists():
+            raise RuntimeError(f"comparison baseline not found: {baseline_path.name}")
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        comparable_fields = [
+            ("suite", baseline.get("benchmark_suite", {}).get("sha256"), output["benchmark_suite"]["sha256"]),
+            ("k", baseline.get("k"), k),
+        ]
+        mismatches = [label for label, old, new in comparable_fields if old != new]
+        if mismatches:
+            raise RuntimeError(
+                "baseline is not comparable: " + ", ".join(mismatches) + " differ"
+            )
+
+        baseline_queries = {
+            item["id"]: item
+            for item in baseline.get("per_query", [])
+            if item.get("category") != "negative"
+        }
+        candidate_queries = {
+            item["id"]: item
+            for item in output["per_query"]
+            if item.get("category") != "negative"
+        }
+        if baseline_queries.keys() != candidate_queries.keys():
+            raise RuntimeError("baseline query IDs do not match candidate query IDs")
+
+        metrics = ("ndcg", "mrr", "map", "precision", "recall")
+        paired_deltas: dict[str, list[float]] = {
+            metric: [
+                candidate_queries[query_id]["metrics_at_10"][metric]
+                - baseline_queries[query_id]["metrics_at_10"][metric]
+                for query_id in sorted(candidate_queries)
+            ]
+            for metric in metrics
+        }
+        mean_deltas = {
+            metric: sum(values) / len(values) for metric, values in paired_deltas.items()
+        }
+        rng = random.Random(20260820)
+        ndcg_deltas = paired_deltas["ndcg"]
+        boot = sorted(
+            sum(rng.choice(ndcg_deltas) for _ in ndcg_deltas) / len(ndcg_deltas)
+            for _ in range(10_000)
+        )
+        output["comparison_to"] = {
+            "name": baseline_name,
+            "paired_positive_queries": len(ndcg_deltas),
+            "mean_delta_at_10": mean_deltas,
+            "ndcg_delta_95pct_bootstrap_ci": [boot[249], boot[9749]],
+            "latency_delta_ms": {
+                "p50": output["latency_ms"]["p50"] - baseline["latency_ms"]["p50"],
+                "p95": output["latency_ms"]["p95"] - baseline["latency_ms"]["p95"],
+            },
+        }
+
     json_path.write_text(json.dumps(output, indent=2))
 
     report("saved", f"{json_path.name}")
@@ -865,9 +883,8 @@ def cmd_run(
 def cmd_show(run_name: str | None = None):
     """Show benchmark results."""
     import json
-    from pathlib import Path
 
-    results_dir = Path(__file__).parent / "results"
+    results_dir = _BENCH_DIR / "results"
     if run_name == "list" or run_name is None:
         report_mode("bench.show", "list")
         skipped = 0
@@ -947,11 +964,6 @@ def cmd_show(run_name: str | None = None):
     created = data.get("created", "unknown")
     report_mode("bench.show", f"{run_label}")
     report("date", created)
-    if "reranker_enabled" in data:
-        report(
-            "reranker",
-            "enabled" if bool(data.get("reranker_enabled")) else "disabled",
-        )
     from .evaluate import STANDARD_K
 
     def get_val(d, k):
@@ -959,7 +971,6 @@ def cmd_show(run_name: str | None = None):
 
     blank = "\u2014"
     lat = data.get("latency_ms", {})
-    neg_fp = data.get("negative_fp_rate", {})
     report(
         "summary",
         " | ".join(
@@ -997,17 +1008,9 @@ def cmd_show(run_name: str | None = None):
         ("map", "MAP"),
         ("recall", "Recall"),
         ("hit_rate", "Hit Rate"),
-        ("doc_coverage", "Doc-Cov"),
-        ("subtopic_recall", "S-Recall"),
-        ("alpha_ndcg", "\u03b1-nDCG"),
     ]:
         row = [label] + [f"{get_val(m.get(metric, {}), kv):.3f}" for kv in STANDARD_K]
         table.add_row(*row)
-
-    # FP rate.
-    if neg_fp:
-        table.add_section()
-        table.add_row("FP Rate", *[f"{get_val(neg_fp, kv):.3f}" for kv in STANDARD_K])
 
     render_table(table, gap_before=True)
     by_cat = data.get("by_category", {})
@@ -1044,16 +1047,22 @@ def main():
 
     p_run = sub.add_parser("run", help="Run benchmark against ground truth")
     p_run.add_argument("project", help="Project id/path")
-    p_run.add_argument("name", help="Benchmark run name (e.g. 'baseline-v2')")
+    p_run.add_argument("name", help="Benchmark run name (e.g. 'baseline')")
     p_run.add_argument(
-        "--autofill",
-        action="store_true",
-        help="Judge unjudged chunks during run (disabled by default)",
+        "--runs",
+        type=int,
+        default=1,
+        help="Complete deterministic passes (default: 1)",
     )
     p_run.add_argument(
-        "--reranker",
-        action="store_true",
-        help="Enable cross-encoder reranker for this run (disabled by default)",
+        "--description",
+        default="",
+        help="Human-readable description stored in the result JSON",
+    )
+    p_run.add_argument(
+        "--baseline",
+        default=None,
+        help="Comparable result name for paired deltas and bootstrap CI",
     )
 
     p_show = sub.add_parser("show", help="Display benchmark results")
@@ -1086,8 +1095,9 @@ def main():
         elif args.command == "run":
             cmd_run(
                 name=args.name,
-                autofill=bool(args.autofill),
-                use_reranker=bool(args.reranker),
+                runs=max(1, int(args.runs)),
+                description=args.description,
+                baseline_name=args.baseline,
             )
         elif args.command == "show":
             cmd_show(run_name=args.name)

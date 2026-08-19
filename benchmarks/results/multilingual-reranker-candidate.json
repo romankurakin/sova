@@ -1,0 +1,444 @@
+{
+  "benchmark_schema_version": 2,
+  "name": "multilingual-reranker-candidate",
+  "experiment": "Added Alibaba-NLP/gte-multilingual-reranker-base over the production top 10, then fused both rankings with equal-weight RRF at k=60; no ranks were protected.",
+  "benchmark_suite": {
+    "id": "search",
+    "schema_version": 2,
+    "sha256": "e50c282909ade931fe2e609fce8a65ef563faefd06d830a863d00e8a05aaacd9"
+  },
+  "k": 10,
+  "runs": 1,
+  "created": "2026-08-20 01:44:00",
+  "unjudged_policy": "error",
+  "latency_ms": {
+    "p50": 427.8,
+    "p95": 434.8
+  },
+  "context_payload": {
+    "median_chars_per_top10": 20035
+  },
+  "metrics": {
+    "ndcg": {
+      "1": 0.7950310559006211,
+      "3": 0.7278396227827387,
+      "5": 0.7447492398542361,
+      "10": 0.7555030233020865
+    },
+    "mrr": {
+      "1": 0.9130434782608695,
+      "3": 0.9275362318840579,
+      "5": 0.9384057971014492,
+      "10": 0.9384057971014492
+    },
+    "precision": {
+      "1": 0.9130434782608695,
+      "3": 0.7971014492753623,
+      "5": 0.7565217391304347,
+      "10": 0.6043478260869566
+    },
+    "map": {
+      "1": 0.9130434782608695,
+      "3": 0.7729468599033816,
+      "5": 0.7384057971014493,
+      "10": 0.6701666379112031
+    },
+    "recall": {
+      "1": 0.12165575969923796,
+      "3": 0.29882086512521294,
+      "5": 0.46938061938061937,
+      "10": 0.6817795730839209
+    },
+    "hit_rate": {
+      "1": 0.9130434782608695,
+      "3": 0.9565217391304348,
+      "5": 1.0,
+      "10": 1.0
+    }
+  },
+  "by_category": {
+    "exact_lookup": {
+      "ndcg": 0.7988367275311754,
+      "mrr": 0.85,
+      "map": 0.6966369047619048,
+      "precision": 0.38,
+      "recall": 0.8416666666666666,
+      "count": 5
+    },
+    "conceptual": {
+      "ndcg": 0.7723155507075292,
+      "mrr": 1.0,
+      "map": 0.6737103174603174,
+      "precision": 0.5666666666666667,
+      "recall": 0.7062590187590189,
+      "count": 6
+    },
+    "cross_doc": {
+      "ndcg": 0.7967335194075718,
+      "mrr": 1.0,
+      "map": 0.6849250440917106,
+      "precision": 0.75,
+      "recall": 0.5990028490028491,
+      "count": 6
+    },
+    "natural": {
+      "ndcg": 0.6613485796002511,
+      "mrr": 0.8888888888888888,
+      "map": 0.6298059964726631,
+      "precision": 0.6833333333333332,
+      "recall": 0.6068376068376068,
+      "count": 6
+    },
+    "negative": {
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "map": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "count": 2
+    }
+  },
+  "by_language": {
+    "en": {
+      "ndcg": 0.7822758119174197,
+      "mrr": 0.9583333333333334,
+      "map": 0.7050422545561434,
+      "precision": 0.6055555555555556,
+      "recall": 0.7083117499784167,
+      "count": 18
+    },
+    "ru": {
+      "ndcg": 0.6591209842868873,
+      "mrr": 0.8666666666666666,
+      "map": 0.544614417989418,
+      "precision": 0.6,
+      "recall": 0.5862637362637362,
+      "count": 5
+    }
+  },
+  "per_query": [
+    {
+      "id": "q01",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9615215457514801,
+        "mrr": 1.0,
+        "map": 1.0,
+        "precision": 0.3,
+        "recall": 1.0
+      }
+    },
+    {
+      "id": "q02",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9100913135811877,
+        "mrr": 1.0,
+        "map": 0.8415178571428571,
+        "precision": 0.7,
+        "recall": 0.875
+      }
+    },
+    {
+      "id": "q03",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9577515774372359,
+        "mrr": 1.0,
+        "map": 0.925,
+        "precision": 0.5,
+        "recall": 1.0
+      }
+    },
+    {
+      "id": "q04",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.7317862348511999,
+        "mrr": 1.0,
+        "map": 0.5,
+        "precision": 0.2,
+        "recall": 0.6666666666666666
+      }
+    },
+    {
+      "id": "q05",
+      "category": "exact_lookup",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.4330329660347736,
+        "mrr": 0.25,
+        "map": 0.21666666666666667,
+        "precision": 0.2,
+        "recall": 0.6666666666666666
+      }
+    },
+    {
+      "id": "q06",
+      "category": "conceptual",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.641633605288262,
+        "mrr": 1.0,
+        "map": 0.2552083333333333,
+        "precision": 0.3,
+        "recall": 0.375
+      }
+    },
+    {
+      "id": "q07",
+      "category": "conceptual",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.8315477690050596,
+        "mrr": 1.0,
+        "map": 0.6875,
+        "precision": 0.7,
+        "recall": 0.6363636363636364
+      }
+    },
+    {
+      "id": "q08",
+      "category": "conceptual",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.7038391147263535,
+        "mrr": 1.0,
+        "map": 0.8166666666666667,
+        "precision": 0.4,
+        "recall": 1.0
+      }
+    },
+    {
+      "id": "q09",
+      "category": "conceptual",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9157011140632259,
+        "mrr": 1.0,
+        "map": 0.8333333333333334,
+        "precision": 0.5,
+        "recall": 0.8333333333333334
+      }
+    },
+    {
+      "id": "q10",
+      "category": "conceptual",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.7316741484997243,
+        "mrr": 1.0,
+        "map": 0.9,
+        "precision": 0.9,
+        "recall": 0.6428571428571429
+      }
+    },
+    {
+      "id": "q11",
+      "category": "conceptual",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.8094975526625504,
+        "mrr": 1.0,
+        "map": 0.5495535714285714,
+        "precision": 0.6,
+        "recall": 0.75
+      }
+    },
+    {
+      "id": "q12",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.9503830355935039,
+        "mrr": 1.0,
+        "map": 0.7904365079365079,
+        "precision": 0.9,
+        "recall": 0.6923076923076923
+      }
+    },
+    {
+      "id": "q13",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.8248456703816434,
+        "mrr": 1.0,
+        "map": 0.6732142857142857,
+        "precision": 0.7,
+        "recall": 0.5
+      }
+    },
+    {
+      "id": "q14",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.7815403539238467,
+        "mrr": 1.0,
+        "map": 0.716111111111111,
+        "precision": 0.8,
+        "recall": 0.6153846153846154
+      }
+    },
+    {
+      "id": "q15",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.8506028129042829,
+        "mrr": 1.0,
+        "map": 0.9,
+        "precision": 0.9,
+        "recall": 0.6923076923076923
+      }
+    },
+    {
+      "id": "q16",
+      "category": "cross_doc",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.7805952479060503,
+        "mrr": 1.0,
+        "map": 0.6283333333333333,
+        "precision": 0.7,
+        "recall": 0.5384615384615384
+      }
+    },
+    {
+      "id": "q17",
+      "category": "cross_doc",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.5924339957361036,
+        "mrr": 1.0,
+        "map": 0.40145502645502645,
+        "precision": 0.5,
+        "recall": 0.5555555555555556
+      }
+    },
+    {
+      "id": "q18",
+      "category": "natural",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.7618447398962626,
+        "mrr": 1.0,
+        "map": 0.6777777777777778,
+        "precision": 0.7,
+        "recall": 0.5384615384615384
+      }
+    },
+    {
+      "id": "q19",
+      "category": "natural",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.7350917945635472,
+        "mrr": 1.0,
+        "map": 0.89,
+        "precision": 0.9,
+        "recall": 0.75
+      }
+    },
+    {
+      "id": "q20",
+      "category": "natural",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.874233276401097,
+        "mrr": 1.0,
+        "map": 1.0,
+        "precision": 1.0,
+        "recall": 0.7692307692307693
+      }
+    },
+    {
+      "id": "q21",
+      "category": "natural",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.6230836943744885,
+        "mrr": 1.0,
+        "map": 0.5658730158730159,
+        "precision": 0.7,
+        "recall": 0.5833333333333334
+      }
+    },
+    {
+      "id": "q22",
+      "category": "natural",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.6313268506711107,
+        "mrr": 1.0,
+        "map": 0.4351851851851851,
+        "precision": 0.4,
+        "recall": 0.6666666666666666
+      }
+    },
+    {
+      "id": "q23",
+      "category": "natural",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.34251112169500053,
+        "mrr": 0.3333333333333333,
+        "map": 0.20999999999999996,
+        "precision": 0.4,
+        "recall": 0.3333333333333333
+      }
+    },
+    {
+      "id": "q24",
+      "category": "negative",
+      "language": "en",
+      "metrics_at_10": {
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "map": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      }
+    },
+    {
+      "id": "q25",
+      "category": "negative",
+      "language": "ru",
+      "metrics_at_10": {
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "map": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      }
+    }
+  ],
+  "decision": {
+    "status": "rejected",
+    "reason": "nDCG@10, MRR@10, and MAP@10 decreased, and the paired nDCG confidence interval crossed zero."
+  },
+  "comparison_to": {
+    "name": "baseline",
+    "paired_positive_queries": 23,
+    "mean_delta_at_10": {
+      "ndcg": -0.00740693822823471,
+      "mrr": -0.06159420289855073,
+      "map": -0.013745542903151586,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    "ndcg_delta_95pct_bootstrap_ci": [
+      -0.0261219089333793,
+      0.012356958990944158
+    ],
+    "latency_delta_ms": {
+      "p50": 291.8,
+      "p95": 291.4
+    }
+  }
+}

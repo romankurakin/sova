@@ -1,4 +1,4 @@
-"""llama-server API client for embeddings, reranking, and context generation."""
+"""llama-server API client for embeddings and context generation."""
 
 import json
 import math
@@ -15,12 +15,12 @@ from pathlib import Path
 
 from sova.config import (
     CONTEXT_MODEL,
+    CONTEXT_MODEL_HF_FILE,
+    CONTEXT_MODEL_HF_REPO,
     CONTEXT_SERVER_URL,
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
     EMBEDDING_SERVER_URL,
-    RERANK_TIMEOUT,
-    RERANKER_SERVER_URL,
     SOVA_HOME,
     get_memory_hard_cap_gib,
     get_model_memory_estimate_gib,
@@ -29,20 +29,16 @@ from sova.config import (
 # Map server URLs to launchd service labels for on-demand startup.
 _SERVICE_LABELS = {
     EMBEDDING_SERVER_URL: "com.sova.embedding",
-    RERANKER_SERVER_URL: "com.sova.reranker",
     CONTEXT_SERVER_URL: "com.sova.chat",
 }
 _SERVICE_PORTS = {
     EMBEDDING_SERVER_URL: 8081,
-    RERANKER_SERVER_URL: 8082,
     CONTEXT_SERVER_URL: 8083,
 }
 
-# Recent llama.cpp builds store -hf downloads in the Hugging Face hub cache
-# layout (blobs/<sha>[.downloadInProgress] + snapshots/<rev>/<file> symlinks);
-# older builds used a flat directory with mangled file names. Check both.
+# llama.cpp stores -hf downloads in the Hugging Face hub cache layout
+# (blobs/<sha>[.downloadInProgress] + snapshots/<rev>/<file> symlinks).
 _HF_HUB_CACHE = Path.home() / ".cache" / "huggingface" / "hub"
-_LLAMA_CACHE = Path.home() / "Library" / "Caches" / "llama.cpp"
 
 # Map service labels to (hf repo, model file). File None means single-file
 # repo where any .gguf snapshot counts.
@@ -52,26 +48,14 @@ _MODEL_SPECS: dict[str, tuple[str, str | None]] = {
         "Qwen3-Embedding-4B-Q8_0.gguf",
     ),
     "com.sova.chat": (
-        "mistralai/Ministral-3-14B-Instruct-2512-GGUF",
-        "Ministral-3-14B-Instruct-2512-Q8_0.gguf",
+        CONTEXT_MODEL_HF_REPO,
+        CONTEXT_MODEL_HF_FILE,
     ),
-    "com.sova.reranker": ("ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF", None),
-}
-
-# Legacy flat-cache file names per service label.
-_CACHE_FILES = {
-    "com.sova.embedding": "Qwen_Qwen3-Embedding-4B-GGUF_Qwen3-Embedding-4B-Q8_0.gguf",
-    "com.sova.chat": "mistralai_Ministral-3-14B-Instruct-2512-GGUF_Ministral-3-14B-Instruct-2512-Q8_0.gguf",
-    "com.sova.reranker": "ggml-org_Qwen3-Reranker-0.6B-Q8_0-GGUF_qwen3-reranker-0.6b-q8_0.gguf",
 }
 
 # Idle timeout in seconds; services stop after this much inactivity.
 _IDLE_TIMEOUT = 900  # 15 minutes.
-_RERANK_MIN_UBATCH = 4096
-
 _ACTIVITY_DIR = SOVA_HOME / "activity"
-_SEARCH_ACTIVITY_LABEL = "com.sova.search"
-_SEARCH_PAIR_LABELS = frozenset({"com.sova.embedding", "com.sova.reranker"})
 
 # Fixed embedding batch size. Concurrency is controlled by llama-server slots.
 _EMBED_BATCH_SIZE = 12
@@ -88,14 +72,12 @@ _EMBED_RECOVERY_MAX_ATTEMPTS = 6
 _EMBED_RECOVERY_RESTART_PAUSE_S = 1.0
 _EMBED_RECOVERY_CANARY_REQUESTS = 2
 
-_RERANK_COMPACT_CHAR_BUDGETS = (3000, 2000, 1400, 1000, 800, 600, 450)
-_RERANK_KEEP_RATIO_FALLBACKS = (1.0, 0.75, 0.5, 0.35, 0.25)
-
 # Startup probe: send sequential requests to warm up the Metal autorelease.
 # pool and fail early if the embedding server is unstable (llama.cpp #18568).
 _EMBED_CANARY_REQUESTS = 24
 _EMBED_CANARY_TEXT = "sova embedding canary"
 _DOWNLOAD_PROGRESS_STEP_GIB = 0.5
+_CONTEXT_TIMEOUT_S = 120.0
 
 # Required-model admission is estimate-based; allow a small mode-specific.
 # slack to avoid false negatives on machines where real RSS is lower than.
@@ -114,7 +96,6 @@ _MODE_SERVERS = {
     ],
     "search": [
         ("embedding", EMBEDDING_SERVER_URL, True),
-        ("reranker", RERANKER_SERVER_URL, True),
     ],
 }
 
@@ -124,27 +105,84 @@ _MODE_SERVERS = {
 QUERY_TASK = "Given a search query, retrieve relevant passages that answer the query"
 
 CONTEXT_SYSTEM_PROMPT = (
-    "Return exactly one plain-text sentence for technical retrieval. "
-    "No markdown formatting: do not use backticks, emphasis markers, headings, "
-    "table pipes, or list markers. "
-    "Do not start with demonstratives or meta intros: never begin with "
-    "'This', 'This chunk', 'This section', 'This document', "
-    "'These', 'In this chunk', 'In this section', 'The chunk', "
-    "'The section', 'The document', 'Here', or similar lead-ins. "
-    "Begin directly with concrete technical terms copied from <chunk>. "
-    "Keep technical tokens raw and never wrap them. "
-    "Bad: 'This chunk describes PLIC priorities.' "
-    "Good: 'PLIC priorities are encoded in ...'."
+    "Write context for document retrieval. Return one concise, standalone, "
+    "grammatical plain-text sentence with an explicit subject and verb. Identify "
+    "the target passage's main subject and its most distinguishing information. "
+    "Begin directly with that specific subject, never with a reference to the "
+    "passage itself. Use the title, section, and neighboring passages only to "
+    "disambiguate the target passage. Include only information supported by the "
+    "supplied text. Prefer specific names and terms from the target passage. Do "
+    "not mention the prompt, document structure, excerpts, chunks, passages, or "
+    "retrieval. Do not use markdown, labels, quotations, or XML."
 )
 
 CONTEXT_USER_PROMPT = """\
-<document title="{doc_name}" section="{section_title}">
+<source>
+<title>{doc_name}</title>
+<section>{section_title}</section>
 <previous>{prev_chunk}</previous>
-<chunk>{chunk_text}</chunk>
+<target>{chunk_text}</target>
 <next>{next_chunk}</next>
-</document>
+</source>
 
-One sentence in plain text."""
+Return the context sentence in the required JSON object."""
+
+CONTEXT_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "context_sentence",
+        "schema": {
+            "type": "object",
+            "properties": {"context": {"type": "string"}},
+            "required": ["context"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
+}
+
+_CONTEXT_META_OPENING_RE = re.compile(
+    r"^(?:here|(?:this|the|the target) "
+    r"(?:chunk|section|document|excerpt|passage)|"
+    r"in (?:this|the|the target) "
+    r"(?:chunk|section|document|excerpt|passage))\b",
+    re.IGNORECASE,
+)
+_CONTEXT_MARKUP_RE = re.compile(
+    r"(?:<[^>]+>|`|\*\*|^\s*#{1,6}\s|^\s*[-*+]\s|^\s*\d+[.)]\s|\|---)",
+    re.MULTILINE,
+)
+
+
+def _extract_context_response(raw: str) -> str:
+    """Extract a context sentence from the structured response or plain fallback."""
+    text = raw.strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+    if not isinstance(payload, dict) or not isinstance(payload.get("context"), str):
+        raise ServerError("context response did not contain a string 'context' field")
+    return payload["context"].strip()
+
+
+def _validate_context_response(raw: str) -> str:
+    """Validate and normalize generated context before it reaches the database."""
+    text = " ".join(raw.split())
+    if not text:
+        raise ServerError("context response was empty")
+    word_count = len(text.split())
+    if not 3 <= word_count <= 72:
+        raise ServerError(
+            f"context response length was outside 3-72 words ({word_count})"
+        )
+    if _CONTEXT_META_OPENING_RE.search(text):
+        raise ServerError("context response used a meta opening")
+    if _CONTEXT_MARKUP_RE.search(text):
+        raise ServerError("context response contained markup")
+    if not text.endswith((".", "!", "?")):
+        raise ServerError("context response was not a complete sentence")
+    return text
 
 
 class ServerError(RuntimeError):
@@ -216,8 +254,6 @@ def _touch_activity(label: str) -> None:
     try:
         _ACTIVITY_DIR.mkdir(parents=True, exist_ok=True)
         (_ACTIVITY_DIR / label).write_bytes(b"")
-        if label in _SEARCH_PAIR_LABELS:
-            (_ACTIVITY_DIR / _SEARCH_ACTIVITY_LABEL).write_bytes(b"")
     except OSError:
         # Activity tracking is best-effort; health checks should not fail on FS errors.
         pass
@@ -227,25 +263,6 @@ def _plist_exists(label: str) -> bool:
     """Check if a launchd plist is installed for the given label."""
     plist = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
     return plist.exists()
-
-
-def _configured_ubatch_size(label: str) -> int | None:
-    """Read configured --ubatch-size from launchd plist ProgramArguments."""
-    plist = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
-    try:
-        data = plistlib.loads(plist.read_bytes())
-    except OSError, plistlib.InvalidFileException:
-        return None
-    args = data.get("ProgramArguments")
-    if not isinstance(args, list):
-        return None
-    for i, arg in enumerate(args):
-        if arg in {"--ubatch-size", "-ub"} and (i + 1) < len(args):
-            try:
-                return int(str(args[i + 1]))
-            except ValueError:
-                return None
-    return None
 
 
 def _configured_ctx_size(label: str) -> int | None:
@@ -309,21 +326,12 @@ def _download_in_progress_bytes(label: str) -> int | None:
                     total += partial.stat().st_size
                 except OSError:
                     pass
-    legacy = _CACHE_FILES.get(label)
-    if legacy:
-        partial = _LLAMA_CACHE / f"{legacy}.downloadInProgress"
-        if partial.exists():
-            found = True
-            try:
-                total += partial.stat().st_size
-            except OSError:
-                pass
     return total if found else None
 
 
 def _server_status(label: str) -> str:
     """Return human-readable status for a service: downloading, loading, or waiting."""
-    if label not in _MODEL_SPECS and label not in _CACHE_FILES:
+    if label not in _MODEL_SPECS:
         return "waiting"
     in_progress = _download_in_progress_bytes(label)
     if in_progress is not None:
@@ -370,9 +378,6 @@ def stop_server(url: str, *, suppress_interrupt: bool = False) -> None:
     label = _SERVICE_LABELS.get(url)
     if not label:
         return
-    activity_labels = [label]
-    if label in _SEARCH_PAIR_LABELS:
-        activity_labels.append(_SEARCH_ACTIVITY_LABEL)
     try:
         subprocess.run(["launchctl", "stop", label], capture_output=True, check=False)
         # Wait for the process to actually exit and free memory.
@@ -393,12 +398,11 @@ def stop_server(url: str, *, suppress_interrupt: bool = False) -> None:
         if not suppress_interrupt:
             raise
     finally:
-        for activity_label in activity_labels:
-            try:
-                (_ACTIVITY_DIR / activity_label).unlink(missing_ok=True)
-            except KeyboardInterrupt:
-                if not suppress_interrupt:
-                    raise
+        try:
+            (_ACTIVITY_DIR / label).unlink(missing_ok=True)
+        except KeyboardInterrupt:
+            if not suppress_interrupt:
+                raise
 
 
 def _is_file_idle(path: Path, now: float) -> bool:
@@ -428,29 +432,7 @@ def cleanup_idle_services() -> None:
     now = time.time()
     label_files = {path.name: path for path in _ACTIVITY_DIR.iterdir()}
 
-    # Keep embedding+rereanker lifecycle coupled to avoid "orphan" leftovers.
-    search_file = label_files.get(_SEARCH_ACTIVITY_LABEL)
-    if search_file and _is_file_idle(search_file, now):
-        for label in _SEARCH_PAIR_LABELS:
-            subprocess.run(
-                ["launchctl", "stop", label], capture_output=True, check=False
-            )
-        if _is_file_idle(search_file, now):
-            try:
-                search_file.unlink(missing_ok=True)
-            except FileNotFoundError:
-                pass
-            for label in _SEARCH_PAIR_LABELS:
-                label_path = label_files.get(label)
-                if label_path is not None:
-                    try:
-                        label_path.unlink(missing_ok=True)
-                    except FileNotFoundError:
-                        pass
-
     for label, label_file in label_files.items():
-        if label == _SEARCH_ACTIVITY_LABEL or label in _SEARCH_PAIR_LABELS:
-            continue
         _stop_and_unlink_if_still_idle(label, label_file, now)
 
 
@@ -562,7 +544,6 @@ def get_services_runtime_status() -> list[dict[str, str | int | float | bool | N
     """Return runtime status for known llama services (no autostart)."""
     services = [
         ("embedding", EMBEDDING_SERVER_URL),
-        ("reranker", RERANKER_SERVER_URL),
         ("chat", CONTEXT_SERVER_URL),
     ]
     rows: list[dict[str, str | int | float | bool | None]] = []
@@ -602,7 +583,6 @@ def check_servers(
     on_status: Callable[[str], None] | None = None,
     mode: str = "search",
     fast_only: bool = False,
-    use_reranker: bool = True,
 ) -> tuple[bool, str]:
     """Probe /health on needed llama-server instances, starting them if needed.
 
@@ -610,31 +590,13 @@ def check_servers(
     ``mode`` selects which servers are needed:
       - "index_context": chat only
       - "index_embed": embedding only
-      - "search": embedding (+ reranker when enabled; chat skipped)
+      - "search": embedding only
     ``on_status`` is called with a human-readable status string on each poll.
     """
     timeout = 300.0
     all_servers = _MODE_SERVERS.get(mode)
     if all_servers is None:
         raise ValueError(f"unknown server mode: {mode}")
-    if mode == "search" and not use_reranker:
-        all_servers = [srv for srv in all_servers if srv[0] != "reranker"]
-
-    if mode == "search":
-        for name, url, required in all_servers:
-            label = _SERVICE_LABELS.get(url, "")
-            if name == "reranker" and required and label and _plist_exists(label):
-                ubatch = _configured_ubatch_size(label)
-                effective_ubatch = 512 if ubatch is None else ubatch
-                if effective_ubatch < _RERANK_MIN_UBATCH:
-                    return (
-                        False,
-                        (
-                            "reranker service configured with too small --ubatch-size "
-                            f"({effective_ubatch}); run sova-install to update services"
-                        ),
-                    )
-
     # Warm path: when required services are already healthy, skip launchctl and.
     # polling loops to keep repeated searches snappy.
     required_servers = [(name, url) for name, url, required in all_servers if required]
@@ -707,7 +669,7 @@ def check_servers(
             admission_note = "unavailable"
 
     if admission_note:
-        return True, f"ready (reranker {admission_note})"
+        return True, f"ready ({admission_note})"
 
     return True, "ready"
 
@@ -1191,133 +1153,23 @@ def generate_context(
         chunk_text=chunk_text[:1000],
         next_chunk=next_chunk[:500] if next_chunk else "(end of document)",
     )
-    try:
-        resp = _post_json(
-            f"{CONTEXT_SERVER_URL}/v1/chat/completions",
-            {
-                "model": CONTEXT_MODEL,
-                "messages": [
-                    {"role": "system", "content": CONTEXT_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                "max_tokens": 96,
-                "temperature": 0.0,
-            },
-        )
-        return (resp["choices"][0]["message"]["content"] or "").strip()
-    except ServerError as e:
-        msg = str(e).lower()
-        if "failed to parse input at pos 0" not in msg:
-            raise
-        # llama.cpp occasionally fails parsing chat output for specific prompts.
-        # Retry via completion endpoint with equivalent instruction text.
-        fallback = _post_json(
-            f"{CONTEXT_SERVER_URL}/completion",
-            {
-                "prompt": f"{CONTEXT_SYSTEM_PROMPT}\n\n{prompt}",
-                "n_predict": 96,
-                "temperature": 0.0,
-            },
-        )
-        text = (fallback.get("content") or "").strip()
-        if text:
-            return text
-        raise ServerError(
-            "context fallback via /completion returned empty content"
-        ) from e
-
-
-def rerank(query: str, documents: list[str], top_n: int = 10) -> list[dict]:
-    """Rerank documents via /v1/rerank."""
-
-    def _is_batch_overflow(msg: str) -> bool:
-        low = msg.lower()
-        return "too large to process" in low and "physical batch size" in low
-
-    def _is_timeout(msg: str) -> bool:
-        low = msg.lower()
-        return "server timeout" in low or "timed out" in low
-
-    def _compact_doc(text: str, char_budget: int) -> str:
-        if char_budget <= 0:
-            return ""
-        if len(text) <= char_budget:
-            return text
-        # Preserve both lead and tail signals when truncating for reranking.
-        head = max(200, int(char_budget * 0.72))
-        tail = max(0, char_budget - head - 5)
-        if tail <= 0:
-            return text[:char_budget]
-        return f"{text[:head]}\n...\n{text[-tail:]}"
-
-    if not _ensure_server(RERANKER_SERVER_URL, timeout=30.0):
-        raise ServerError(f"reranker server not reachable at {RERANKER_SERVER_URL}")
-
-    doc_count = len(documents)
-    if doc_count == 0:
-        return []
-
-    last_overflow: ServerError | None = None
-    last_timeout: ServerError | None = None
-    smallest_budget = _RERANK_COMPACT_CHAR_BUDGETS[-1]
-    attempts: list[tuple[int, int | None]] = [(doc_count, None)]
-
-    for keep_ratio in _RERANK_KEEP_RATIO_FALLBACKS:
-        keep_count = max(1, round(doc_count * keep_ratio))
-        keep_count = min(keep_count, doc_count)
-        for budget in _RERANK_COMPACT_CHAR_BUDGETS:
-            attempts.append((keep_count, budget))
-
-    seen_attempts: set[tuple[int, int | None]] = set()
-    for keep_count, budget in attempts:
-        attempt_key = (keep_count, budget)
-        if attempt_key in seen_attempts:
-            continue
-        seen_attempts.add(attempt_key)
-
-        docs_slice = documents[:keep_count]
-        if budget is None:
-            docs_payload = docs_slice
-        else:
-            docs_payload = [_compact_doc(doc, budget) for doc in docs_slice]
-
-        try:
-            resp = _post_json(
-                f"{RERANKER_SERVER_URL}/v1/rerank",
-                {
-                    "query": query,
-                    "documents": docs_payload,
-                    "top_n": min(top_n, len(docs_payload)),
-                },
-                timeout=RERANK_TIMEOUT,
-            )
-            results = resp.get("results")
-            if not isinstance(results, list):
-                raise ServerError("invalid rerank response: missing results")
-            return results
-        except ServerError as e:
-            if _is_batch_overflow(str(e)):
-                last_overflow = e
-                continue
-            if _is_timeout(str(e)):
-                # Slow reranker calls are retried with tighter payloads.
-                last_timeout = e
-                continue
-            raise
-
-    if last_overflow is not None:
-        raise ServerError(
-            "reranker input exceeds llama-server physical batch size even after "
-            f"adaptive compaction (min doc budget={smallest_budget} chars); "
-            "increase com.sova.reranker --ubatch-size and restart services"
-        ) from last_overflow
-    if last_timeout is not None:
-        raise ServerError(
-            "reranker timed out even after adaptive compaction; "
-            "increase reranker timeout or reduce system load"
-        ) from last_timeout
-
-    raise ServerError("reranker failed unexpectedly")
+    resp = _post_json(
+        f"{CONTEXT_SERVER_URL}/v1/chat/completions",
+        {
+            "model": CONTEXT_MODEL,
+            "messages": [
+                {"role": "system", "content": CONTEXT_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": 192,
+            "temperature": 0.0,
+            "reasoning_effort": "low",
+            "response_format": CONTEXT_RESPONSE_FORMAT,
+        },
+        timeout=_CONTEXT_TIMEOUT_S,
+    )
+    raw = resp["choices"][0]["message"]["content"] or ""
+    return _validate_context_response(_extract_context_response(raw))
 
 
 def is_service_installed(label: str) -> bool:
@@ -1329,12 +1181,7 @@ def is_model_cached(label: str) -> bool:
     """Return True if the model file for label is fully downloaded."""
     if _download_in_progress_bytes(label) is not None:
         return False
-    if _hf_snapshot_file(label) is not None:
-        return True
-    cache_file = _CACHE_FILES.get(label)
-    if cache_file:
-        return (_LLAMA_CACHE / cache_file).exists()
-    return False
+    return _hf_snapshot_file(label) is not None
 
 
 def get_model_status(label: str) -> str:

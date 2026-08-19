@@ -28,7 +28,7 @@ PDFs are converted to Markdown, split into chunks, then indexed into two
 retrieval artifacts: a vector store and an FTS index.
 
 **Context generation** — at index time, a local LLM
-(`ministral-3-14b-instruct-2512`) generates a one-sentence summary situating
+(`qwen3.8-27b`) generates a one-sentence summary situating
 each chunk within its document and section. This context is prepended to the
 chunk text before embedding, so vectors capture meaning beyond the raw text [1].
 Format: `[doc | section]\n\n{chunk_context}\n\n{chunk_text}`.
@@ -46,15 +46,13 @@ flowchart LR
     Q --> FC["FTS retrieval"]
     VC --> RRF["RRF fusion"]
     FC --> RRF
-    RRF --> RR["rerank"]
-    RR --> DV["diversify"]
+    RRF --> DV["diversify"]
     DV --> OUT["final context chunks"]
 ```
 
 At search time, query embedding and FTS retrieval run in parallel. Their
-candidates are fused with RRF [3], reranked by a cross-encoder
-(`qwen3-reranker-0.6b`), then diversified. The output is a compact set of final
-context chunks for answer generation.
+candidates are fused with RRF [3], then diversified. The output is a compact
+set of final context chunks for answer generation.
 
 **ToC detection** — chunks are classified at index time using text density [2].
 ToC and index pages are flagged so they can be down-ranked at retrieval time.
@@ -63,9 +61,8 @@ ToC and index pages are flagged so they can be down-ranked at retrieval time.
 avoiding redundant embedding calls.
 
 Models run locally via llama-server (llama.cpp): `qwen3-embedding-4b` for
-embeddings (2560 dims), `ministral-3-14b-instruct` for contextual summaries,
-`qwen3-reranker-0.6b` for reranking. Services are managed as launchd agents
-and start on demand.
+embeddings (2560 dims) and `qwen3.8-27b` for contextual summaries. Services are
+managed as launchd agents and start on demand.
 
 
 ## Usage
