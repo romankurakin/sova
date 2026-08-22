@@ -236,6 +236,8 @@ class TestFuseAndRank:
                 limit=2,
             )
             assert len(results) == 2
-            assert all(result["sort_score"] == result["final_score"] for result in results)
+            assert all(
+                result["sort_score"] == result["final_score"] for result in results
+            )
         finally:
             conn.close()

@@ -8,7 +8,7 @@
 uv run sova-install            # Build binary + set up llama-server services
 sova index /path/to/your/pdfs  # Register + index project
 sova projects                  # See project ids
-sova <project-id> "your query" # Search
+sova search <project-id> "your query"
 ```
 
 Services start on demand — no memory used until you run a search or index.
@@ -26,6 +26,11 @@ flowchart LR
 
 PDFs are converted to Markdown, split into chunks, then indexed into two
 retrieval artifacts: a vector store and an FTS index.
+
+Indexing is deliberately sequential on unified-memory machines: Sova unloads
+both models while it prepares every source (including layout analysis and OCR),
+loads the context model once for the context phase, releases it, then loads the
+embedding model. The source PDFs are read-only.
 
 **Context generation** — at index time, a local LLM
 (`qwen3.8-27b`) generates a one-sentence summary situating
@@ -50,9 +55,9 @@ flowchart LR
     DV --> OUT["final context chunks"]
 ```
 
-At search time, query embedding and FTS retrieval run in parallel. Their
-candidates are fused with RRF [3], then diversified. The output is a compact
-set of final context chunks for answer generation.
+At search time, vector and FTS candidates are fused with RRF [3], then
+diversified. The output is a compact set of final context chunks for answer
+generation.
 
 **ToC detection** — chunks are classified at index time using text density [2].
 ToC and index pages are flagged so they can be down-ranked at retrieval time.
@@ -72,12 +77,32 @@ sova help                              # Show unified help
 sova projects                          # List projects
 sova index /path/to/pdfs               # Add project and index
 sova index <project-id>                # Re-index existing project
-sova <project-id> "your query"         # Semantic search (default mode)
-sova <project-id> "query" -n 20        # More results
+sova search <project-id> "your query"  # Semantic search
+sova <project-id> "your query"         # Short search form
+sova search <project-id> "query" -n 20 # More results
 sova list <project-id>                 # List docs and indexing status
-sova remove <project-id>               # Remove project + local project data
-sova remove <project-id> --keep-data   # Remove from registry, keep project data (md,db)
+sova doctor <project-id>               # Read-only database integrity audit
+sova remove <project-id>               # Unregister; keep local data
+sova remove <project-id> --delete-data # Also delete local data (asks first)
 ```
+
+Progress is updated in place in an interactive terminal. When output is piped,
+Sova writes stable append-only status to stderr and results to stdout. Agents
+and scripts can use newline-delimited JSON. Third-party converters and system
+tools never write directly to the terminal; Sova captures their output and
+reports failures through the same error format used by every command:
+
+```bash
+sova --json search <project-id> "your query"
+sova --json doctor <project-id>
+```
+
+Indexing checkpoints every completed context and embedding batch. Re-running
+the command resumes current-pipeline work. Changed PDFs are re-extracted, and
+documents removed from the source directory are removed from the searchable
+index. Markdown files placed directly in the source directory are also
+supported; generated Markdown under Sova's data directory is never treated as
+a source document.
 
 ## Install / Remove
 

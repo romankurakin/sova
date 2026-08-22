@@ -13,6 +13,8 @@ from pathlib import Path
 
 import sqlite_vector
 
+from sova.external import ExternalToolError, run_process
+
 
 def _is_frozen_binary() -> bool:
     return bool(getattr(sys, "frozen", False))
@@ -37,9 +39,7 @@ _CONFIG_PATH = SOVA_HOME / "config.json"
 PROJECTS_DIR = SOVA_HOME / "projects"
 
 _ACTIVE_PROJECT_ID: str | None = None
-_ACTIVE_PROJECT_NAME: str | None = None
 _ACTIVE_PROJECT_DOCS_DIR: Path | None = None
-_ACTIVE_PROJECT_ROOT_DIR: Path | None = None
 _ACTIVE_PROJECT_DATA_DIR: Path | None = None
 _ACTIVE_PROJECT_DB_PATH: Path | None = None
 
@@ -90,23 +90,17 @@ def get_docs_dir() -> Path | None:
 def activate_project(
     *,
     project_id: str,
-    project_name: str,
     docs_dir: Path,
-    root_dir: Path,
     data_dir: Path,
     db_path: Path,
 ) -> None:
     """Activate per-project paths for this process."""
     global _ACTIVE_PROJECT_ID
-    global _ACTIVE_PROJECT_NAME
     global _ACTIVE_PROJECT_DOCS_DIR
-    global _ACTIVE_PROJECT_ROOT_DIR
     global _ACTIVE_PROJECT_DATA_DIR
     global _ACTIVE_PROJECT_DB_PATH
     _ACTIVE_PROJECT_ID = project_id
-    _ACTIVE_PROJECT_NAME = project_name
     _ACTIVE_PROJECT_DOCS_DIR = docs_dir.expanduser().resolve()
-    _ACTIVE_PROJECT_ROOT_DIR = root_dir.expanduser().resolve()
     _ACTIVE_PROJECT_DATA_DIR = data_dir.expanduser().resolve()
     _ACTIVE_PROJECT_DB_PATH = db_path.expanduser().resolve()
 
@@ -114,29 +108,17 @@ def activate_project(
 def clear_active_project() -> None:
     """Clear active project override."""
     global _ACTIVE_PROJECT_ID
-    global _ACTIVE_PROJECT_NAME
     global _ACTIVE_PROJECT_DOCS_DIR
-    global _ACTIVE_PROJECT_ROOT_DIR
     global _ACTIVE_PROJECT_DATA_DIR
     global _ACTIVE_PROJECT_DB_PATH
     _ACTIVE_PROJECT_ID = None
-    _ACTIVE_PROJECT_NAME = None
     _ACTIVE_PROJECT_DOCS_DIR = None
-    _ACTIVE_PROJECT_ROOT_DIR = None
     _ACTIVE_PROJECT_DATA_DIR = None
     _ACTIVE_PROJECT_DB_PATH = None
 
 
 def get_active_project_id() -> str | None:
     return _ACTIVE_PROJECT_ID
-
-
-def get_active_project_name() -> str | None:
-    return _ACTIVE_PROJECT_NAME
-
-
-def get_active_project_root_dir() -> Path | None:
-    return _ACTIVE_PROJECT_ROOT_DIR
 
 
 def get_data_dir() -> Path:
@@ -156,18 +138,6 @@ def _env_float(name: str) -> float | None:
         return None
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    value = raw.strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
-    return default
-
-
 def _parse_float(value: object, default: float) -> float:
     if isinstance(value, str | bytes | bytearray | memoryview | int | float):
         try:
@@ -184,17 +154,17 @@ def _probe_total_ram_gib() -> float:
     """Best-effort system RAM detection in GiB."""
     if sys.platform == "darwin":
         try:
-            result = subprocess.run(
+            result = run_process(
                 ["sysctl", "-n", "hw.memsize"],
-                capture_output=True,
-                check=False,
+                runner=subprocess.run,
                 text=True,
                 timeout=2,
+                operation="read system memory",
             )
             if result.returncode == 0:
                 mem_bytes = int(result.stdout.strip())
                 return mem_bytes / (1024**3)
-        except OSError, subprocess.SubprocessError, ValueError:
+        except ExternalToolError, ValueError:
             # Fall through to the portable sysconf probe below.
             pass
     try:
@@ -209,12 +179,12 @@ def _probe_available_ram_gib() -> float:
     """Best-effort available memory in GiB (macOS vm_stat, else total RAM)."""
     if sys.platform == "darwin":
         try:
-            result = subprocess.run(
+            result = run_process(
                 ["vm_stat"],
-                capture_output=True,
-                check=False,
+                runner=subprocess.run,
                 text=True,
                 timeout=2,
+                operation="read available memory",
             )
             if result.returncode == 0:
                 text = result.stdout
@@ -239,7 +209,7 @@ def _probe_available_ram_gib() -> float:
                 )
                 if available_pages > 0:
                     return float(available_pages * page_size) / (1024**3)
-        except OSError, subprocess.SubprocessError, ValueError:
+        except ExternalToolError, ValueError:
             return _probe_total_ram_gib()
     return _probe_total_ram_gib()
 
@@ -248,12 +218,12 @@ def _probe_free_swap_gib() -> float:
     """Best-effort free swap detection in GiB."""
     if sys.platform == "darwin":
         try:
-            result = subprocess.run(
+            result = run_process(
                 ["sysctl", "vm.swapusage"],
-                capture_output=True,
-                check=False,
+                runner=subprocess.run,
                 text=True,
                 timeout=2,
+                operation="read swap usage",
             )
             if result.returncode == 0:
                 text = f"{result.stdout}\n{result.stderr}"
@@ -269,7 +239,7 @@ def _probe_free_swap_gib() -> float:
                         "P": 1024.0 * 1024.0,
                     }
                     return value * scale.get(unit, 0.0)
-        except OSError, subprocess.SubprocessError, ValueError:
+        except ExternalToolError, ValueError:
             return 0.0
     return 0.0
 
@@ -282,14 +252,14 @@ def _probe_metal_ceiling_gib() -> float | None:
     if not llama_server:
         return None
     try:
-        result = subprocess.run(
+        result = run_process(
             [llama_server, "--help"],
-            capture_output=True,
-            check=False,
+            runner=subprocess.run,
             text=True,
             timeout=8,
+            operation="inspect llama-server",
         )
-    except OSError, subprocess.SubprocessError:
+    except ExternalToolError:
         return None
     combined = f"{result.stdout}\n{result.stderr}"
     m = re.search(r"recommendedMaxWorkingSetSize\s*=\s*([0-9.]+)\s*MB", combined)

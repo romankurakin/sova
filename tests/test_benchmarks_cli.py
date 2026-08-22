@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -59,7 +60,7 @@ def test_cmd_run_closes_backend_on_interrupt(monkeypatch, tmp_path: Path):
     bench_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(bench_cli, "_BENCH_DIR", bench_dir)
 
-    ground_truth = {
+    ground_truth: dict[str, Any] = {
         "queries": [
             {
                 "id": "t01",
@@ -92,9 +93,18 @@ def test_cmd_run_closes_backend_on_interrupt(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(run_benchmark, "run_search", _raise_interrupt)
 
     with pytest.raises(KeyboardInterrupt):
-        bench_cli.cmd_run(name="interrupt-case")
+        bench_cli.cmd_run(name="interrupt-case", description="Interrupt cleanup")
 
     assert closed == [True]
+
+
+def test_cmd_run_requires_a_meaningful_experiment_description():
+    import benchmarks.__main__ as bench_cli
+
+    with pytest.raises(SystemExit) as exc:
+        bench_cli.cmd_run(name="candidate", description="   ")
+
+    assert exc.value.code == 2
 
 
 def test_cmd_run_fails_on_unjudged(monkeypatch, tmp_path: Path):
@@ -105,7 +115,7 @@ def test_cmd_run_fails_on_unjudged(monkeypatch, tmp_path: Path):
     bench_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(bench_cli, "_BENCH_DIR", bench_dir)
 
-    ground_truth = {
+    ground_truth: dict[str, Any] = {
         "queries": [
             {
                 "id": "t01",
@@ -141,7 +151,10 @@ def test_cmd_run_fails_on_unjudged(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(search_interface, "close_backend", lambda: closed.append(True))
 
     with pytest.raises(RuntimeError, match="ground truth contains unjudged chunks"):
-        bench_cli.cmd_run(name="missing-judgments")
+        bench_cli.cmd_run(
+            name="missing-judgments",
+            description="Reject incomplete ground truth",
+        )
 
     assert closed == [True]
     loaded = json.loads(gt_path.read_text())
@@ -156,7 +169,7 @@ def test_cmd_run_defaults_to_one_deterministic_pass(monkeypatch, tmp_path: Path)
     bench_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(bench_cli, "_BENCH_DIR", bench_dir)
 
-    ground_truth = {
+    ground_truth: dict[str, Any] = {
         "queries": [
             {
                 "id": "t01",
@@ -205,7 +218,10 @@ def test_cmd_run_defaults_to_one_deterministic_pass(monkeypatch, tmp_path: Path)
     result_path = bench_dir / "results" / "three-pass-default.json"
     result_path.unlink(missing_ok=True)
 
-    bench_cli.cmd_run(name="three-pass-default")
+    bench_cli.cmd_run(
+        name="three-pass-default",
+        description="Measure the single-pass default",
+    )
 
     data = json.loads(result_path.read_text())
     assert data["runs"] == 1
@@ -224,7 +240,7 @@ def test_cmd_run_respects_internal_runs_override(monkeypatch, tmp_path: Path):
     bench_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(bench_cli, "_BENCH_DIR", bench_dir)
 
-    ground_truth = {
+    ground_truth: dict[str, Any] = {
         "queries": [
             {
                 "id": "t01",
@@ -265,7 +281,11 @@ def test_cmd_run_respects_internal_runs_override(monkeypatch, tmp_path: Path):
     result_path = bench_dir / "results" / "runs-override.json"
     result_path.unlink(missing_ok=True)
 
-    bench_cli.cmd_run(name="runs-override", runs=1)
+    bench_cli.cmd_run(
+        name="runs-override",
+        runs=1,
+        description="Measure an explicit run override",
+    )
 
     data = json.loads(result_path.read_text())
     assert data["runs"] == 1

@@ -98,7 +98,7 @@ def test_registry_raises_on_duplicate_id(monkeypatch, tmp_path):
         projects.list_projects()
 
 
-def test_remove_project_deletes_local_data_by_default(monkeypatch, tmp_path):
+def test_remove_project_keeps_local_data_by_default(monkeypatch, tmp_path):
     _isolate_registry(monkeypatch, tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir(parents=True)
@@ -107,16 +107,60 @@ def test_remove_project_deletes_local_data_by_default(monkeypatch, tmp_path):
 
     projects.remove_project(project.project_id)
 
-    assert not project.root_dir.exists()
+    assert project.root_dir.exists()
 
 
-def test_remove_project_can_keep_local_data(monkeypatch, tmp_path):
+def test_remove_project_deletes_data_only_when_explicit(monkeypatch, tmp_path):
     _isolate_registry(monkeypatch, tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir(parents=True)
     project = projects.add_project(docs)
     assert project.root_dir.exists()
 
-    projects.remove_project(project.project_id, keep_data=True)
+    projects.remove_project(project.project_id, delete_data=True)
 
-    assert project.root_dir.exists()
+    assert not project.root_dir.exists()
+
+
+def test_failed_data_deletion_keeps_project_registered(monkeypatch, tmp_path):
+    _isolate_registry(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir(parents=True)
+    project = projects.add_project(docs)
+
+    def fail_delete(_path):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(projects.shutil, "rmtree", fail_delete)
+
+    with pytest.raises(OSError, match="permission denied"):
+        projects.remove_project(project.project_id, delete_data=True)
+
+    assert projects.get_project(project.project_id) == project
+
+
+def test_project_storage_has_no_unused_metadata_or_benchmark_dirs(
+    monkeypatch, tmp_path
+):
+    _isolate_registry(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir(parents=True)
+
+    project = projects.add_project(docs)
+
+    assert project.data_dir.is_dir()
+    assert not (project.root_dir / "project.json").exists()
+    assert not (project.root_dir / "benchmarks").exists()
+
+
+def test_read_only_activation_does_not_create_storage(monkeypatch, tmp_path):
+    _isolate_registry(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir(parents=True)
+    project = projects.add_project(docs)
+    project.data_dir.rmdir()
+    project.root_dir.rmdir()
+
+    projects.activate(project)
+
+    assert not project.root_dir.exists()

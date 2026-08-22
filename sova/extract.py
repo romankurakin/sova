@@ -3,10 +3,13 @@
 import bisect
 import importlib
 import re
+import sys
 import warnings
 from pathlib import Path
+from typing import TextIO
 
 from sova import config
+from sova.external import call_external
 
 
 def get_docs_dir() -> Path | None:
@@ -23,14 +26,13 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="pymupdf")
 
 
 def find_docs() -> list[dict]:
-    """Find all documents (PDFs and extracted markdown files)."""
+    """Find source documents; generated Markdown is never treated as a source."""
     docs_dir = get_docs_dir()
     data_dir = get_data_dir()
-    pdfs = list(docs_dir.glob("*.pdf")) if docs_dir and docs_dir.exists() else []
-    mds = sorted(
-        [m for m in data_dir.glob("*.md")] if data_dir.exists() else [],
-        key=lambda p: p.name.lower(),
-    )
+    if not docs_dir or not docs_dir.exists():
+        return []
+    pdfs = list(docs_dir.glob("*.pdf"))
+    source_mds = list(docs_dir.glob("*.md"))
     pdf_names = {p.stem for p in pdfs}
 
     docs = []
@@ -44,7 +46,7 @@ def find_docs() -> list[dict]:
                 "size": pdf.stat().st_size,
             }
         )
-    for md in mds:
+    for md in source_mds:
         if md.stem not in pdf_names:
             docs.append(
                 {"name": md.stem, "pdf": None, "md": md, "size": md.stat().st_size}
@@ -54,13 +56,27 @@ def find_docs() -> list[dict]:
 
 def extract_pdf(pdf_path: Path) -> str:
     """Extract markdown from PDF using pymupdf4llm with layout analysis."""
-    # pymupdf4llm checks if pymupdf.layout was already imported to decide.
-    # whether to use layout analysis. Must be imported first or it silently.
-    # falls back to basic extraction with much worse quality.
-    importlib.import_module("pymupdf.layout")
-    import pymupdf4llm
+    import pymupdf
 
-    return pymupdf4llm.to_markdown(str(pdf_path), header=False, footer=False)
+    def capture_messages(stream: TextIO):
+        previous = getattr(pymupdf, "_g_out_message", sys.stdout)
+        pymupdf.set_messages(stream=stream)
+        return lambda: pymupdf.set_messages(stream=previous)
+
+    def convert() -> str:
+        # pymupdf4llm checks if pymupdf.layout was already imported to decide
+        # whether to use layout analysis. Import it first or extraction silently
+        # falls back to the lower-quality basic path.
+        importlib.import_module("pymupdf.layout")
+        import pymupdf4llm
+
+        return pymupdf4llm.to_markdown(str(pdf_path), header=False, footer=False)
+
+    return call_external(
+        "PDF extraction",
+        convert,
+        messages=capture_messages,
+    )
 
 
 def parse_sections(lines: list[str]) -> list[dict]:

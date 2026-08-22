@@ -9,6 +9,43 @@ from contextlib import contextmanager
 from sova import config
 from sova.config import EMBEDDING_DIM, VECTOR_EXT
 
+SCHEMA_VERSION = 3
+
+
+def _check_schema_version(conn: sqlite3.Connection) -> int:
+    version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+    if version > SCHEMA_VERSION:
+        raise RuntimeError(
+            f"database schema {version} is newer than supported {SCHEMA_VERSION}"
+        )
+    return version
+
+
+def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """Apply small, transactional schema upgrades to existing project databases."""
+    _check_schema_version(conn)
+    with conn:
+        chunks_columns = _column_names(conn, "chunks")
+        if "embedding_signature" not in chunks_columns:
+            conn.execute("ALTER TABLE chunks ADD COLUMN embedding_signature TEXT")
+
+        context_columns = _column_names(conn, "chunk_contexts")
+        if "pipeline_signature" not in context_columns:
+            conn.execute(
+                "ALTER TABLE chunk_contexts "
+                "ADD COLUMN pipeline_signature TEXT NOT NULL DEFAULT ''"
+            )
+
+        document_columns = _column_names(conn, "documents")
+        if document_columns and "source_signature" not in document_columns:
+            conn.execute("ALTER TABLE documents ADD COLUMN source_signature TEXT")
+
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
 
 def init_db() -> sqlite3.Connection:
     """Initialize database with tables and indexes."""
@@ -19,11 +56,13 @@ def init_db() -> sqlite3.Connection:
     conn.enable_load_extension(True)
     conn.load_extension(str(VECTOR_EXT))
     conn.enable_load_extension(False)
+    _check_schema_version(conn)
 
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS documents (
             id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
             path TEXT NOT NULL, line_count INTEGER, expected_chunks INTEGER,
+            source_signature TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS sections (
@@ -35,6 +74,7 @@ def init_db() -> sqlite3.Connection:
             id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL, section_id INTEGER,
             start_line INTEGER NOT NULL, end_line INTEGER NOT NULL,
             word_count INTEGER NOT NULL, text TEXT NOT NULL, embedding BLOB,
+            embedding_signature TEXT,
             is_index INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
         );
@@ -50,6 +90,7 @@ def init_db() -> sqlite3.Connection:
             chunk_id INTEGER PRIMARY KEY,
             context TEXT NOT NULL,
             model TEXT NOT NULL,
+            pipeline_signature TEXT NOT NULL DEFAULT '',
             FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
         );
         CREATE TABLE IF NOT EXISTS index_meta (
@@ -61,6 +102,7 @@ def init_db() -> sqlite3.Connection:
         CREATE INDEX IF NOT EXISTS idx_query_cache_created ON query_cache(created_at);
         PRAGMA foreign_keys = ON;
     """)
+    _migrate_schema(conn)
 
     conn.executescript("""
         CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -83,22 +125,17 @@ def init_db() -> sqlite3.Connection:
         END;
     """)
 
-    # FTS triggers only fire on new inserts. If chunks were added before FTS.
-    # was set up (e.g. schema migration), backfill the index from existing rows.
+    # Rebuild if a crash or older schema left the external-content index out of sync.
     fts_count = conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]
     chunk_count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    if fts_count == 0 and chunk_count > 0:
-        conn.execute("INSERT INTO chunks_fts(rowid, text) SELECT id, text FROM chunks")
+    if fts_count != chunk_count:
+        conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
         conn.commit()
 
-    # vector_init is idempotent but raises if already initialized.
-    try:
-        conn.execute(
-            f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
-        )
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
+    conn.execute(
+        f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
+    )
+    conn.commit()
 
     return conn
 
@@ -184,8 +221,14 @@ def get_connection(readonly: bool = False) -> Generator[sqlite3.Connection]:
         conn.close()
 
 
-def get_doc_status(conn, name: str) -> dict:
-    """Get indexing status for a document."""
+def get_doc_status(
+    conn,
+    name: str,
+    *,
+    context_signature: str | None = None,
+    embedding_signature: str | None = None,
+) -> dict:
+    """Get indexing status, including durable progress from interrupted runs."""
     empty = {
         "extracted": False,
         "embedded": 0,
@@ -212,24 +255,42 @@ def get_doc_status(conn, name: str) -> dict:
     ).fetchone()
     chunk_count, text_size, embed_size = row
 
-    embedded = conn.execute(
-        "SELECT COUNT(*) FROM chunks WHERE doc_id = ? AND embedding IS NOT NULL",
-        (doc_id,),
-    ).fetchone()[0]
+    chunk_columns = _column_names(conn, "chunks")
+    embed_sig = embedding_signature or get_meta(conn, "pipeline.embedding.signature")
+    if "embedding_signature" in chunk_columns and embed_sig:
+        embedded = conn.execute(
+            """
+            SELECT COUNT(*) FROM chunks
+            WHERE doc_id = ? AND embedding IS NOT NULL AND embedding_signature = ?
+            """,
+            (doc_id, embed_sig),
+        ).fetchone()[0]
+    else:
+        embedded = 0
 
     try:
-        contextualized = conn.execute(
-            """
-            SELECT COUNT(*) FROM chunk_contexts cc
-            JOIN chunks c ON cc.chunk_id = c.id
-            WHERE c.doc_id = ?
-        """,
-            (doc_id,),
-        ).fetchone()[0]
+        context_columns = _column_names(conn, "chunk_contexts")
+        context_sig = context_signature or get_meta(conn, "pipeline.context.signature")
+        if "pipeline_signature" in context_columns and context_sig:
+            contextualized = conn.execute(
+                """
+                SELECT COUNT(*) FROM chunk_contexts cc
+                JOIN chunks c ON cc.chunk_id = c.id
+                WHERE c.doc_id = ? AND cc.pipeline_signature = ?
+                """,
+                (doc_id, context_sig),
+            ).fetchone()[0]
+        else:
+            contextualized = 0
     except sqlite3.Error:
         contextualized = 0
 
-    complete = expected is not None and chunk_count >= expected
+    complete = (
+        expected is not None
+        and chunk_count == expected
+        and contextualized == expected
+        and embedded == expected
+    )
 
     return {
         "extracted": True,

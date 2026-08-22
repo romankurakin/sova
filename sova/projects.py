@@ -16,6 +16,7 @@ RESERVED_PROJECT_IDS = frozenset(
     {
         "help",
         "projects",
+        "doctor",
         "download",
         "remove",
         "list",
@@ -43,7 +44,6 @@ class Project:
     root_dir: Path
     data_dir: Path
     db_path: Path
-    bench_dir: Path
 
 
 def _normalize(path: Path) -> Path:
@@ -101,10 +101,9 @@ def _load_registry() -> dict:
 
         docs_dir = str(_normalize(Path(raw_docs)))
         raw_id = entry.get("id")
-        if isinstance(raw_id, str) and raw_id.strip():
-            project_id = raw_id.strip()
-        else:
-            project_id = Path(docs_dir).name.strip() or "project"
+        if not isinstance(raw_id, str) or not raw_id.strip():
+            raise RegistryError("each project entry must include string id")
+        project_id = raw_id.strip()
         if is_reserved_project_id(project_id):
             raise RegistryError(f"reserved project id in registry: {project_id}")
         if project_id in seen_ids:
@@ -124,7 +123,6 @@ def _entry_to_project(entry: dict) -> Project:
         root_dir=root_dir,
         data_dir=root_dir / "data",
         db_path=root_dir / "indexed.db",
-        bench_dir=root_dir / "benchmarks",
     )
 
 
@@ -149,23 +147,9 @@ def _find_by_docs_dir(reg: dict, docs_dir: Path) -> Project | None:
     return None
 
 
-def _write_project_file(project: Project) -> None:
-    payload = {
-        "id": project.project_id,
-        "docs_dir": str(project.docs_dir),
-    }
-    project.root_dir.mkdir(parents=True, exist_ok=True)
-    (project.root_dir / "project.json").write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
 def ensure_project_dirs(project: Project) -> None:
     project.root_dir.mkdir(parents=True, exist_ok=True)
     project.data_dir.mkdir(parents=True, exist_ok=True)
-    project.bench_dir.mkdir(parents=True, exist_ok=True)
-    _write_project_file(project)
 
 
 def list_projects() -> list[Project]:
@@ -225,11 +209,16 @@ def get_project(ref: str) -> Project | None:
     return None
 
 
-def remove_project(ref: str, *, keep_data: bool = False) -> Project:
-    """Remove project from registry, deleting local project storage by default."""
+def remove_project(ref: str, *, delete_data: bool = False) -> Project:
+    """Unregister a project, preserving local data unless explicitly requested."""
     project = get_project(ref)
     if project is None:
         raise ValueError(f"project not found: {ref}")
+
+    # Destructive removal must succeed before the only registry reference is
+    # dropped. A filesystem error then leaves the project fully recoverable.
+    if delete_data and project.root_dir.exists():
+        shutil.rmtree(project.root_dir)
 
     reg = _load_registry()
     kept: list[dict] = []
@@ -239,20 +228,16 @@ def remove_project(ref: str, *, keep_data: bool = False) -> Project:
         kept.append(entry)
     reg["projects"] = kept
     _save_registry(reg)
-
-    if not keep_data and project.root_dir.exists():
-        shutil.rmtree(project.root_dir)
     return project
 
 
-def activate(project: Project) -> None:
+def activate(project: Project, *, create_dirs: bool = False) -> None:
     """Activate project paths in runtime config."""
-    ensure_project_dirs(project)
+    if create_dirs:
+        ensure_project_dirs(project)
     config.activate_project(
         project_id=project.project_id,
-        project_name=project.project_id,
         docs_dir=project.docs_dir,
-        root_dir=project.root_dir,
         data_dir=project.data_dir,
         db_path=project.db_path,
     )

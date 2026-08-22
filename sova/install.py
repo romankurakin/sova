@@ -13,7 +13,14 @@ from pathlib import Path
 from typing import Any
 
 from sova.config import CONTEXT_MODEL_HF_FILE, CONTEXT_MODEL_HF_REPO
-from sova.ui import report, report_error, report_mode, report_step
+from sova.external import ExternalToolError, run_process
+from sova.ui import (
+    close_output,
+    configure_output,
+    emit,
+    report_error,
+    status,
+)
 
 SERVICES: list[dict[str, Any]] = [
     {
@@ -158,22 +165,16 @@ def _run_build(repo_root: Path) -> None:
     env = os.environ.copy()
     env.setdefault("UV_CACHE_DIR", str(repo_root / ".uv-cache"))
     env.setdefault("PYINSTALLER_CONFIG_DIR", str(repo_root / ".pyinstaller"))
-    result = subprocess.run(
+    result = run_process(
         [str(build_script)],
+        runner=subprocess.run,
         cwd=repo_root,
         env=env,
-        capture_output=True,
-        check=False,
+        check=True,
         text=True,
+        operation="build",
     )
-    if result.returncode != 0:
-        error_text = result.stderr.strip() or "build failed"
-        report_error(
-            "build failed",
-            cause=error_text,
-            action="fix build errors and retry sova-install",
-        )
-        raise SystemExit(1)
+    assert result.returncode == 0
 
 
 def _write_manifest(path: Path, data: dict[str, Any]) -> None:
@@ -205,19 +206,272 @@ def _logs_dir() -> Path:
 _COMPLETION_SHELLS = ("bash", "zsh", "fish")
 
 
-def _install_shell_completion(shell: str) -> bool:
-    """Install completion via Typer's installer with an explicit shell.
+_BASH_COMPLETION = r"""# Native Bash completions for Sova.
+# Keep this static: invoking the one-file binary during completion is expensive.
 
-    Calling the typer API directly avoids shellingham process-tree detection,
-    which is unreliable when sova-install itself runs under another shell.
-    """
-    from typer._completion_shared import install as typer_install_completion
+__sova_projects() {
+    local registry="${SOVA_HOME:-$HOME/.sova}/projects/registry.json"
+    [[ -r "$registry" ]] || return
+    sed -nE 's/.*"id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$registry"
+}
 
-    try:
-        typer_install_completion(
-            shell=shell, prog_name="sova", complete_var="_SOVA_COMPLETE"
+__sova_add_matches() {
+    local prefix="$1"
+    local candidate
+    while IFS= read -r candidate || [[ -n "$candidate" ]]; do
+        [[ "$candidate" == "$prefix"* ]] && COMPREPLY+=("$candidate")
+    done
+}
+
+_sova_completion() {
+    COMPREPLY=()
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local command_name=""
+    local command_index=-1
+    local word
+    local i
+
+    for ((i = 1; i < COMP_CWORD; i++)); do
+        word="${COMP_WORDS[i]}"
+        if [[ -z "$command_name" && "$word" == --* ]]; then
+            continue
+        fi
+        if [[ -z "$command_name" ]]; then
+            command_name="$word"
+            command_index=$i
+        fi
+    done
+
+    if [[ -z "$command_name" ]]; then
+        __sova_add_matches "$cur" <<'SOVA_COMMANDS'
+help
+projects
+doctor
+download
+remove
+list
+index
+search
+--json
+--help
+SOVA_COMMANDS
+        __sova_add_matches "$cur" < <(__sova_projects)
+        return
+    fi
+
+    case "$command_name" in
+        doctor|remove|list|index|search)
+            if ((COMP_CWORD == command_index + 1)); then
+                if [[ "$cur" == -* ]]; then
+                    case "$command_name" in
+                        remove) __sova_add_matches "$cur" <<<'--delete-data
+--yes
+--help' ;;
+                        search) __sova_add_matches "$cur" <<<'--limit
+--help' ;;
+                        *) __sova_add_matches "$cur" <<<'--help' ;;
+                    esac
+                    return
+                fi
+                __sova_add_matches "$cur" < <(__sova_projects)
+                while IFS= read -r candidate; do
+                    COMPREPLY+=("$candidate")
+                done < <(compgen -d -- "$cur")
+                return
+            fi
+            ;;
+    esac
+
+    [[ "$cur" == -* ]] || return
+    case "$command_name" in
+        remove) __sova_add_matches "$cur" <<<'--delete-data
+--yes
+--help' ;;
+        search) __sova_add_matches "$cur" <<<'--limit
+--help' ;;
+        *) __sova_add_matches "$cur" <<<'--help' ;;
+    esac
+}
+
+complete -F _sova_completion sova
+"""
+
+
+_ZSH_COMPLETION = r"""#compdef sova
+# Native Zsh completions for Sova.
+# Keep this static: invoking the one-file binary during completion is expensive.
+
+__sova_projects() {
+    local registry="${SOVA_HOME:-$HOME/.sova}/projects/registry.json"
+    [[ -r "$registry" ]] || return
+    sed -nE 's/.*"id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$registry"
+}
+
+_sova() {
+    local cur="${words[CURRENT]}"
+    local command_name=""
+    local command_index=0
+    local word
+    local i
+    local -a commands projects options
+
+    for ((i = 2; i < CURRENT; i++)); do
+        word="${words[i]}"
+        if [[ -z "$command_name" && "$word" == --* ]]; then
+            continue
+        fi
+        if [[ -z "$command_name" ]]; then
+            command_name="$word"
+            command_index=$i
+        fi
+    done
+
+    if [[ -z "$command_name" ]]; then
+        commands=(
+            'help:Show help'
+            'projects:List configured projects'
+            'doctor:Check a project database'
+            'download:Download model files'
+            'remove:Remove a project'
+            'list:List documents and index status'
+            'index:Index project documents'
+            'search:Search project documents'
         )
-    except OSError:
+        projects=("${(@f)$(__sova_projects)}")
+        options=(
+            '--json:Emit newline-delimited JSON'
+            '--help:Show help'
+        )
+        _describe -t commands 'command' commands
+        _describe -t projects 'project' projects
+        _describe -t options 'option' options
+        return
+    fi
+
+    case "$command_name" in
+        doctor|remove|list|index|search)
+            if ((CURRENT == command_index + 1)); then
+                if [[ "$cur" == -* ]]; then
+                    case "$command_name" in
+                        remove) options=('--delete-data:Delete local project data' '--yes:Confirm deletion' '--help:Show help') ;;
+                        search) options=('--limit:Maximum results' '--help:Show help') ;;
+                        *) options=('--help:Show help') ;;
+                    esac
+                    _describe -t options 'option' options
+                    return
+                fi
+                projects=("${(@f)$(__sova_projects)}")
+                _describe -t projects 'project' projects
+                _files -/
+                return
+            fi
+            ;;
+    esac
+
+    [[ "$cur" == -* ]] || return
+    case "$command_name" in
+        remove) options=('--delete-data:Delete local project data' '--yes:Confirm deletion' '--help:Show help') ;;
+        search) options=('--limit:Maximum results' '--help:Show help') ;;
+        *) options=('--help:Show help') ;;
+    esac
+    _describe -t options 'option' options
+}
+
+compdef _sova sova
+"""
+
+
+_FISH_COMPLETION = r"""# Native Fish completions for Sova.
+# Keep this static: invoking the one-file binary during completion is expensive.
+
+function __fish_sova_projects
+    set -l registry
+    if set -q SOVA_HOME
+        set registry "$SOVA_HOME/projects/registry.json"
+    else
+        set registry "$HOME/.sova/projects/registry.json"
+    end
+    test -r "$registry"; or return
+
+    for project in (string match --regex --all --groups-only '"id"[[:space:]]*:[[:space:]]*"([^"]+)"' < "$registry")
+        printf '%s\tProject\n' "$project"
+    end
+end
+
+function __fish_sova_needs_command
+    set -l words (commandline -opc)
+    for word in $words[2..]
+        string match --quiet -- '--*' "$word"; and continue
+        return 1
+    end
+    return 0
+end
+
+function __fish_sova_needs_project
+    set -l words (commandline -opc)
+    set -l command_name
+    for word in $words[2..]
+        if test -z "$command_name"
+            string match --quiet -- '--*' "$word"; and continue
+            set command_name "$word"
+            continue
+        end
+        string match --quiet -- '-*' "$word"; and continue
+        return 1
+    end
+    contains -- "$command_name" doctor remove list index search
+end
+
+complete --command sova --erase
+complete --command sova --no-files
+
+complete --command sova --condition __fish_sova_needs_command --arguments help --description 'Show help'
+complete --command sova --condition __fish_sova_needs_command --arguments projects --description 'List configured projects'
+complete --command sova --condition __fish_sova_needs_command --arguments doctor --description 'Check a project database'
+complete --command sova --condition __fish_sova_needs_command --arguments download --description 'Download model files'
+complete --command sova --condition __fish_sova_needs_command --arguments remove --description 'Remove a project'
+complete --command sova --condition __fish_sova_needs_command --arguments list --description 'List documents and index status'
+complete --command sova --condition __fish_sova_needs_command --arguments index --description 'Index project documents'
+complete --command sova --condition __fish_sova_needs_command --arguments search --description 'Search project documents'
+complete --command sova --condition __fish_sova_needs_command --arguments '(__fish_sova_projects)'
+
+complete --command sova --condition __fish_sova_needs_project --arguments '(__fish_sova_projects)'
+complete --command sova --condition __fish_sova_needs_project --arguments '(__fish_complete_directories)'
+
+complete --command sova --condition __fish_sova_needs_command --long-option json --description 'Emit newline-delimited JSON'
+complete --command sova --long-option help --description 'Show help'
+
+complete --command sova --condition '__fish_seen_subcommand_from remove' --long-option delete-data --description 'Delete local project data'
+complete --command sova --condition '__fish_seen_subcommand_from remove' --long-option yes --description 'Confirm deletion'
+complete --command sova --condition '__fish_seen_subcommand_from search' --short-option n --long-option limit --require-parameter --description 'Maximum results'
+"""
+
+
+def _bash_completion_path() -> Path:
+    return Path.home() / ".bash_completions" / "sova.sh"
+
+
+def _zsh_completion_path() -> Path:
+    return Path.home() / ".zfunc" / "_sova"
+
+
+def _install_native_completion(shell: str) -> None:
+    """Install static completion metadata without starting the frozen CLI."""
+    paths_and_scripts = {
+        "bash": (_bash_completion_path(), _BASH_COMPLETION),
+        "zsh": (_zsh_completion_path(), _ZSH_COMPLETION),
+        "fish": (_fish_completions_dir() / "sova.fish", _FISH_COMPLETION),
+    }
+    path, script = paths_and_scripts[shell]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(script, encoding="utf-8")
+
+
+def _install_shell_completion(shell: str) -> bool:
+    """Install a static completion script for one supported shell."""
+    try:
+        _install_native_completion(shell)
+    except KeyError, OSError:
         return False
     return True
 
@@ -314,30 +568,42 @@ def _install_services(
             if not force:
                 skipped_count += 1
                 continue
-            subprocess.run(
+            run_process(
                 ["launchctl", "unload", str(plist)],
-                capture_output=True,
+                runner=subprocess.run,
                 check=False,
+                operation="unload model service",
             )
         plist_data = _generate_plist(svc, llama_server_path)
         with open(plist, "wb") as f:
             plistlib.dump(plist_data, f)
-        subprocess.run(["launchctl", "load", str(plist)], check=True)
+        run_process(
+            ["launchctl", "load", str(plist)],
+            runner=subprocess.run,
+            check=True,
+            operation="load model service",
+        )
         installed.append(str(plist))
         loaded_count += 1
 
     # Install watchdog that stops idle services automatically.
     watchdog_plist = _plist_path(_WATCHDOG_LABEL)
     if watchdog_plist.exists():
-        subprocess.run(
+        run_process(
             ["launchctl", "unload", str(watchdog_plist)],
-            capture_output=True,
+            runner=subprocess.run,
             check=False,
+            operation="unload service watchdog",
         )
     watchdog_data = _generate_watchdog_plist(binary_path)
     with open(watchdog_plist, "wb") as f:
         plistlib.dump(watchdog_data, f)
-    subprocess.run(["launchctl", "load", str(watchdog_plist)], check=True)
+    run_process(
+        ["launchctl", "load", str(watchdog_plist)],
+        runner=subprocess.run,
+        check=True,
+        operation="load service watchdog",
+    )
     installed.append(str(watchdog_plist))
     loaded_count += 1
 
@@ -349,10 +615,11 @@ def _remove_services() -> int:
     # Remove watchdog first.
     watchdog_plist = _plist_path(_WATCHDOG_LABEL)
     if watchdog_plist.exists():
-        subprocess.run(
+        run_process(
             ["launchctl", "unload", str(watchdog_plist)],
-            capture_output=True,
+            runner=subprocess.run,
             check=False,
+            operation="unload service watchdog",
         )
         watchdog_plist.unlink()
         unloaded_count += 1
@@ -361,10 +628,11 @@ def _remove_services() -> int:
         plist = _plist_path(svc["label"])
         if not plist.exists():
             continue
-        subprocess.run(
+        run_process(
             ["launchctl", "unload", str(plist)],
-            capture_output=True,
+            runner=subprocess.run,
             check=False,
+            operation="unload model service",
         )
         plist.unlink()
         unloaded_count += 1
@@ -376,10 +644,10 @@ def _remove_services() -> int:
     return unloaded_count
 
 
-def install_main() -> None:
+def _install() -> None:
     parser = argparse.ArgumentParser(description="Build and install global sova binary")
     parser.parse_args()
-    report_mode("install")
+    emit("run_started", "Installing Sova")
 
     if sys.platform != "darwin":
         report_error(
@@ -396,7 +664,7 @@ def install_main() -> None:
     replace_managed = bool(existing_manifest)
     allow_replace = replace_managed
 
-    report_step("build")
+    status("Building binary", phase="build")
     _run_build(repo_root)
 
     built_binary = repo_root / "dist" / "sova"
@@ -408,28 +676,27 @@ def install_main() -> None:
         )
         raise SystemExit(1)
 
-    report_step("binary")
+    status("Installing binary", phase="install")
     _install_binary(built_binary, binary_path, allow_replace)
 
     home.mkdir(parents=True, exist_ok=True)
-    data_dir = home / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
 
     llama_server = shutil.which("llama-server")
     service_paths: list[str] = []
     _loaded_services = 0
     skipped_services = 0
     if llama_server:
-        report_step("services")
+        status("Installing model services", phase="install")
         service_paths, _loaded_services, skipped_services = _install_services(
             llama_server, binary_path, allow_replace
         )
     else:
-        report(
+        emit(
             "warning",
-            "llama-server not found in PATH; skipping service install",
+            "llama-server not found in PATH. Model services were not installed.",
+            level="warning",
         )
-        report("hint", "install llama.cpp and re-run sova-install")
+        emit("hint", "Install llama.cpp and re-run sova-install")
 
     manifest = {
         "installed_at": datetime.now(UTC).isoformat(),
@@ -444,18 +711,21 @@ def install_main() -> None:
         summary = "loaded"
         if skipped_services:
             summary = "loaded (some skipped)"
-        report("services", summary)
+        emit("services_installed", f"Model services: {summary}")
     installed_shells, failed_shells = _install_shell_completions()
     if installed_shells:
-        report("shell", f"completions installed: {', '.join(installed_shells)}")
+        emit(
+            "completions_installed",
+            f"Shell completions: {', '.join(installed_shells)}",
+        )
     if failed_shells:
-        report("hint", "completions: sova --install-completion")
-    report("status", "install complete")
+        emit("hint", "Check shell configuration and re-run sova-install")
+    emit("completed", "Sova installation complete")
     if str(binary_path.parent) not in os.environ.get("PATH", "").split(os.pathsep):
-        report("hint", "add ~/.local/bin to PATH")
+        emit("hint", "Add ~/.local/bin to PATH")
 
 
-def remove_main() -> None:
+def _remove() -> None:
     parser = argparse.ArgumentParser(description="Remove global sova binary install")
     parser.add_argument(
         "--purge-data",
@@ -463,7 +733,7 @@ def remove_main() -> None:
         help="Also remove ~/.sova",
     )
     args = parser.parse_args()
-    report_mode("remove")
+    emit("run_started", "Removing Sova")
 
     home = _default_home()
     manifest_path = _manifest_path(home)
@@ -480,8 +750,7 @@ def remove_main() -> None:
     if args.purge_data:
         if home.exists():
             shutil.rmtree(home)
-        report("services", "unloaded")
-        report("status", "remove complete")
+        emit("completed", "Sova removed. Local data deleted.")
         return
 
     if manifest_path.exists():
@@ -497,5 +766,28 @@ def remove_main() -> None:
     if home.exists() and not any(home.iterdir()):
         home.rmdir()
 
-    report("services", "unloaded")
-    report("status", "remove complete")
+    emit("completed", "Sova removed. Project data kept.")
+
+
+def install_main() -> None:
+    configure_output("auto")
+    try:
+        try:
+            _install()
+        except ExternalToolError as exc:
+            report_error("installation failed", cause=str(exc))
+            raise SystemExit(1) from exc
+    finally:
+        close_output()
+
+
+def remove_main() -> None:
+    configure_output("auto")
+    try:
+        try:
+            _remove()
+        except ExternalToolError as exc:
+            report_error("removal failed", cause=str(exc))
+            raise SystemExit(1) from exc
+    finally:
+        close_output()

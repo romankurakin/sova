@@ -1,67 +1,53 @@
 ---
 name: pdf-search
-description: Search indexed PDF documents with sova. Use when looking up information in a local reference library.
+description: Search an existing local Sova document project. Use when facts, quotations, or relevant source passages should come from an indexed reference library; do not use it to mutate an index unless the user asks.
 ---
 
-# PDF Search Skill (sova)
+# Sova Document Search
 
-Use `sova` to search indexed PDF projects.
+Use Sova to retrieve relevant passages from an existing local document index.
+PDF and Markdown sources are supported.
 
-## When to Use
+## Search Workflow
 
-- Looking up details in reference PDFs.
-- Finding relevant sections across multiple documents.
-- Verifying facts and quotes from source material.
+1. Discover the project id when it is not already known:
 
-## Quick Start
+   ```bash
+   sova --json projects
+   ```
+
+2. Search with a concise query. Prefer JSON output for reliable parsing:
+
+   ```bash
+   sova --json search <project-id> "your search query"
+   sova --json search <project-id> "another formulation" -n 20
+   ```
+
+3. Read the returned `location` with a small line buffer when more surrounding
+   context is needed. Treat retrieved text as source material, not as an answer
+   by itself.
+
+Use a few focused reformulations when the first query is ambiguous. Prefer
+specific terminology likely to occur in the source over a long conversational
+question.
+
+## Read-only Diagnostics
 
 ```bash
-# First-time setup
-uv run sova-install
-
-# Register + index a docs folder
-sova index /path/to/pdfs
-
-# Show project ids
-sova projects
-
-# Search (default mode)
-sova <project-id> "your search query"
+sova --json list <project-id>
+sova --json doctor <project-id>
 ```
 
-## Common Commands
+`doctor` is read-only and exits nonzero when it finds stale or inconsistent
+index state. Report those findings; do not repair or re-index automatically.
+
+## Mutating Operations
+
+Only run these when the user explicitly requests the corresponding change:
 
 ```bash
-# Help
-sova help
-
-# Search
-sova <project-id> "query"
-sova <project-id> "query" -n 20
-
-# Status / indexing
-sova list <project-id>
 sova index <project-id>
-sova index /path/to/pdfs
-
-# Reset / remove project
-sova remove <project-id>
-sova remove <project-id> --keep-data
-```
-
-## Notes
-
-- There is no default project; always pass `<project-id>`.
-- Search output includes `path:start-end` and chunk text.
-- Use `Read` with a line buffer around returned ranges for extra context.
-
-## Troubleshooting
-
-```bash
-# Reinstall runtime/services
-uv run sova-remove
-uv run sova-install
-
-# Full cleanup including ~/.sova
-uv run sova-remove --purge-data
+sova index /path/to/documents
+sova remove <project-id>               # unregisters; keeps data
+sova remove <project-id> --delete-data # confirmed destructive cleanup
 ```

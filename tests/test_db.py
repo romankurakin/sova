@@ -22,8 +22,21 @@ class TestGetDocStatus:
                 id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL,
                 section_id INTEGER, start_line INTEGER NOT NULL,
                 end_line INTEGER NOT NULL, word_count INTEGER NOT NULL,
-                text TEXT NOT NULL, embedding BLOB
+                text TEXT NOT NULL, embedding BLOB,
+                embedding_signature TEXT DEFAULT 'embed-v1'
             );
+            CREATE TABLE chunk_contexts (
+                chunk_id INTEGER PRIMARY KEY,
+                context TEXT NOT NULL,
+                model TEXT NOT NULL,
+                pipeline_signature TEXT NOT NULL DEFAULT 'context-v1'
+            );
+            CREATE TABLE index_meta (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL
+            );
+            INSERT INTO index_meta VALUES
+                ('pipeline.context.signature', 'context-v1'),
+                ('pipeline.embedding.signature', 'embed-v1');
         """)
         return conn
 
@@ -66,6 +79,12 @@ class TestGetDocStatus:
             "INSERT INTO chunks (doc_id, start_line, end_line, word_count, text, embedding) VALUES (1, 1, 10, 50, 'hello', ?)",
             (fake_emb,),
         )
+        conn.execute(
+            """
+            INSERT INTO chunk_contexts (chunk_id, context, model)
+            VALUES (1, 'Authentication rules.', 'qwen3.8-27b')
+            """
+        )
         conn.commit()
 
         status = get_doc_status(conn, "doc1")
@@ -98,6 +117,45 @@ class TestGetDocStatus:
         assert status["embedded"] == 1  # one chunk has embedding.
         assert status["complete"] is False  # 2 chunks < 3 expected.
         assert status["chunks"] == 2
+        conn.close()
+
+    def test_explicit_signatures_report_saved_progress_before_finalization(self):
+        conn = self._make_db()
+        conn.execute("DELETE FROM index_meta")
+        conn.execute(
+            "INSERT INTO documents (name, path, expected_chunks) VALUES (?, ?, ?)",
+            ("doc1", "/tmp/doc1.md", 2),
+        )
+        conn.executemany(
+            """
+            INSERT INTO chunks
+                (doc_id, start_line, end_line, word_count, text, embedding, embedding_signature)
+            VALUES (1, ?, ?, 20, ?, ?, ?)
+            """,
+            [
+                (1, 10, "one", struct.pack("1f", 0.1), "current-embed"),
+                (11, 20, "two", None, None),
+            ],
+        )
+        conn.execute(
+            """
+            INSERT INTO chunk_contexts
+                (chunk_id, context, model, pipeline_signature)
+            VALUES (1, 'saved context', 'model', 'current-context')
+            """
+        )
+        conn.commit()
+
+        status = get_doc_status(
+            conn,
+            "doc1",
+            context_signature="current-context",
+            embedding_signature="current-embed",
+        )
+
+        assert status["contextualized"] == 1
+        assert status["embedded"] == 1
+        assert status["complete"] is False
         conn.close()
 
 

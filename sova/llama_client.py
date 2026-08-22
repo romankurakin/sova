@@ -25,6 +25,7 @@ from sova.config import (
     get_memory_hard_cap_gib,
     get_model_memory_estimate_gib,
 )
+from sova.external import ExternalToolError, run_process
 
 # Map server URLs to launchd service labels for on-demand startup.
 _SERVICE_LABELS = {
@@ -141,18 +142,6 @@ CONTEXT_RESPONSE_FORMAT = {
     },
 }
 
-_CONTEXT_META_OPENING_RE = re.compile(
-    r"^(?:here|(?:this|the|the target) "
-    r"(?:chunk|section|document|excerpt|passage)|"
-    r"in (?:this|the|the target) "
-    r"(?:chunk|section|document|excerpt|passage))\b",
-    re.IGNORECASE,
-)
-_CONTEXT_MARKUP_RE = re.compile(
-    r"(?:<[^>]+>|`|\*\*|^\s*#{1,6}\s|^\s*[-*+]\s|^\s*\d+[.)]\s|\|---)",
-    re.MULTILINE,
-)
-
 
 def _extract_context_response(raw: str) -> str:
     """Extract a context sentence from the structured response or plain fallback."""
@@ -167,21 +156,15 @@ def _extract_context_response(raw: str) -> str:
 
 
 def _validate_context_response(raw: str) -> str:
-    """Validate and normalize generated context before it reaches the database."""
-    text = " ".join(raw.split())
+    """Apply only structural safeguards; the model owns wording and style."""
+    text = raw.strip()
     if not text:
         raise ServerError("context response was empty")
     word_count = len(text.split())
-    if not 3 <= word_count <= 72:
+    if not 3 <= word_count <= 96:
         raise ServerError(
-            f"context response length was outside 3-72 words ({word_count})"
+            f"context response length was outside 3-96 words ({word_count})"
         )
-    if _CONTEXT_META_OPENING_RE.search(text):
-        raise ServerError("context response used a meta opening")
-    if _CONTEXT_MARKUP_RE.search(text):
-        raise ServerError("context response contained markup")
-    if not text.endswith((".", "!", "?")):
-        raise ServerError("context response was not a complete sentence")
     return text
 
 
@@ -359,7 +342,11 @@ def _ensure_server(url: str, timeout: float = 300.0) -> bool:
     if not label or not _plist_exists(label):
         return False
 
-    subprocess.run(["launchctl", "start", label], capture_output=True, check=False)
+    run_process(
+        ["launchctl", "start", label],
+        runner=subprocess.run,
+        operation="start model service",
+    )
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         time.sleep(2)
@@ -379,16 +366,20 @@ def stop_server(url: str, *, suppress_interrupt: bool = False) -> None:
     if not label:
         return
     try:
-        subprocess.run(["launchctl", "stop", label], capture_output=True, check=False)
+        run_process(
+            ["launchctl", "stop", label],
+            runner=subprocess.run,
+            operation="stop model service",
+        )
         # Wait for the process to actually exit and free memory.
         wait_s = 10 if suppress_interrupt else 30
         deadline = time.monotonic() + wait_s
         while time.monotonic() < deadline:
-            result = subprocess.run(
+            result = run_process(
                 ["launchctl", "list", label],
-                capture_output=True,
-                check=False,
+                runner=subprocess.run,
                 text=True,
+                operation="inspect model service",
             )
             # PID column is "-" when the service is not running.
             if result.returncode != 0 or result.stdout.startswith("-"):
@@ -417,7 +408,11 @@ def _stop_and_unlink_if_still_idle(label: str, path: Path, now: float) -> None:
     """Stop a service and unlink its activity marker if it remained idle."""
     if not _is_file_idle(path, now):
         return
-    subprocess.run(["launchctl", "stop", label], capture_output=True, check=False)
+    run_process(
+        ["launchctl", "stop", label],
+        runner=subprocess.run,
+        operation="stop idle model service",
+    )
     try:
         if _is_file_idle(path, now):
             path.unlink(missing_ok=True)
@@ -500,13 +495,13 @@ def _health_ok(url: str, timeout: float = 1.0) -> bool:
 def _pid_for_port(port: int) -> int | None:
     """Return listener PID for a TCP port, if any."""
     try:
-        result = subprocess.run(
+        result = run_process(
             ["lsof", "-n", "-P", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
-            capture_output=True,
-            check=False,
+            runner=subprocess.run,
             text=True,
+            operation="inspect listening port",
         )
-    except OSError:
+    except ExternalToolError:
         return None
     if result.returncode != 0:
         return None
@@ -520,13 +515,13 @@ def _pid_for_port(port: int) -> int | None:
 def _rss_mib_for_pid(pid: int) -> float | None:
     """Return RSS memory for PID in MiB."""
     try:
-        result = subprocess.run(
+        result = run_process(
             ["ps", "-o", "rss=", "-p", str(pid)],
-            capture_output=True,
-            check=False,
+            runner=subprocess.run,
             text=True,
+            operation="inspect process memory",
         )
-    except OSError:
+    except ExternalToolError:
         return None
     if result.returncode != 0:
         return None
@@ -631,7 +626,11 @@ def check_servers(
                     f"{name} server not reachable at {url} (service not installed)",
                 )
             continue
-        subprocess.run(["launchctl", "start", label], capture_output=True, check=False)
+        run_process(
+            ["launchctl", "start", label],
+            runner=subprocess.run,
+            operation="start model service",
+        )
         to_wait.append((name, url, label, required))
 
     # Poll all started services concurrently in a single loop.
@@ -967,9 +966,15 @@ def get_service_diagnostics(url: str) -> str:
     if not label:
         return ""
     state = "stopped"
-    status = subprocess.run(
-        ["launchctl", "list", label], capture_output=True, check=False, text=True
-    )
+    try:
+        status = run_process(
+            ["launchctl", "list", label],
+            runner=subprocess.run,
+            text=True,
+            operation="inspect model service",
+        )
+    except ExternalToolError as exc:
+        return str(exc)
     if status.returncode == 0 and status.stdout.strip():
         first = status.stdout.splitlines()[0].split()
         if first and first[0].isdigit() and int(first[0]) > 0:
@@ -1191,9 +1196,15 @@ def get_model_status(label: str) -> str:
 
 def is_service_running(label: str) -> bool:
     """Return True while launchd reports a live process for the label."""
-    result = subprocess.run(
-        ["launchctl", "list", label], capture_output=True, check=False, text=True
-    )
+    try:
+        result = run_process(
+            ["launchctl", "list", label],
+            runner=subprocess.run,
+            text=True,
+            operation="inspect model service",
+        )
+    except ExternalToolError:
+        return False
     if result.returncode != 0:
         return False
     match = re.search(r'"PID"\s*=\s*(\d+)', result.stdout)
@@ -1203,4 +1214,8 @@ def is_service_running(label: str) -> bool:
 def start_service(label: str) -> None:
     """Start a launchd-managed service to trigger a model download."""
     if _plist_exists(label):
-        subprocess.run(["launchctl", "start", label], capture_output=True, check=False)
+        run_process(
+            ["launchctl", "start", label],
+            runner=subprocess.run,
+            operation="start model service",
+        )

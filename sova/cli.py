@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+import signal
 import sqlite3
 import sys
 import time
@@ -12,12 +13,13 @@ from typing import Annotated
 
 import typer
 from typer._click import exceptions as click_exceptions
-from typer._click.shell_completion import CompletionItem
 from typer.core import TyperGroup
 
 from sova import config, projects
+from sova.audit import Finding, audit_database
 from sova.cache import get_cache
 from sova.db import (
+    SCHEMA_VERSION,
     connect_readonly,
     embedding_to_blob,
     get_doc_status,
@@ -43,7 +45,6 @@ from sova.llama_client import (
     get_model_status,
     get_query_embedding,
     get_service_diagnostics,
-    get_services_runtime_status,
     is_model_cached,
     is_service_installed,
     is_service_running,
@@ -58,10 +59,25 @@ from sova.search import (
     is_index_like,
 )
 from sova.ui import (
+    close_output,
+    configure_output,
+    emit,
     fmt_duration,
+    is_json_output,
     make_table,
+    progress,
     render_table,
-    report,
+    report_error,
+    status,
+)
+from sova.ui import (
+    result as report_result,
+)
+from sova.ui import (
+    runtime as report_runtime,
+)
+from sova.ui import (
+    scope as report_scope,
 )
 
 
@@ -75,6 +91,15 @@ def _display_path(path: Path) -> str:
         return str(path)
 
 
+def _file_signature(path: Path) -> str:
+    """Return a stable source fingerprint without loading the file into memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while block := source.read(1024 * 1024):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 # Keep embedding work bounded so Python memory and llama-server lifetime stay.
 # controlled on large indexes.
 _EMBED_WINDOW_CHUNKS = 256
@@ -85,8 +110,6 @@ _EMBED_PREFIX_VERSION = "chunk-prefix.v1"
 _CONTEXT_RETRY_ATTEMPTS = 2
 _CONTEXT_RECYCLE_PAUSE_S = 2.0
 _RUNTIME_REFRESH_S = 20.0
-_PROGRESS_PCT_STEP = 2
-_PROGRESS_REFRESH_S = 6.0
 
 _META_CONTEXT_SIG = "pipeline.context.signature"
 _META_EMBED_SIG = "pipeline.embedding.signature"
@@ -129,20 +152,6 @@ def _progress_pct(done: int, total: int) -> int:
     return min(99, round((done / total) * 100))
 
 
-def _fmt_gib(value: float | None) -> str:
-    if value is None:
-        return "-"
-    return f"{value:.1f} GiB"
-
-
-def _fmt_rss(value_mib: float | None) -> str:
-    if value_mib is None:
-        return "-"
-    if value_mib >= 1024:
-        return f"{value_mib / 1024.0:.1f} GiB"
-    return f"{value_mib:.0f} MiB"
-
-
 def _format_error_chain(exc: BaseException) -> str:
     """Render exception and cause chain in one concise line."""
     parts: list[str] = []
@@ -169,13 +178,7 @@ def _report_error_block(
     action: str | None = None,
     detail: str | None = None,
 ) -> None:
-    report("error", summary)
-    if cause:
-        report("cause", cause)
-    if action:
-        report("action", action)
-    if detail:
-        report("detail", detail)
+    report_error(summary, cause=cause, action=action, detail=detail)
 
 
 def _infer_service_name(message: str) -> str | None:
@@ -189,6 +192,12 @@ def _infer_service_name(message: str) -> str | None:
 
 def _classify_error(message: str) -> tuple[str, str | None, str | None]:
     low = message.lower()
+    if "index database not found" in low:
+        return (
+            "database not ready",
+            message,
+            "run: sova index <project>",
+        )
     if "memory hard-cap exceeded" in low:
         return (
             "model does not fit current memory budget",
@@ -248,7 +257,12 @@ def _report_service_diag(url: str) -> None:
     )
     diag = get_service_diagnostics(url)
     if diag:
-        report("service", f"{name} {diag}")
+        emit(
+            "service_diagnostic",
+            f"{name}: {diag}",
+            level="warning",
+            data={"service": name, "diagnostic": diag},
+        )
 
 
 def _report_relevant_service_diags(
@@ -276,34 +290,14 @@ def _report_relevant_service_diags(
         _report_service_diag(url)
 
 
-def _service_status_line(service_name: str, *, with_memory: bool = False) -> str:
-    rows = get_services_runtime_status()
-    for row in rows:
-        if row["name"] != service_name:
-            continue
-        state = str(row["state"])
-        rss = _fmt_rss(row["rss_mib"] if isinstance(row["rss_mib"], float) else None)
-        if with_memory:
-            return f"{service_name} {state} | rss {rss}"
-        return f"{service_name} {state}"
-    if with_memory:
-        return f"{service_name} unknown | rss -"
-    return f"{service_name} unknown"
-
-
 def _report_phase_runtime(phase: str, service_name: str, mode: str = "index") -> None:
-    """Compact runtime snapshot for indexing phases."""
+    """Update runtime telemetry without adding permanent terminal lines."""
+    del phase, service_name
     try:
         effective = config.get_effective_available_gib()
         reserve = config.get_memory_reserve_gib(mode)
         budget_now = max(0.0, round(effective - reserve, 2))
-        service = _service_status_line(service_name, with_memory=False)
-        report("phase", f"{phase} (updated {time.strftime('%H:%M:%S')})")
-        if mode == "index":
-            report("runtime", f"free-for-model {_fmt_gib(budget_now)} | {service}")
-        else:
-            cap = config.get_memory_hard_cap_gib(mode)
-            report("runtime", f"cap {_fmt_gib(cap)} | {service}")
+        report_runtime(memory_headroom_gib=budget_now)
     except OSError, RuntimeError, TypeError, ValueError:
         pass
 
@@ -331,17 +325,38 @@ def _prepare_doc(
     conn: sqlite3.Connection,
 ) -> tuple[int, list[dict], list[dict]] | None:
     """Extract, chunk, and store a document.  Returns (doc_id, chunks, sections) or None."""
-    report("doc", name)
+    status("Preparing", phase="prepare", item=name)
 
-    extracted_now = False
-    if not md_path or not md_path.exists():
-        if not pdf_path:
-            _report_error_block(
-                "extract failed",
-                cause=f"{name}: source PDF not found",
-                action="check docs directory and document mapping, then retry",
-            )
-            return None
+    source_path = pdf_path or md_path
+    if source_path is None or not source_path.exists():
+        _report_error_block(
+            "source document is unavailable",
+            cause=name,
+            action="restore the source document and retry",
+        )
+        return None
+    source_signature = _file_signature(source_path)
+    document_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(documents)")
+    }
+    stored_source_signature: str | None = None
+    if "source_signature" in document_columns:
+        signature_row = conn.execute(
+            "SELECT source_signature FROM documents WHERE name = ?", (name,)
+        ).fetchone()
+        if signature_row and signature_row[0]:
+            stored_source_signature = str(signature_row[0])
+
+    needs_extract = bool(
+        pdf_path
+        and (
+            not md_path
+            or not md_path.exists()
+            or stored_source_signature != source_signature
+        )
+    )
+    if needs_extract:
+        assert pdf_path is not None
         try:
             start = time.time()
             markdown = extract_pdf(pdf_path)
@@ -350,8 +365,12 @@ def _prepare_doc(
             md_path = data_dir / f"{name}.md"
             md_path.write_text(markdown, encoding="utf-8")
             lines = len(markdown.splitlines())
-            report("extract", f"{lines:>9,} lines  {fmt_duration(time.time() - start)}")
-            extracted_now = True
+            status(
+                f"Prepared {lines:,} lines in "
+                f"{fmt_duration(time.time() - start).strip()}",
+                phase="prepare",
+                item=name,
+            )
         except (OSError, RuntimeError, ValueError) as e:
             _report_error_block(
                 "extract failed",
@@ -360,26 +379,53 @@ def _prepare_doc(
             )
             return None
 
+    assert md_path is not None and md_path.exists()
+
     text = md_path.read_text(encoding="utf-8")
     lines = text.split("\n")
 
-    if not extracted_now:
-        report("extract", f"{len(lines):>9,} lines")
     sections = parse_sections(lines)
     chunks = chunk_text(lines)
 
     row = conn.execute("SELECT id FROM documents WHERE name = ?", (name,)).fetchone()
     if row:
         doc_id = row[0]
-        conn.execute(
-            "UPDATE documents SET path = ?, line_count = ?, expected_chunks = ? WHERE id = ?",
-            (str(md_path), len(lines), len(chunks), doc_id),
-        )
+        if "source_signature" in document_columns:
+            conn.execute(
+                """
+                UPDATE documents
+                SET path = ?, line_count = ?, expected_chunks = ?, source_signature = ?
+                WHERE id = ?
+                """,
+                (str(md_path), len(lines), len(chunks), source_signature, doc_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE documents
+                SET path = ?, line_count = ?, expected_chunks = ?
+                WHERE id = ?
+                """,
+                (str(md_path), len(lines), len(chunks), doc_id),
+            )
     else:
-        cursor = conn.execute(
-            "INSERT INTO documents (name, path, line_count, expected_chunks) VALUES (?, ?, ?, ?)",
-            (name, str(md_path), len(lines), len(chunks)),
-        )
+        if "source_signature" in document_columns:
+            cursor = conn.execute(
+                """
+                INSERT INTO documents
+                    (name, path, line_count, expected_chunks, source_signature)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (name, str(md_path), len(lines), len(chunks), source_signature),
+            )
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO documents (name, path, line_count, expected_chunks)
+                VALUES (?, ?, ?, ?)
+                """,
+                (name, str(md_path), len(lines), len(chunks)),
+            )
         doc_id = cursor.lastrowid
         assert doc_id is not None
 
@@ -565,6 +611,47 @@ def _prepare_doc(
     return doc_id, chunks, sections
 
 
+def _load_prepared_doc(
+    conn: sqlite3.Connection, doc_id: int
+) -> tuple[list[dict], list[dict]]:
+    """Load one prepared document for a model phase, keeping project RAM bounded."""
+    chunks = [
+        {
+            "start_line": int(row[0]),
+            "end_line": int(row[1]),
+            "word_count": int(row[2]),
+            "text": str(row[3]),
+        }
+        for row in conn.execute(
+            """
+            SELECT start_line, end_line, word_count, text
+            FROM chunks
+            WHERE doc_id = ?
+            ORDER BY start_line, id
+            """,
+            (doc_id,),
+        ).fetchall()
+    ]
+    sections = [
+        {
+            "title": str(row[0]),
+            "level": int(row[1]),
+            "start_line": int(row[2]),
+            "end_line": int(row[3]) if row[3] is not None else None,
+        }
+        for row in conn.execute(
+            """
+            SELECT title, level, start_line, end_line
+            FROM sections
+            WHERE doc_id = ?
+            ORDER BY start_line, id
+            """,
+            (doc_id,),
+        ).fetchall()
+    ]
+    return chunks, sections
+
+
 def _signature(parts: list[str]) -> str:
     raw = "\n".join(parts).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
@@ -574,8 +661,13 @@ def _context_pipeline_signature() -> str:
     return _signature(
         [
             config.CONTEXT_MODEL,
+            config.CONTEXT_MODEL_HF_REPO,
+            config.CONTEXT_MODEL_HF_FILE,
             CONTEXT_SYSTEM_PROMPT,
             CONTEXT_USER_PROMPT,
+            "input-clipping:previous=500,target=1000,next=500",
+            "response:json-schema,max_tokens=192,temperature=0,reasoning=low",
+            "validation:sentence.v2",
         ]
     )
 
@@ -604,17 +696,37 @@ def _sync_index_signatures(conn: sqlite3.Connection) -> _IndexSignatureState:
     stored_embed = get_meta(conn, _META_EMBED_SIG)
     stored_chunk = get_meta(conn, _META_CHUNK_SIG)
 
-    context_changed = stored_context is not None and stored_context != current_context
-    embed_changed = stored_embed is not None and stored_embed != current_embed
-    chunk_changed = stored_chunk is not None and stored_chunk != current_chunk
+    has_contexts = conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM chunk_contexts)"
+    ).fetchone()[0]
+    has_embeddings = conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM chunks WHERE embedding IS NOT NULL)"
+    ).fetchone()[0]
+    has_chunks = conn.execute("SELECT EXISTS(SELECT 1 FROM chunks)").fetchone()[0]
+
+    context_changed = bool(has_contexts) and stored_context != current_context
+    embed_changed = bool(has_embeddings) and stored_embed != current_embed
+    chunk_changed = bool(has_chunks) and stored_chunk != current_chunk
 
     if context_changed:
-        report("event", "context pipeline changed; refreshing contexts and embeddings")
+        emit(
+            "pipeline_changed",
+            "Context pipeline changed. Refreshing contexts and embeddings.",
+            phase="prepare",
+        )
     elif embed_changed:
-        report("event", "embedding pipeline changed; refreshing embeddings")
+        emit(
+            "pipeline_changed",
+            "Embedding pipeline changed. Refreshing embeddings.",
+            phase="prepare",
+        )
 
     if chunk_changed:
-        report("event", "chunking settings changed; syncing chunk rows during prepare")
+        emit(
+            "pipeline_changed",
+            "Chunking changed. Synchronizing document chunks.",
+            phase="prepare",
+        )
 
     return _IndexSignatureState(
         force_rebuild_context=context_changed,
@@ -634,25 +746,35 @@ def _commit_index_signatures(
     conn.commit()
 
 
-def _make_progress_reporter(name: str, total: int) -> Callable[[int], None]:
-    """Return throttled plain progress reporter printing done/total lines."""
-    last_reported_pct = -1
-    last_report_ts = 0.0
+def _prune_missing_documents(conn: sqlite3.Connection, source_names: set[str]) -> int:
+    """Remove indexed rows whose source document is no longer in the project."""
+    existing = {
+        str(row[0]) for row in conn.execute("SELECT name FROM documents").fetchall()
+    }
+    stale = sorted(existing - source_names)
+    if not stale:
+        return 0
+    placeholders = ",".join("?" for _ in stale)
+    conn.execute(f"DELETE FROM documents WHERE name IN ({placeholders})", stale)
+    conn.commit()
+    emit(
+        "sources_reconciled",
+        f"Removed {len(stale)} stale indexed document(s)",
+        phase="prepare",
+        data={"documents": stale},
+    )
+    return len(stale)
 
-    def emit(done: int) -> None:
-        nonlocal last_reported_pct, last_report_ts
-        pct = _progress_pct(done, total)
-        now = time.monotonic()
-        if (
-            done == total
-            or pct >= (last_reported_pct + _PROGRESS_PCT_STEP)
-            or (now - last_report_ts) >= _PROGRESS_REFRESH_S
-        ):
-            report(name, f"{done:>9,}/{total:,} chunks")
-            last_reported_pct = pct
-            last_report_ts = now
 
-    return emit
+def _make_progress_reporter(
+    name: str, total: int, *, item: str | None = None
+) -> Callable[[int], None]:
+    """Publish progress; each renderer decides how often and where to draw it."""
+
+    def publish(done: int) -> None:
+        progress(name, done, total, item=item, unit="chunks")
+
+    return publish
 
 
 def _generate_contexts(
@@ -670,8 +792,27 @@ def _generate_contexts(
     ).fetchall()
     chunk_id_by_start = {r[1]: r[0] for r in chunk_rows}
 
-    if force_rebuild_context:
-        existing_contexts: set[int] = set()
+    context_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(chunk_contexts)")
+    }
+    chunk_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(chunks)")}
+    context_sig = _context_pipeline_signature()
+    if "pipeline_signature" in context_columns:
+        existing_contexts = {
+            r[0]
+            for r in conn.execute(
+                """
+                SELECT chunk_id
+                FROM chunk_contexts
+                WHERE chunk_id IN (SELECT id FROM chunks WHERE doc_id = ?)
+                  AND TRIM(context) <> ''
+                  AND pipeline_signature = ?
+                """,
+                (doc_id, context_sig),
+            ).fetchall()
+        }
+    elif force_rebuild_context:
+        existing_contexts = set()
     else:
         existing_contexts = {
             r[0]
@@ -699,14 +840,14 @@ def _generate_contexts(
         planned_chunk_ids.add(chunk_id)
 
     if not chunks_needing_context:
-        count = len(chunks)
-        report("context", f"{count:>9,} chunks")
+        progress("context", len(chunks), len(chunks), item=name, unit="chunks")
         return
 
     try:
-        start = time.time()
         total = len(chunks_needing_context)
-        emit_progress = _make_progress_reporter("context", total)
+        absolute_total = len(chunk_id_by_start)
+        absolute_done_base = absolute_total - total
+        emit_progress = _make_progress_reporter("context", absolute_total, item=name)
         for done, (i, chunk, chunk_id) in enumerate(chunks_needing_context, start=1):
             sec_idx = find_section(sections, chunk["start_line"])
             sec_title = sections[sec_idx]["title"] if sec_idx is not None else None
@@ -719,7 +860,7 @@ def _generate_contexts(
                     candidate = generate_context(
                         name, sec_title, chunk["text"], prev_text, next_text
                     )
-                    ctx = " ".join(candidate.split())
+                    ctx = candidate.strip()
                     if not ctx:
                         raise RuntimeError("context model returned empty content")
                     break
@@ -731,25 +872,48 @@ def _generate_contexts(
 
             assert ctx
 
-            conn.execute(
-                """
-                INSERT INTO chunk_contexts (chunk_id, context, model)
-                VALUES (?, ?, ?)
-                ON CONFLICT(chunk_id)
-                DO UPDATE SET context = excluded.context, model = excluded.model
-                """,
-                (chunk_id, ctx, config.CONTEXT_MODEL),
-            )
-            conn.execute(
-                "UPDATE chunks SET embedding = NULL WHERE id = ?",
-                (chunk_id,),
-            )
+            if "pipeline_signature" in context_columns:
+                conn.execute(
+                    """
+                    INSERT INTO chunk_contexts
+                        (chunk_id, context, model, pipeline_signature)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(chunk_id) DO UPDATE SET
+                        context = excluded.context,
+                        model = excluded.model,
+                        pipeline_signature = excluded.pipeline_signature
+                    """,
+                    (chunk_id, ctx, config.CONTEXT_MODEL, context_sig),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO chunk_contexts (chunk_id, context, model)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(chunk_id) DO UPDATE SET
+                        context = excluded.context,
+                        model = excluded.model
+                    """,
+                    (chunk_id, ctx, config.CONTEXT_MODEL),
+                )
+            if "embedding_signature" in chunk_columns:
+                conn.execute(
+                    """
+                    UPDATE chunks
+                    SET embedding = NULL, embedding_signature = NULL
+                    WHERE id = ?
+                    """,
+                    (chunk_id,),
+                )
+            else:
+                conn.execute(
+                    "UPDATE chunks SET embedding = NULL WHERE id = ?",
+                    (chunk_id,),
+                )
             conn.commit()
-            emit_progress(done)
+            emit_progress(absolute_done_base + done)
             if runtime_tick:
                 runtime_tick(False)
-
-        report("context", f"{total:>9,} chunks {fmt_duration(time.time() - start)}")
 
     except Exception as e:
         conn.rollback()
@@ -779,17 +943,30 @@ def _embed_doc(
         ).fetchall()
     }
 
-    embedded_ids = (
-        set()
-        if force_rebuild_embed
-        else {
+    chunk_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(chunks)")}
+    embed_sig = _embedding_pipeline_signature()
+    if "embedding_signature" in chunk_columns:
+        embedded_ids = {
+            r[0]
+            for r in conn.execute(
+                """
+                SELECT id FROM chunks
+                WHERE doc_id = ? AND embedding IS NOT NULL
+                  AND embedding_signature = ?
+                """,
+                (doc_id, embed_sig),
+            ).fetchall()
+        }
+    elif force_rebuild_embed:
+        embedded_ids = set()
+    else:
+        embedded_ids = {
             r[0]
             for r in conn.execute(
                 "SELECT id FROM chunks WHERE doc_id = ? AND embedding IS NOT NULL",
                 (doc_id,),
             ).fetchall()
         }
-    )
     pending_embed = []
     for i, chunk in enumerate(chunks):
         chunk_id = chunk_id_by_start.get(chunk["start_line"])
@@ -797,16 +974,14 @@ def _embed_doc(
             pending_embed.append((i, chunk, chunk_id))
 
     if not pending_embed:
-        count = len(chunks)
-        report("embed", f"{count:>9,} chunks")
+        progress("embed", len(chunks), len(chunks), item=name, unit="chunks")
         return
 
     try:
-        start = time.time()
         total = len(pending_embed)
         absolute_total = len(chunks)
         absolute_done_base = len(embedded_ids)
-        emit_progress = _make_progress_reporter("embed", absolute_total)
+        emit_progress = _make_progress_reporter("embed", absolute_total, item=name)
         done = 0
         embedded_since_recycle = 0
 
@@ -851,10 +1026,20 @@ def _embed_doc(
                         )
                         for batch_idx, emb in zip(batch_indices, batch_embeddings)
                     ]
-                    conn.executemany(
-                        "UPDATE chunks SET embedding = ? WHERE id = ?",
-                        rows,
-                    )
+                    if "embedding_signature" in chunk_columns:
+                        conn.executemany(
+                            """
+                            UPDATE chunks
+                            SET embedding = ?, embedding_signature = ?
+                            WHERE id = ?
+                            """,
+                            [(blob, embed_sig, chunk_id) for blob, chunk_id in rows],
+                        )
+                    else:
+                        conn.executemany(
+                            "UPDATE chunks SET embedding = ? WHERE id = ?",
+                            rows,
+                        )
                     conn.commit()
 
                     batch_count = len(rows)
@@ -887,8 +1072,6 @@ def _embed_doc(
                 run_embedding_canary(requests=_EMBED_RECYCLE_CANARY_REQUESTS)
                 embedded_since_recycle = 0
 
-        report("embed", f"{total:>9,} chunks {fmt_duration(time.time() - start)}")
-
     except Exception as e:
         conn.rollback()
         raise RuntimeError(f"embedding failed for {name}: {e}") from e
@@ -903,7 +1086,7 @@ def _doc_status_label(status: dict) -> str:
     ctx = status.get("contextualized", 0)
     embedded = status.get("embedded", 0)
     # All done.
-    if embedded >= total:
+    if status.get("complete"):
         return "ready"
     # Context generation in progress.
     if ctx < total:
@@ -930,51 +1113,53 @@ def list_docs(docs: list[dict] | None = None) -> None:
     table.add_column("Status", justify="right")
 
     ready_count = 0
+    context_count = 0
+    embedding_count = 0
+    expected_count = 0
+    context_signature = _context_pipeline_signature()
+    embedding_signature = _embedding_pipeline_signature()
     for d in docs:
-        status = get_doc_status(conn, d["name"]) if conn else {}
-        label = _doc_status_label(status)
+        doc_status = (
+            get_doc_status(
+                conn,
+                d["name"],
+                context_signature=context_signature,
+                embedding_signature=embedding_signature,
+            )
+            if conn
+            else {}
+        )
+        label = _doc_status_label(doc_status)
         if label == "ready":
             ready_count += 1
+        context_count += int(doc_status.get("contextualized", 0))
+        embedding_count += int(doc_status.get("embedded", 0))
+        expected_count += int(doc_status.get("expected") or 0)
         table.add_row(d["name"], fmt_size(d["size"]), label)
 
     if conn:
         conn.close()
 
     render_table(table)
-    report("indexed", f"{ready_count}/{len(docs)}")
-
-
-def show_stats(mode: str = "list") -> None:
-    """Show document directory."""
-    docs_dir = config.get_docs_dir()
-    if docs_dir:
-        report("docs", _display_path(docs_dir))
-    else:
-        report("docs", "not configured")
-
-    # Keep list output compact and search-focused.
-    if mode == "list":
-        try:
-            cap_search = config.get_memory_hard_cap_gib("search")
-            report(
-                "search",
-                f"cap {_fmt_gib(cap_search)} | "
-                f"{_service_status_line('embedding', with_memory=False)}",
-            )
-        except OSError, RuntimeError, TypeError, ValueError:
-            pass
-        return
-
-    # For index summary keep only a minimal memory line.
-    if mode == "index":
-        try:
-            cap_index = config.get_memory_hard_cap_gib("index")
-            effective = config.get_effective_available_gib()
-            report(
-                "index", f"cap {_fmt_gib(cap_index)} | effective {_fmt_gib(effective)}"
-            )
-        except OSError, RuntimeError, TypeError, ValueError:
-            pass
+    progress_parts = [f"{ready_count}/{len(docs)} documents ready"]
+    if expected_count:
+        progress_parts.extend(
+            [
+                f"{context_count}/{expected_count} contexts",
+                f"{embedding_count}/{expected_count} embeddings",
+            ]
+        )
+    emit(
+        "list_completed",
+        "  ".join(progress_parts),
+        data={
+            "ready": ready_count,
+            "documents": len(docs),
+            "contexts": context_count,
+            "embeddings": embedding_count,
+            "chunks": expected_count,
+        },
+    )
 
 
 def search_semantic(
@@ -984,12 +1169,7 @@ def search_semantic(
 ) -> None:
     """Perform semantic search and display results."""
     if not config.get_db_path().exists():
-        _report_error_block(
-            "database not ready",
-            cause="no index database found",
-            action="run indexing first",
-        )
-        return
+        raise RuntimeError("index database not found")
 
     conn = connect_readonly()
     cache = get_cache()
@@ -1002,7 +1182,7 @@ def search_semantic(
         min_candidates = compute_candidates(total_chunks, limit)
         cached_vectors = cache.get(query_emb, min_candidates)
         if cached_vectors:
-            report("cache", "hit")
+            status("Cache hit", phase="search")
             vector_results = cached_vectors
         else:
             vector_results = get_vector_candidates(
@@ -1022,10 +1202,15 @@ def search_semantic(
         conn.close()
 
     if verbose and n_fts:
-        report("hybrid", f"{n_vector} vector + {n_fts} fts")
+        emit(
+            "search_diagnostic",
+            f"Hybrid candidates: {n_vector} vector + {n_fts} full-text",
+            phase="search",
+            data={"vector_candidates": n_vector, "fts_candidates": n_fts},
+        )
 
     if not results:
-        report("result", "none")
+        emit("search_completed", "No results", phase="search", data={"count": 0})
         return
 
     for i, r in enumerate(results, 1):
@@ -1035,26 +1220,32 @@ def search_semantic(
             location = f"{shown_path}:{r['start']}-{r['end']}"
         else:
             location = f"{r['doc']}.md:{r['start']}-{r['end']}"
+        diagnostic = None
         if verbose:
-            print(f"{location}  {r['display_score']:.2f}")
-            tags = []
-            if r.get("fts_hit"):
-                tags.append("fts")
-            if r.get("is_idx"):
-                tags.append("idx")
-            tag_str = "  ".join(tags)
-            print(
-                f"  vec {r['embed_score']:.2f}"
-                f"  rrf {r['rrf_score']:.4f}"
-                f"  {tag_str}".rstrip()
+            tags = [
+                tag
+                for tag, present in (
+                    ("fts", r.get("fts_hit")),
+                    ("idx", r.get("is_idx")),
+                )
+                if present
+            ]
+            diagnostic = f"vec {r['embed_score']:.2f}  rrf {r['rrf_score']:.4f}" + (
+                f"  {'  '.join(tags)}" if tags else ""
             )
-        else:
-            print(location)
-        body = r["text"]
-        for line in body.splitlines() or [body]:
-            print(f"  {line}")
-        if i < len(results):
-            print()
+        report_result(
+            {
+                "rank": i,
+                "location": location,
+                "document": r["doc"],
+                "start_line": r["start"],
+                "end_line": r["end"],
+                "text": r["text"],
+                "score": r["display_score"] if verbose else None,
+                "diagnostic": diagnostic,
+                "last": i == len(results),
+            }
+        )
 
 
 def _activate_project_from_ref(
@@ -1096,7 +1287,7 @@ def _activate_project_from_ref(
                         action="rename the docs folder and retry indexing",
                     )
                     sys.exit(2)
-                projects.activate(created)
+                projects.activate(created, create_dirs=True)
                 return created
     project = projects.get_project(project_ref)
     if project is None:
@@ -1107,12 +1298,12 @@ def _activate_project_from_ref(
         )
         sys.exit(1)
     assert project is not None
-    projects.activate(project)
+    projects.activate(project, create_dirs=allow_create_from_dir)
     return project
 
 
 def _run_search_mode(query: str, limit: int) -> None:
-    report("mode", f'search | "{_preview(query)}"')
+    status(f'Query "{_preview(query)}"', phase="search")
     try:
         ok, msg = check_servers(
             mode="search",
@@ -1120,22 +1311,24 @@ def _run_search_mode(query: str, limit: int) -> None:
         )
         if not ok:
             ok, msg = check_servers(
-                on_status=lambda s: report("server", s),
+                on_status=lambda message: status(
+                    message.replace(":", "", 1), phase="search"
+                ),
                 mode="search",
             )
     except KeyboardInterrupt:
-        report("status", "interrupted")
+        emit("interrupted", "Search interrupted")
         sys.exit(130)
 
     if not ok:
         _report_error(RuntimeError(msg))
         _report_relevant_service_diags(RuntimeError(msg), mode="search")
         sys.exit(1)
-    report("server", msg)
+    status(msg, phase="search")
     try:
         search_semantic(query, limit, verbose=False)
     except KeyboardInterrupt:
-        report("status", "interrupted")
+        emit("interrupted", "Search interrupted")
         sys.exit(130)
     except (OSError, RuntimeError, sqlite3.Error, ValueError) as e:
         _report_error(e)
@@ -1155,17 +1348,27 @@ _DOWNLOAD_STALL_TIMEOUT_S = 30.0
 
 def _run_download_mode() -> None:
     """Download both model files by briefly starting each service."""
-    report("mode", "download")
+    emit("run_started", "Downloading models")
     needs_install = False
     downloaded_any = False
     for name, label, url in _DOWNLOAD_SERVICES:
-        col = name.ljust(_DOWNLOAD_NAME_WIDTH)
         if not is_service_installed(label):
-            report("step", f"{col} | not installed — run sova-install first")
+            emit(
+                "download_skipped",
+                "service not installed",
+                level="warning",
+                item=name,
+                data={"item_width": _DOWNLOAD_NAME_WIDTH},
+            )
             needs_install = True
             continue
         if is_model_cached(label):
-            report("step", f"{col} | cached")
+            emit(
+                "download_cached",
+                "cached",
+                item=name,
+                data={"item_width": _DOWNLOAD_NAME_WIDTH},
+            )
             continue
         downloaded_any = True
         start_service(label)
@@ -1173,46 +1376,65 @@ def _run_download_mode() -> None:
         stall_started: float | None = None
         try:
             while True:
-                status = get_model_status(label)
-                if status != last_status:
-                    report("step", f"{col} | {status}")
-                    last_status = status
+                model_status = get_model_status(label)
+                if model_status != last_status:
+                    display_status = (
+                        "preparing" if model_status == "starting" else model_status
+                    )
+                    emit(
+                        "status",
+                        display_status,
+                        phase="download",
+                        item=name,
+                        data={"item_width": _DOWNLOAD_NAME_WIDTH},
+                    )
+                    last_status = model_status
                 if is_model_cached(label):
                     break
                 # Fail instead of polling forever when the service died.
                 # without producing a cached model or download progress.
-                if status.startswith("downloading") or is_service_running(label):
+                if model_status.startswith("downloading") or is_service_running(label):
                     stall_started = None
                 elif stall_started is None:
                     stall_started = time.monotonic()
                 elif (time.monotonic() - stall_started) > _DOWNLOAD_STALL_TIMEOUT_S:
+                    diagnostics = get_service_diagnostics(url)
                     _report_error_block(
                         "model download failed",
-                        cause=f"{name} service is not running and its model is not cached",
-                        action=f"check logs: ~/.sova/logs/{name}.err.log",
+                        cause=diagnostics
+                        or f"{name} service stopped before its model was cached",
+                        action="check the model configuration and re-run: sova-install",
+                        detail=f"log: ~/.sova/logs/{name}.err.log",
                     )
                     sys.exit(1)
                 time.sleep(1)
         except KeyboardInterrupt:
-            report("status", "interrupted")
+            emit("interrupted", "Download interrupted")
             stop_server(url, suppress_interrupt=True)
             sys.exit(130)
         stop_server(url)
-        report("step", f"{col} | done")
+        emit(
+            "download_completed",
+            "downloaded",
+            item=name,
+            data={"item_width": _DOWNLOAD_NAME_WIDTH},
+        )
     if needs_install:
-        return
+        _report_error_block(
+            "model services are not installed",
+            action="run: sova-install",
+        )
+        raise typer.Exit(1)
     if downloaded_any:
-        report("status", "done")
+        emit("completed", "Model download complete")
     else:
-        report("status", "all models cached")
+        emit("completed", "All models are cached")
 
 
 def _run_list_mode() -> None:
     docs = find_docs()
-    report("mode", f"list | {len(docs)} docs")
     try:
         list_docs(docs)
-        show_stats(mode="list")
     except sqlite3.OperationalError as e:
         cause = str(e).strip() or "sqlite extension failed to initialize"
         _report_error_block(
@@ -1239,7 +1461,6 @@ def _run_index_mode() -> None:
     except (OSError, sqlite3.Error) as e:
         _report_error_block("failed to initialize database", cause=str(e))
         sys.exit(1)
-    report("database", "ready")
     try:
         signature_state = _sync_index_signatures(conn)
     except sqlite3.Error as e:
@@ -1251,65 +1472,105 @@ def _run_index_mode() -> None:
         sys.exit(1)
 
     docs = find_docs()
-
+    if not docs:
+        conn.close()
+        _report_error_block(
+            "no documents found",
+            cause="the project contains no PDF or Markdown source documents",
+            action="add source documents to the project directory and retry",
+        )
+        sys.exit(1)
     start_time = time.time()
     interrupted = False
     failed = False
-    prepared: list[tuple[str, int, list[dict], list[dict]]] = []
+    prepared: list[tuple[str, int]] = []
 
-    report("mode", f"index | {len(docs)} docs")
+    project_id = config.get_active_project_id() or "project"
+    emit(
+        "run_started",
+        f"Indexing {project_id}  {len(docs)} documents",
+        phase="prepare",
+        data={"project": project_id, "documents": len(docs)},
+    )
 
     try:
-        # Phase 1: extract + context.
-        report("event", "stopping search services")
+        # Preparation owns the machine first. Keeping both models unloaded gives
+        # PDF layout analysis and OCR all available unified memory.
+        status("Preparing documents", phase="prepare")
+        stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
         stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-        ok, msg = check_servers(
-            on_status=lambda s: report("server", s),
-            mode="index_context",
-        )
-        if not ok:
+        try:
+            for doc_index, doc in enumerate(docs, start=1):
+                report_scope(doc_index, len(docs))
+                result = _prepare_doc(doc["name"], doc["pdf"], doc["md"], conn)
+                if result is None:
+                    failed = True
+                    break
+                doc_id, _chunks, _sections = result
+                prepared.append((doc["name"], doc_id))
+                del result, _chunks, _sections
+        except KeyboardInterrupt:
+            interrupted = True
+            emit("interrupting", "Saving prepared documents")
+        except (OSError, RuntimeError, sqlite3.Error) as e:
             failed = True
-            _report_error(RuntimeError(msg))
-            _report_relevant_service_diags(RuntimeError(msg), mode="index_context")
-        else:
-            report("server", msg)
-            context_runtime_tick = _make_runtime_reporter(
-                "index.context", "chat", mode="index"
-            )
-            context_runtime_tick(True)
-            try:
-                for doc in docs:
-                    result = _prepare_doc(doc["name"], doc["pdf"], doc["md"], conn)
-                    if result is None:
-                        continue
-                    doc_id, chunks, sections = result
-                    _generate_contexts(
-                        doc["name"],
-                        doc_id,
-                        chunks,
-                        sections,
-                        conn,
-                        force_rebuild_context=signature_state.force_rebuild_context,
-                        runtime_tick=context_runtime_tick,
-                    )
-                    prepared.append((doc["name"], doc_id, chunks, sections))
-            except KeyboardInterrupt:
-                interrupted = True
-                report("status", "interrupt received, stopping services")
-            except (OSError, RuntimeError, sqlite3.Error) as e:
-                failed = True
-                _report_error(e)
-                _report_relevant_service_diags(e, mode="index_context")
-            finally:
-                stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
+            _report_error(e)
 
-        # Phase 2: embed all docs.
+        # Context is generated only after every source is fully prepared. The
+        # model is loaded once for the whole project and unloaded before embed.
         if not interrupted and not failed:
-            report("event", "switching to embedding")
+            report_scope(None, None)
+            status("Loading model", phase="context")
+            ok, msg = check_servers(
+                on_status=lambda message: status(
+                    message.replace(":", "", 1), phase="context"
+                ),
+                mode="index_context",
+            )
+            if not ok:
+                failed = True
+                _report_error(RuntimeError(msg))
+                _report_relevant_service_diags(RuntimeError(msg), mode="index_context")
+            else:
+                status(msg, phase="context")
+                context_runtime_tick = _make_runtime_reporter(
+                    "index.context", "chat", mode="index"
+                )
+                context_runtime_tick(True)
+                try:
+                    for doc_index, (name, doc_id) in enumerate(prepared, start=1):
+                        report_scope(doc_index, len(prepared))
+                        chunks, sections = _load_prepared_doc(conn, doc_id)
+                        _generate_contexts(
+                            name,
+                            doc_id,
+                            chunks,
+                            sections,
+                            conn,
+                            force_rebuild_context=signature_state.force_rebuild_context,
+                            runtime_tick=context_runtime_tick,
+                        )
+                        del chunks, sections
+                except KeyboardInterrupt:
+                    interrupted = True
+                    emit("interrupting", "Saving generated contexts")
+                except (OSError, RuntimeError, sqlite3.Error) as e:
+                    failed = True
+                    _report_error(e)
+                    _report_relevant_service_diags(e, mode="index_context")
+                finally:
+                    stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
+
+        # Embedding starts with the context model fully released.
+        if not interrupted and not failed:
+            report_scope(None, None)
+            status("Loading model", phase="embed")
             stop_server(config.EMBEDDING_SERVER_URL)
             time.sleep(2)
             ok, msg = check_servers(
-                on_status=lambda s: report("server", s),
+                on_status=lambda message: status(
+                    message.replace(":", "", 1), phase="embed"
+                ),
                 mode="index_embed",
             )
             if not ok:
@@ -1317,16 +1578,17 @@ def _run_index_mode() -> None:
                 _report_error(RuntimeError(msg))
                 _report_relevant_service_diags(RuntimeError(msg), mode="index_embed")
             else:
-                report("server", msg)
+                status(msg, phase="embed")
                 embed_runtime_tick = _make_runtime_reporter(
                     "index.embed", "embedding", mode="index"
                 )
                 embed_runtime_tick(True)
                 try:
-                    report("embed", "canary probe")
+                    status("Checking model", phase="embed")
                     run_embedding_canary()
-                    for name, doc_id, chunks, sections in prepared:
-                        report("doc", name)
+                    for doc_index, (name, doc_id) in enumerate(prepared, start=1):
+                        report_scope(doc_index, len(prepared))
+                        chunks, sections = _load_prepared_doc(conn, doc_id)
                         _embed_doc(
                             name,
                             doc_id,
@@ -1336,9 +1598,10 @@ def _run_index_mode() -> None:
                             force_rebuild_embed=signature_state.force_rebuild_embed,
                             runtime_tick=embed_runtime_tick,
                         )
+                        del chunks, sections
                 except KeyboardInterrupt:
                     interrupted = True
-                    report("status", "interrupt received, stopping services")
+                    emit("interrupting", "Saving generated embeddings")
                     stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
                 except (OSError, RuntimeError, sqlite3.Error) as e:
                     failed = True
@@ -1346,16 +1609,18 @@ def _run_index_mode() -> None:
                     _report_relevant_service_diags(e, mode="index_embed")
                     stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
 
-        # Phase 3: quantize.
+        # Finalize the searchable vector index only after all durable rows exist.
         if not interrupted and not failed:
-            report("quantize", "building index")
-            quantize_vectors(conn)
+            report_scope(None, None)
+            status("Building vector index", phase="finalize")
             try:
+                quantize_vectors(conn)
+                _prune_missing_documents(conn, {str(doc["name"]) for doc in docs})
                 _commit_index_signatures(conn, signature_state)
-            except sqlite3.Error as e:
+            except (OSError, RuntimeError, sqlite3.Error) as e:
                 failed = True
                 _report_error_block(
-                    "failed to finalize index metadata",
+                    "failed to finalize index",
                     cause=str(e),
                     action="retry indexing",
                 )
@@ -1364,29 +1629,34 @@ def _run_index_mode() -> None:
         if interrupted:
             stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
             stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-            report("status", "services stopped")
     finally:
         conn.close()
 
     elapsed = fmt_duration(time.time() - start_time).strip()
     if interrupted:
-        report("status", f"interrupted after {elapsed}")
-        show_stats(mode="index")
+        emit(
+            "interrupted",
+            f"Index interrupted after {elapsed}. Completed chunks are saved.",
+            data={"elapsed": elapsed},
+        )
         sys.exit(130)
     if failed:
-        report("status", f"failed after {elapsed}")
-        show_stats(mode="index")
+        emit("failed", f"Index failed after {elapsed}", level="error")
         sys.exit(1)
-    report("status", f"done in {elapsed}")
-    show_stats(mode="index")
+    emit(
+        "completed",
+        f"Index complete. {len(docs)} documents in {elapsed}.",
+        data={"documents": len(docs), "elapsed": elapsed},
+    )
 
 
 def _run_projects_mode() -> None:
-    report("mode", "projects")
     rows = projects.list_projects()
     if not rows:
-        report("projects", "none")
-        report("hint", "run: sova index /path/to/pdfs")
+        emit(
+            "projects_empty",
+            "No projects. Run: sova index /path/to/pdfs",
+        )
         return
     table = make_table()
     table.add_column("Id")
@@ -1399,48 +1669,165 @@ def _run_projects_mode() -> None:
     render_table(table)
 
 
-def _complete_project_ids(incomplete: str) -> list[str]:
-    """Shell-complete registered project ids."""
-    try:
-        rows = projects.list_projects()
-    except OSError, projects.RegistryError:
-        return []
-    return [p.project_id for p in rows if p.project_id.startswith(incomplete)]
-
-
-class _SovaGroup(TyperGroup):
-    """Group that also completes project ids for the default search form."""
-
-    def shell_complete(self, ctx, incomplete):
-        items = super().shell_complete(ctx, incomplete)
-        seen = {item.value for item in items}
-        items.extend(
-            CompletionItem(project_id)
-            for project_id in _complete_project_ids(incomplete)
-            if project_id not in seen
+def _run_doctor_mode() -> None:
+    """Run read-only integrity checks for the active project."""
+    db_path = config.get_db_path()
+    if not db_path.exists():
+        _report_error_block(
+            "database not ready",
+            cause="index database not found",
+            action="run: sova index <project>",
         )
-        return items
+        raise typer.Exit(1)
+    conn = connect_readonly()
+    try:
+        findings = audit_database(
+            conn,
+            expected_signatures={
+                _META_CONTEXT_SIG: _context_pipeline_signature(),
+                _META_EMBED_SIG: _embedding_pipeline_signature(),
+                _META_CHUNK_SIG: _chunk_pipeline_signature(),
+            },
+            expected_schema_version=SCHEMA_VERSION,
+        )
+        source_docs = find_docs()
+        source_names = {str(doc["name"]) for doc in source_docs}
+        tables = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        if "documents" not in tables:
+            indexed_signatures = {}
+        else:
+            document_columns = {
+                str(row[1])
+                for row in conn.execute("PRAGMA table_info(documents)").fetchall()
+            }
+            if "source_signature" in document_columns:
+                indexed_signatures = {
+                    str(name): str(signature) if signature else ""
+                    for name, signature in conn.execute(
+                        "SELECT name, source_signature FROM documents ORDER BY name"
+                    )
+                }
+            else:
+                indexed_signatures = {
+                    str(row[0]): ""
+                    for row in conn.execute("SELECT name FROM documents ORDER BY name")
+                }
+    finally:
+        conn.close()
+    indexed_names = set(indexed_signatures)
+    stale_documents = sorted(indexed_names - source_names)
+    if stale_documents:
+        findings.append(
+            Finding(
+                "sources.missing",
+                "Indexed documents have no current source: "
+                + ", ".join(stale_documents[:5]),
+                len(stale_documents),
+            )
+        )
+    changed_sources = []
+    for doc in source_docs:
+        name = str(doc["name"])
+        source_path = doc.get("pdf") or doc.get("md")
+        if (
+            name in indexed_signatures
+            and indexed_signatures[name]
+            and isinstance(source_path, Path)
+            and _file_signature(source_path) != indexed_signatures[name]
+        ):
+            changed_sources.append(name)
+    if changed_sources:
+        findings.append(
+            Finding(
+                "sources.changed",
+                "Source content has changed since indexing: "
+                + ", ".join(changed_sources[:5]),
+                len(changed_sources),
+            )
+        )
+    data_dir = config.get_data_dir()
+    generated_names = (
+        {path.stem for path in data_dir.glob("*.md")} if data_dir.exists() else set()
+    )
+    orphan_generated = sorted(generated_names - source_names)
+    if orphan_generated:
+        findings.append(
+            Finding(
+                "sources.orphan_generated_markdown",
+                "Generated Markdown has no current source: "
+                + ", ".join(orphan_generated[:5]),
+                len(orphan_generated),
+            )
+        )
+    if not findings:
+        emit("audit_completed", "Database checks passed", data={"findings": 0})
+        return
+    for finding in findings:
+        emit(
+            "audit_finding",
+            f"{finding.message}: {finding.count}",
+            level="warning",
+            data={
+                "code": finding.code,
+                "count": finding.count,
+                "message": finding.message,
+            },
+        )
+    emit(
+        "audit_completed",
+        f"Database audit found {len(findings)} issue(s)",
+        level="warning",
+        data={"findings": len(findings)},
+    )
+    raise typer.Exit(1)
 
 
 app = typer.Typer(
     name="sova",
-    cls=_SovaGroup,
-    add_completion=True,
+    add_completion=False,
     rich_markup_mode=None,
-    help="sova project CLI (default search: sova <project> <query>)",
-    epilog='Default search: sova <project> "<query>" [-n LIMIT]',
+    help="Local document search",
+    epilog='Examples: sova index /path/to/pdfs; sova search <project> "<query>"',
 )
+
+
+@app.callback()
+def configure_cli(
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit newline-delimited JSON for agents and scripts",
+    ),
+) -> None:
+    configure_output("json" if json_output else "auto")
 
 
 @app.command("help", help="Show help")
 def help_command(ctx: typer.Context) -> None:
     root = ctx.parent or ctx
-    print(root.get_help())
+    help_text = root.get_help()
+    if is_json_output():
+        emit("help", "Sova command help", data={"text": help_text})
+    else:
+        print(help_text)
 
 
 @app.command("projects", help="List configured projects")
 def projects_command() -> None:
     _run_projects_mode()
+
+
+@app.command("doctor", help="Check a project database without changing it")
+def doctor_command(
+    project: str = typer.Argument(..., help="Project id/path"),
+) -> None:
+    _activate_project_from_ref(project)
+    _run_doctor_mode()
 
 
 @app.command("download", help="Download all model files")
@@ -1450,18 +1837,34 @@ def download_command() -> None:
 
 @app.command("remove", help="Remove project from Sova")
 def remove_command(
-    project: str = typer.Argument(
-        ..., help="Project id/path", autocompletion=_complete_project_ids
-    ),
-    keep_data: bool = typer.Option(
+    project: str = typer.Argument(..., help="Project id/path"),
+    delete_data: bool = typer.Option(
         False,
-        "--keep-data",
-        help="Keep local project data under ~/.sova/projects/<id>",
+        "--delete-data",
+        help="Also delete the local index and extracted documents",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Confirm deletion without prompting",
     ),
 ) -> None:
-    report("mode", "remove")
+    if delete_data and not yes:
+        if is_json_output() or not sys.stdin.isatty():
+            _report_error_block(
+                "confirmation required",
+                action="re-run with --delete-data --yes",
+            )
+            raise typer.Exit(2)
+        confirmed = typer.confirm(
+            f"Delete all local data for '{project}'?",
+            default=False,
+        )
+        if not confirmed:
+            emit("cancelled", "No changes made")
+            return
     try:
-        removed = projects.remove_project(project, keep_data=keep_data)
+        removed = projects.remove_project(project, delete_data=delete_data)
     except ValueError as e:
         _report_error_block(
             "project not found",
@@ -1469,92 +1872,125 @@ def remove_command(
             action="run: sova projects",
         )
         sys.exit(1)
-    report("project", f"removed {removed.project_id}")
-    if keep_data:
-        report("data", f"kept {_display_path(removed.root_dir)}")
-    else:
-        report("data", f"deleted {_display_path(removed.root_dir)}")
+    except OSError as e:
+        _report_error_block(
+            "project data could not be deleted",
+            cause=str(e),
+            action="fix filesystem access and retry; the project remains registered",
+        )
+        sys.exit(1)
+    outcome = (
+        f"data deleted from {_display_path(removed.root_dir)}"
+        if delete_data
+        else f"data kept at {_display_path(removed.root_dir)}"
+    )
+    emit("project_removed", f"Removed {removed.project_id}. {outcome}.")
 
 
 @app.command("list", help="List docs and indexing status")
 def list_command(
-    project: str = typer.Argument(
-        ..., help="Project id/path", autocompletion=_complete_project_ids
-    ),
+    project: str = typer.Argument(..., help="Project id/path"),
 ) -> None:
-    resolved = _activate_project_from_ref(project)
-    report("project", resolved.project_id)
+    _activate_project_from_ref(project)
     _run_list_mode()
 
 
 @app.command("index", help="Index project docs")
 def index_command(
-    project: str = typer.Argument(
-        ..., help="Project id/path", autocompletion=_complete_project_ids
-    ),
+    project: str = typer.Argument(..., help="Project id/path"),
 ) -> None:
-    resolved = _activate_project_from_ref(project, allow_create_from_dir=True)
-    report("project", resolved.project_id)
+    _activate_project_from_ref(project, allow_create_from_dir=True)
     _run_index_mode()
 
 
-@app.command("search", hidden=True, help="Search project docs (default command)")
+@app.command("search", help="Search project docs")
 def search_command(
     project: Annotated[
         str,
-        typer.Argument(help="Project id/path", autocompletion=_complete_project_ids),
+        typer.Argument(help="Project id/path"),
     ],
     query: Annotated[list[str], typer.Argument(help="Search query text")],
     limit: int = typer.Option(10, "-n", "--limit", help="Max results (default: 10)"),
 ) -> None:
-    resolved = _activate_project_from_ref(project)
-    report("project", resolved.project_id)
+    _activate_project_from_ref(project)
     _run_search_mode(" ".join(query), limit)
 
 
-_COMMAND_NAMES = {"help", "projects", "download", "remove", "list", "index", "search"}
+_COMMAND_NAMES = set(projects.RESERVED_PROJECT_IDS)
 
 
 def _argv_with_default_search(argv: list[str]) -> list[str]:
     """Route `sova <project> <query>` to the hidden search command."""
     if not argv:
         return argv
-    head = argv[0]
+    command_index = 1 if argv[0] == "--json" and len(argv) > 1 else 0
+    head = argv[command_index]
     if head in _COMMAND_NAMES or head.startswith("-"):
         return argv
-    return ["search", *argv]
+    return [*argv[:command_index], "search", *argv[command_index:]]
 
 
 def _handle_interrupt() -> None:
-    report("status", "interrupt received, stopping services")
+    emit("interrupting", "Stopping services")
     stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
     stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
-    report("status", "services stopped")
-    report("status", "interrupted")
+    emit("interrupted", "Interrupted")
     sys.exit(130)
 
 
 def main() -> None:
     """Main entry point."""
     config.clear_active_project()
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+    previous_sigpipe = signal.getsignal(signal.SIGPIPE)
+    signal.signal(signal.SIGTERM, lambda _signum, _frame: _handle_interrupt())
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     try:
         argv = sys.argv[1:]
+        json_requested = "--json" in argv
+        configure_output("json" if json_requested else "auto")
         if "--_watchdog" in argv:
             from sova.llama_client import cleanup_idle_services
 
             cleanup_idle_services()
             return
         command = typer.main.get_command(app)
+        if json_requested and "--help" in argv:
+            help_args = [arg for arg in argv if arg not in {"--json", "--help"}]
+            root_context = typer.Context(command, info_name="sova")
+            target = command
+            target_context = root_context
+            if help_args and isinstance(command, TyperGroup):
+                subcommand = command.commands.get(help_args[0])
+                if subcommand is not None:
+                    target = subcommand
+                    target_context = typer.Context(
+                        target,
+                        info_name=help_args[0],
+                        parent=root_context,
+                    )
+            help_text = target.get_help(target_context)
+            emit("help", "Sova command help", data={"text": help_text})
+            return
         try:
-            command.main(
+            exit_code = command.main(
                 args=_argv_with_default_search(argv),
                 prog_name="sova",
                 standalone_mode=False,
             )
+            if isinstance(exit_code, int) and exit_code != 0:
+                sys.exit(exit_code)
         except click_exceptions.Abort:
             _handle_interrupt()
         except click_exceptions.ClickException as e:
-            e.show()
+            if json_requested:
+                _report_error_block(
+                    "invalid command",
+                    cause=e.format_message(),
+                    action="run: sova --json help",
+                )
+            else:
+                e.show()
             sys.exit(e.exit_code)
         except projects.RegistryError as e:
             _report_error_block(
@@ -1564,7 +2000,10 @@ def main() -> None:
             )
             sys.exit(1)
     finally:
+        close_output()
         config.clear_active_project()
+        signal.signal(signal.SIGTERM, previous_sigterm)
+        signal.signal(signal.SIGPIPE, previous_sigpipe)
 
 
 if __name__ == "__main__":

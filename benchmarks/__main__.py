@@ -14,14 +14,13 @@ from rich.text import Text
 from sova import config
 from sova import projects as sova_projects
 from sova.ui import (
+    close_output,
+    configure_output,
+    emit,
     fmt_duration,
     make_table,
-    print_gap,
     render_table,
-    report,
     report_error,
-    report_mode,
-    report_progress,
 )
 
 _BENCH_DIR = Path(__file__).parent
@@ -29,9 +28,25 @@ _SUITE_FILENAME = "suite.json"
 _DRAFT_SUITE_FILENAME = "draft-suite.json"
 DATA_DIR = config.DATA_DIR
 
-# Benchmarks keep their own Rich console for live judging progress;
-# the sova CLI itself is plain-text only.
-console = Console()
+# Long-running benchmark loops use a transient progress bar; durable output
+# still goes through the same event stream as the main CLI.
+console = Console(file=sys.stderr, stderr=True, highlight=False)
+
+
+def _note(label: str, value: object, *, level: str = "info") -> None:
+    emit(
+        "benchmark_info",
+        f"{label}: {value}",
+        level=level,
+        data={"label": label, "value": value},
+    )
+
+
+def _mode(name: str, detail: str | None = None) -> None:
+    message = f"Benchmark {name}"
+    if detail:
+        message += f" · {detail}"
+    emit("run_started", message, phase=name, data={"name": name, "detail": detail})
 
 
 def get_data_dir() -> Path:
@@ -160,7 +175,7 @@ def _report_relevant_service_diags(exc: BaseException) -> None:
         seen.add(url)
         diag = get_service_diagnostics(url)
         if diag:
-            report("service", f"{_svc_name(url)} {diag}")
+            _note("service", f"{_svc_name(url)} {diag}")
 
 
 def _report_exception(exc: BaseException) -> None:
@@ -221,7 +236,7 @@ def cmd_judge():
         )
         sys.exit(1)
 
-    report_mode("bench.judge")
+    _mode("judge")
 
     checkpoint_path = get_data_dir() / "ground_truth_partial.json"
     output_path = _BENCH_DIR / _DRAFT_SUITE_FILENAME
@@ -261,18 +276,18 @@ def cmd_judge():
             stale_judgment_count += len(prior.get("judgments", []))
     existing_queries = compatible_existing
 
-    report("model", JUDGE_MODEL)
-    report("debias", "enabled" if use_debiasing else "disabled")
-    report("pooling", f"hybrid + fts + vector @ k={k_per_strategy}")
+    _note("model", JUDGE_MODEL)
+    _note("debias", "enabled" if use_debiasing else "disabled")
+    _note("pooling", f"hybrid + fts + vector @ k={k_per_strategy}")
     if stale_judgment_count:
-        report(
+        _note(
             "stale", f"ignored {stale_judgment_count} stale judgments (query changed)"
         )
     if existing_queries:
         total_existing = sum(
             len(q.get("judgments", [])) for q in existing_queries.values()
         )
-        report(
+        _note(
             "existing",
             f"{total_existing} judgments across {len(existing_queries)} queries",
         )
@@ -400,12 +415,12 @@ def cmd_judge():
         sys.exit(1)
 
     if new_judgments_total > 0:
-        report(
+        _note(
             "judged",
             f"{new_judgments_total} new chunks in {fmt_duration(time.time() - start)}",
         )
     else:
-        report(
+        _note(
             "status",
             f"no new chunks to judge ({fmt_duration(time.time() - start).strip()})",
         )
@@ -425,8 +440,8 @@ def cmd_judge():
     if checkpoint_path.exists():
         checkpoint_path.unlink()
 
-    report("total", f"{total_judgments} judgments")
-    report("saved", f"{output_path.name}")
+    _note("total", f"{total_judgments} judgments")
+    _note("saved", f"{output_path.name}")
     table = make_table(title="Score Distribution")
     table.add_column("Score")
     table.add_column("Count", justify="right")
@@ -446,7 +461,7 @@ def cmd_run(
     name: str | None = None,
     *,
     runs: int = 1,
-    description: str = "",
+    description: str,
     baseline_name: str | None = None,
 ):
     """Run deterministic quality evaluation plus corpus-wide latency probes."""
@@ -473,6 +488,13 @@ def cmd_run(
             action="usage: run <name> (e.g. phase1-baseline)",
         )
         sys.exit(1)
+    description = description.strip()
+    if not description:
+        report_error(
+            "experiment description is required",
+            action="describe what changed and why this run exists",
+        )
+        sys.exit(2)
 
     results_dir = _BENCH_DIR / "results"
     json_path = results_dir / f"{name}.json"
@@ -481,7 +503,7 @@ def cmd_run(
             f"benchmark result already exists: {json_path.name}; choose a new name"
         )
 
-    report_mode("bench.run", name)
+    _mode("run", name)
 
     gt_path = _BENCH_DIR / _SUITE_FILENAME
     if not gt_path.exists():
@@ -539,9 +561,9 @@ def cmd_run(
     k_values = STANDARD_K
     run_count = max(1, int(runs))
 
-    report("queries", str(len(ground_truth["queries"])))
-    report("runs", f"{run_count} (mean)")
-    report("unjudged-policy", "error")
+    _note("queries", str(len(ground_truth["queries"])))
+    _note("runs", f"{run_count} (mean)")
+    _note("unjudged-policy", "error")
 
     def _p95(arr: list[float]) -> float:
         s = sorted(arr)
@@ -608,13 +630,13 @@ def cmd_run(
     all_start = time.time()
 
     for run_idx in range(1, run_count + 1):
-        report("pass", f"{run_idx}/{run_count}")
+        _note("pass", f"{run_idx}/{run_count}")
         run_start = time.time()
         try:
             clear_cache()
             latency_queries = [q["query"] for q in ground_truth["queries"]]
 
-            report("phase", f"latency probe ({run_idx}/{run_count})")
+            _note("phase", f"latency probe ({run_idx}/{run_count})")
             # Two untimed requests warm model kernels and allocator state. The
             # reported distribution then covers every suite query, rather than
             # treating a five-query maximum as P95.
@@ -628,8 +650,13 @@ def cmd_run(
             results = []
             per_query: list[dict] = []
 
-            report("phase", f"evaluation ({run_idx}/{run_count})")
-            with report_progress("evaluating") as progress:
+            _note("phase", f"evaluation ({run_idx}/{run_count})")
+            with Progress(
+                BarColumn(bar_width=30),
+                TimeElapsedColumn(),
+                console=console,
+                transient=True,
+            ) as progress:
                 task = progress.add_task("", total=len(ground_truth["queries"]))
 
                 for q in ground_truth["queries"]:
@@ -683,7 +710,7 @@ def cmd_run(
 
         by_cat = aggregate_by_category(results, k=k)
         run_duration = time.time() - run_start
-        report(
+        _note(
             "pass-summary",
             f"{run_idx}/{run_count} nDCG@10 {_metric_at(agg.get('ndcg', {}), 10):.3f} | "
             f"MRR@10 {_metric_at(agg.get('mrr', {}), 10):.3f} | P50 {latency_p50:.0f}ms",
@@ -725,13 +752,13 @@ def cmd_run(
             for metric in ("ndcg", "mrr", "map", "precision", "recall")
         }
         by_language[language]["count"] = len(items)
-    report("evaluated", f"in {fmt_duration(time.time() - all_start).strip()}")
-    report(
+    _note("evaluated", f"in {fmt_duration(time.time() - all_start).strip()}")
+    _note(
         "latency-spread",
         f"P50 {min(p50_values):.0f}-{max(p50_values):.0f}ms | "
         f"P95 {min(p95_values):.0f}-{max(p95_values):.0f}ms",
     )
-    report(
+    _note(
         "summary",
         " | ".join(
             [
@@ -741,7 +768,7 @@ def cmd_run(
             ]
         ),
     )
-    print_gap()
+
     blank = "\u2014"
     table = make_table(title=f"Results ({run_count}-run mean)")
     table.add_column("Metric")
@@ -824,7 +851,11 @@ def cmd_run(
             raise RuntimeError(f"comparison baseline not found: {baseline_path.name}")
         baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
         comparable_fields = [
-            ("suite", baseline.get("benchmark_suite", {}).get("sha256"), output["benchmark_suite"]["sha256"]),
+            (
+                "suite",
+                baseline.get("benchmark_suite", {}).get("sha256"),
+                output["benchmark_suite"]["sha256"],
+            ),
             ("k", baseline.get("k"), k),
         ]
         mismatches = [label for label, old, new in comparable_fields if old != new]
@@ -856,7 +887,8 @@ def cmd_run(
             for metric in metrics
         }
         mean_deltas = {
-            metric: sum(values) / len(values) for metric, values in paired_deltas.items()
+            metric: sum(values) / len(values)
+            for metric, values in paired_deltas.items()
         }
         rng = random.Random(20260820)
         ndcg_deltas = paired_deltas["ndcg"]
@@ -877,7 +909,7 @@ def cmd_run(
 
     json_path.write_text(json.dumps(output, indent=2))
 
-    report("saved", f"{json_path.name}")
+    _note("saved", f"{json_path.name}")
 
 
 def cmd_show(run_name: str | None = None):
@@ -886,7 +918,7 @@ def cmd_show(run_name: str | None = None):
 
     results_dir = _BENCH_DIR / "results"
     if run_name == "list" or run_name is None:
-        report_mode("bench.show", "list")
+        _mode("show", "list")
         skipped = 0
         runs = (
             sorted(
@@ -898,8 +930,8 @@ def cmd_show(run_name: str | None = None):
             else []
         )
         if not runs:
-            report("status", "no benchmark runs found")
-            report("hint", "run run <name> first")
+            _note("status", "no benchmark runs found")
+            _note("hint", "run run <name> first")
             return
 
         table = make_table(title="Benchmark Runs")
@@ -936,8 +968,12 @@ def cmd_show(run_name: str | None = None):
 
         render_table(table)
         if skipped:
-            report("warning", f"skipped {skipped} invalid run file(s)")
-        report("hint", "use show <name> to view details")
+            _note(
+                "warning",
+                f"skipped {skipped} invalid run file(s)",
+                level="warning",
+            )
+        _note("hint", "use show <name> to view details")
         return
     results_path = results_dir / f"{run_name}.json"
     if not results_path.exists():
@@ -962,8 +998,8 @@ def cmd_show(run_name: str | None = None):
 
     run_label = data.get("name", run_name)
     created = data.get("created", "unknown")
-    report_mode("bench.show", f"{run_label}")
-    report("date", created)
+    _mode("show", f"{run_label}")
+    _note("date", created)
     from .evaluate import STANDARD_K
 
     def get_val(d, k):
@@ -971,7 +1007,7 @@ def cmd_show(run_name: str | None = None):
 
     blank = "\u2014"
     lat = data.get("latency_ms", {})
-    report(
+    _note(
         "summary",
         " | ".join(
             [
@@ -1056,7 +1092,7 @@ def main():
     )
     p_run.add_argument(
         "--description",
-        default="",
+        required=True,
         help="Human-readable description stored in the result JSON",
     )
     p_run.add_argument(
@@ -1088,7 +1124,7 @@ def main():
             sys.exit(1)
         assert project is not None
         sova_projects.activate(project)
-        report("project", project.project_id)
+        _note("project", project.project_id)
 
         if args.command == "judge":
             cmd_judge()
@@ -1106,11 +1142,14 @@ def main():
 
 
 if __name__ == "__main__":
+    configure_output("auto")
     try:
         main()
     except KeyboardInterrupt:
-        report("status", "interrupted")
+        emit("interrupted", "Benchmark interrupted")
         sys.exit(130)
     except (OSError, RuntimeError, ValueError) as e:
         _report_exception(e)
         sys.exit(1)
+    finally:
+        close_output()

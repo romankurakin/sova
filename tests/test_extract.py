@@ -1,10 +1,41 @@
 """Tests for extract module."""
 
 import tempfile
+import types
 from pathlib import Path
 from unittest.mock import patch
 
-from sova.extract import chunk_text, find_docs, find_section, parse_sections
+import pytest
+
+from sova.extract import (
+    chunk_text,
+    extract_pdf,
+    find_docs,
+    find_section,
+    parse_sections,
+)
+
+
+@pytest.mark.filterwarnings(
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning"
+)
+def test_extract_pdf_suppresses_parser_messages(monkeypatch, capsys, tmp_path):
+    import pymupdf
+
+    fake = types.SimpleNamespace()
+
+    def to_markdown(*_args, **_kwargs):
+        print("raw converter output")
+        pymupdf.message("=== Document parser messages ===")
+        pymupdf.message("Using Tesseract for OCR processing.")
+        return "# Extracted"
+
+    fake.to_markdown = to_markdown
+    monkeypatch.setitem(__import__("sys").modules, "pymupdf4llm", fake)
+    monkeypatch.setattr("sova.extract.importlib.import_module", lambda _name: None)
+
+    assert extract_pdf(tmp_path / "source.pdf") == "# Extracted"
+    assert capsys.readouterr() == ("", "")
 
 
 class TestParseSections:
@@ -155,7 +186,7 @@ class TestFindDocs:
             data_dir = Path(tmpdir) / "data"
             docs_dir.mkdir()
             data_dir.mkdir()
-            (data_dir / "notes.md").write_text("# Notes")
+            (docs_dir / "notes.md").write_text("# Notes")
             with (
                 patch("sova.extract.get_docs_dir", return_value=docs_dir),
                 patch("sova.extract.get_data_dir", return_value=data_dir),
@@ -165,6 +196,19 @@ class TestFindDocs:
                 assert docs[0]["name"] == "notes"
                 assert docs[0]["pdf"] is None
                 assert docs[0]["md"] is not None
+
+    def test_generated_markdown_without_source_is_not_a_document(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docs_dir = Path(tmpdir) / "docs"
+            data_dir = Path(tmpdir) / "data"
+            docs_dir.mkdir()
+            data_dir.mkdir()
+            (data_dir / "deleted-source.md").write_text("# Stale")
+            with (
+                patch("sova.extract.get_docs_dir", return_value=docs_dir),
+                patch("sova.extract.get_data_dir", return_value=data_dir),
+            ):
+                assert find_docs() == []
 
     def test_pdf_with_extracted_md(self):
         with tempfile.TemporaryDirectory() as tmpdir:

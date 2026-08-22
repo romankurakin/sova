@@ -97,7 +97,9 @@ def main() -> None:
                     )
         documents = connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         chunks = connection.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-        contexts = connection.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
+        contexts = connection.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[
+            0
+        ]
 
     queries = [judged_by_id[spec["id"]] for spec in specs]
     payload = {

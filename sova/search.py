@@ -24,12 +24,9 @@ def search_vector(
     conn: sqlite3.Connection, query_blob: bytes, candidates: int
 ) -> list[tuple[int, float]]:
     """Vector similarity search. Returns list of (chunk_id, similarity_score)."""
-    try:
-        conn.execute(
-            f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
-        )
-    except sqlite3.OperationalError:
-        pass
+    conn.execute(
+        f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
+    )
 
     # Preload quantized vectors into memory for faster search. Not all DBs.
     # have quantized data yet (first run, interrupted indexing), so we ignore.

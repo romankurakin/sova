@@ -5,14 +5,14 @@ description = "Local document semantic search"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "msgpack>=1.1.2",
-    "numpy>=2.4.2",
-    "pydantic>=2.12.5",
-    "pymupdf4llm>=0.3.4",
-    "pymupdf-layout>=1.27.1",
-    "rich>=14.3.3",
-    "sqliteai-vector>=0.9.92",
-    "typer>=0.16",
+    "msgpack>=1.2.1",
+    "numpy>=2.5.2",
+    "pydantic>=2.13.4",
+    "pymupdf4llm>=1.28.2",
+    "pymupdf-layout>=1.28.2",
+    "rich>=15.0.0",
+    "sqliteai-vector>=1.0.0",
+    "typer>=0.27.1",
 ]
 
 [project.scripts]
@@ -33,8 +33,8 @@ package = true
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
-    "pytest-cov>=7.0.0",
-    "ruff>=0.16.0",
-    "ty>=0.0.20",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.4",
+    "ty>=0.0.73",
 ]

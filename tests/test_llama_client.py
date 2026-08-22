@@ -128,6 +128,7 @@ class TestCheckServers:
         assert admitted == [("embedding", "http://127.0.0.1:8081", True)]
         assert note is None
 
+
 class TestPostJson:
     def test_touches_activity_for_known_service_url(self):
         from sova.llama_client import _post_json
@@ -637,21 +638,18 @@ class TestGenerateContext:
             assert captured["body"]["response_format"]["type"] == "json_schema"
             assert captured["body"]["messages"][0]["role"] == "system"
 
-    def test_rejects_markup_and_meta_openings(self):
+    def test_context_validation_keeps_only_structural_safeguards(self):
         from sova.llama_client import ServerError, _validate_context_response
 
-        with pytest.raises(ServerError, match="meta opening"):
-            _validate_context_response("This chunk explains account access rules.")
-        with pytest.raises(ServerError, match="meta opening"):
-            _validate_context_response("The target passage defines register operands.")
-        with pytest.raises(ServerError, match="markup"):
-            _validate_context_response("Account **access** follows explicit rules.")
+        with pytest.raises(ServerError, match="empty"):
+            _validate_context_response("   ")
         assert (
             _validate_context_response(
                 "In the RISC-V specification, sbi_nacl_sync_sret handles values < 100."
             )
             == "In the RISC-V specification, sbi_nacl_sync_sret handles values < 100."
         )
+
 
 class TestStopServer:
     def test_stops_known_service(self):

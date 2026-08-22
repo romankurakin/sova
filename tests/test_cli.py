@@ -1,5 +1,6 @@
 """Tests for cli module."""
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -149,8 +150,13 @@ class TestInterruptHandling:
             "_generate_contexts",
             lambda *args, **kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
         )
-        monkeypatch.setattr(cli, "show_stats", lambda mode="index": None)
+        monkeypatch.setattr(
+            cli,
+            "_load_prepared_doc",
+            lambda *_args: ([{"start_line": 1, "text": "x"}], []),
+        )
         monkeypatch.setattr(cli, "get_cache", lambda: DummyCache())
+        monkeypatch.setattr(cli, "_prune_missing_documents", lambda *args: 0)
         monkeypatch.setattr(
             cli,
             "stop_server",
@@ -175,7 +181,7 @@ class TestInterruptHandling:
     def test_search_reports_server_status_changes(self, monkeypatch):
         from sova import cli
 
-        reports: list[tuple[str, str]] = []
+        statuses: list[str] = []
 
         class DummyProject:
             project_id = "proj"
@@ -197,15 +203,14 @@ class TestInterruptHandling:
         monkeypatch.setattr(cli, "check_servers", fake_check_servers)
         monkeypatch.setattr(cli, "search_semantic", lambda *args, **kwargs: None)
         monkeypatch.setattr(
-            cli, "report", lambda name, msg: reports.append((name, msg))
+            cli, "status", lambda message, phase=None: statuses.append(message)
         )
 
         cli.main()
 
-        # Server status changes are reported as plain lines, once each.
-        assert reports.count(("server", "embedding: downloading (0.5 GB)")) == 1
-        assert reports.count(("server", "embedding: loading")) == 1
-        assert ("server", "ready") in reports
+        assert statuses.count("embedding downloading (0.5 GB)") == 1
+        assert statuses.count("embedding loading") == 1
+        assert "ready" in statuses
 
     def test_search_uses_single_embedding_service_path(self, monkeypatch):
         from sova import cli
@@ -237,6 +242,54 @@ class TestInterruptHandling:
 
         assert check_calls[0] == {"mode": "search", "fast_only": True}
         assert search_calls == [("q", 10)]
+
+
+def test_json_missing_arguments_are_one_structured_error(monkeypatch, capsys):
+    from sova import cli
+
+    monkeypatch.setattr(sys, "argv", ["sova", "--json", "search"])
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    events = [json.loads(line) for line in captured.out.splitlines()]
+    assert len(events) == 1
+    assert events[0]["type"] == "error"
+    assert "Missing argument" in events[0]["data"]["cause"]
+    assert captured.err == ""
+
+
+def test_json_help_is_one_structured_event(monkeypatch, capsys):
+    from sova import cli
+
+    monkeypatch.setattr(sys, "argv", ["sova", "--json", "--help"])
+
+    cli.main()
+
+    captured = capsys.readouterr()
+    events = [json.loads(line) for line in captured.out.splitlines()]
+    assert len(events) == 1
+    assert events[0]["type"] == "help"
+    assert "Commands:" in events[0]["data"]["text"]
+    assert captured.err == ""
+
+
+def test_main_propagates_command_exit_code(monkeypatch):
+    from sova import cli
+
+    class DummyCommand:
+        def main(self, **_kwargs):
+            return 7
+
+    monkeypatch.setattr(sys, "argv", ["sova", "projects"])
+    monkeypatch.setattr(cli.typer.main, "get_command", lambda _app: DummyCommand())
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 7
 
 
 def test_index_reserved_token_fails_before_project_lookup(monkeypatch):
@@ -276,8 +329,8 @@ def test_help_command_prints_global_help(monkeypatch, capsys):
     for command in ("help", "projects", "download", "remove", "list", "index"):
         assert command in out
     assert "Download all model files" in out
-    # The hidden default-search command is documented via the epilog only.
-    assert "Default search:" in out
+    assert "search" in out
+    assert "--json" in out
 
 
 def test_help_flag_prints_global_help(monkeypatch, capsys):
@@ -305,25 +358,19 @@ class TestRuntimeReporting:
     def test_report_phase_runtime_uses_named_budget_fields(self, monkeypatch):
         from sova import cli
 
-        lines: list[tuple[str, str]] = []
+        headroom: list[float | None] = []
 
-        monkeypatch.setattr(cli.time, "strftime", lambda _fmt: "12:34:56")
         monkeypatch.setattr(cli.config, "get_effective_available_gib", lambda: 7.4)
         monkeypatch.setattr(cli.config, "get_memory_reserve_gib", lambda _mode: 4.0)
         monkeypatch.setattr(
             cli,
-            "_service_status_line",
-            lambda _service, with_memory=False: "chat running",
+            "report_runtime",
+            lambda memory_headroom_gib: headroom.append(memory_headroom_gib),
         )
-        monkeypatch.setattr(cli, "report", lambda name, msg: lines.append((name, msg)))
 
         cli._report_phase_runtime("index.context", "chat", mode="index")
 
-        assert ("phase", "index.context (updated 12:34:56)") in lines
-        assert (
-            "runtime",
-            "free-for-model 3.4 GiB | chat running",
-        ) in lines
+        assert headroom == [3.4]
 
     def test_runtime_reporter_re_emits_after_refresh_interval(self, monkeypatch):
         from sova import cli
@@ -358,18 +405,21 @@ class TestProgressReporter:
     def test_progress_reporter_throttles_and_always_emits_final(self, monkeypatch):
         from sova import cli
 
-        lines: list[tuple[str, str]] = []
-        monkeypatch.setattr(cli, "report", lambda name, msg: lines.append((name, msg)))
+        updates: list[tuple[str, int, int]] = []
+        monkeypatch.setattr(
+            cli,
+            "progress",
+            lambda phase, done, total, **kwargs: updates.append((phase, done, total)),
+        )
         monkeypatch.setattr(cli.time, "monotonic", lambda: 100.0)
 
         emit = cli._make_progress_reporter("context", 1000)
         for done in range(1, 1001):
             emit(done)
 
-        # Throttled by percent step: far fewer lines than updates.
-        assert 0 < len(lines) <= 60
-        assert lines[-1][0] == "context"
-        assert "1,000/1,000 chunks" in lines[-1][1]
+        # The event stream is lossless; renderers own throttling.
+        assert len(updates) == 1000
+        assert updates[-1] == ("context", 1000, 1000)
 
 
 def test_generate_contexts_is_idempotent_on_duplicate_chunk_start_lines(monkeypatch):
@@ -401,7 +451,6 @@ def test_generate_contexts_is_idempotent_on_duplicate_chunk_start_lines(monkeypa
     sections: list[dict] = []
 
     monkeypatch.setattr(cli, "generate_context", lambda *args, **kwargs: "ctx")
-    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
 
     cli._generate_contexts("doc", 1, chunks, sections, conn)
     count = conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0]
@@ -456,7 +505,6 @@ def test_prepare_doc_updates_changed_chunk_text_and_clears_context_and_embedding
         );
         """
     )
-    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
 
     md = tmp_path / "doc.md"
     md.write_text("\n".join(["alpha"] * 12) + "\n", encoding="utf-8")
@@ -465,6 +513,9 @@ def test_prepare_doc_updates_changed_chunk_text_and_clears_context_and_embedding
     doc_id, chunks, _ = prepared
     assert doc_id == 1
     assert len(chunks) == 1
+    loaded_chunks, loaded_sections = cli._load_prepared_doc(conn, doc_id)
+    assert loaded_chunks == chunks
+    assert loaded_sections == []
     chunk_id = conn.execute("SELECT id FROM chunks WHERE doc_id = 1").fetchone()[0]
 
     conn.execute(
@@ -530,7 +581,6 @@ def test_prepare_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
         );
         """
     )
-    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
 
     md = tmp_path / "doc.md"
     first_lines = ["# H"] + ["w"] * 520 + [""] + ["tail"] * 20
@@ -604,7 +654,6 @@ def test_prepare_doc_keeps_context_and_embedding_when_only_section_ids_reorder(
         );
         """
     )
-    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
 
     md1 = tmp_path / "doc1.md"
     md2 = tmp_path / "doc2.md"
@@ -669,7 +718,6 @@ def test_generate_contexts_retries_on_empty_response(monkeypatch):
         cli, "generate_context", lambda *args, **kwargs: next(responses)
     )
     monkeypatch.setattr(cli, "stop_server", lambda url, **kwargs: stops.append(url))
-    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
 
     cli._generate_contexts("doc", 1, chunks, sections, conn)
 
@@ -679,6 +727,196 @@ def test_generate_contexts_retries_on_empty_response(monkeypatch):
     assert row == ("ctx after retry",)
     assert len(stops) == 1
     conn.close()
+
+
+def test_forced_context_migration_resumes_rows_already_written_by_new_pipeline(
+    monkeypatch,
+):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL,
+            start_line INTEGER NOT NULL, embedding BLOB,
+            embedding_signature TEXT
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY, context TEXT NOT NULL, model TEXT NOT NULL,
+            pipeline_signature TEXT NOT NULL
+        );
+        INSERT INTO chunks (id, doc_id, start_line) VALUES (1, 1, 10), (2, 1, 20);
+        """
+    )
+    current = cli._context_pipeline_signature()
+    conn.execute(
+        "INSERT INTO chunk_contexts VALUES (1, 'already done', ?, ?)",
+        (cli.config.CONTEXT_MODEL, current),
+    )
+    conn.commit()
+    generated: list[str] = []
+    monkeypatch.setattr(
+        cli,
+        "generate_context",
+        lambda _name, _section, text, _prev, _next: (
+            generated.append(text) or "new context"
+        ),
+    )
+
+    cli._generate_contexts(
+        "doc",
+        1,
+        [{"start_line": 10, "text": "first"}, {"start_line": 20, "text": "second"}],
+        [],
+        conn,
+        force_rebuild_context=True,
+    )
+
+    assert generated == ["second"]
+    assert conn.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[0] == 2
+    conn.close()
+
+
+def test_prune_missing_documents_removes_stale_search_rows():
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        PRAGMA foreign_keys = ON;
+        CREATE TABLE documents (id INTEGER PRIMARY KEY, name TEXT UNIQUE);
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL,
+            FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
+        );
+        INSERT INTO documents VALUES (1, 'keep'), (2, 'deleted');
+        INSERT INTO chunks VALUES (1, 1), (2, 2);
+        """
+    )
+
+    removed = cli._prune_missing_documents(conn, {"keep"})
+
+    assert removed == 1
+    assert conn.execute("SELECT name FROM documents").fetchall() == [("keep",)]
+    assert conn.execute("SELECT id FROM chunks").fetchall() == [(1,)]
+    conn.close()
+
+
+def test_index_with_empty_source_preserves_existing_database_rows(
+    monkeypatch, tmp_path
+):
+    from sova import cli
+
+    db_path = tmp_path / "indexed.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        PRAGMA foreign_keys = ON;
+        CREATE TABLE documents (id INTEGER PRIMARY KEY, name TEXT UNIQUE);
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL,
+            FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
+        );
+        INSERT INTO documents VALUES (1, 'deleted');
+        INSERT INTO chunks VALUES (1, 1);
+        """
+    )
+    conn.commit()
+    monkeypatch.setattr(cli.config, "get_docs_dir", lambda: tmp_path)
+    monkeypatch.setattr(cli, "init_db", lambda: conn)
+    monkeypatch.setattr(
+        cli,
+        "_sync_index_signatures",
+        lambda _conn: cli._IndexSignatureState(False, False, "c", "e", "k"),
+    )
+    monkeypatch.setattr(cli, "find_docs", list)
+
+    with pytest.raises(SystemExit) as exc:
+        cli._run_index_mode()
+
+    assert exc.value.code == 1
+    check = sqlite3.connect(db_path)
+    assert check.execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 1
+    assert check.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 1
+    check.close()
+
+
+def test_index_prepares_every_document_before_loading_models(monkeypatch, tmp_path):
+    from sova import cli
+
+    events: list[str] = []
+    conn = sqlite3.connect(":memory:")
+    docs = [
+        {"name": "one", "pdf": tmp_path / "one.pdf", "md": None},
+        {"name": "two", "pdf": tmp_path / "two.pdf", "md": None},
+    ]
+
+    monkeypatch.setattr(cli.config, "get_docs_dir", lambda: tmp_path)
+    monkeypatch.setattr(cli.config, "get_active_project_id", lambda: "test")
+    monkeypatch.setattr(cli, "init_db", lambda: conn)
+    monkeypatch.setattr(
+        cli,
+        "_sync_index_signatures",
+        lambda _conn: cli._IndexSignatureState(False, False, "c", "e", "k"),
+    )
+    monkeypatch.setattr(cli, "find_docs", lambda: docs)
+    monkeypatch.setattr(
+        cli,
+        "_prepare_doc",
+        lambda name, *_args: (
+            events.append(f"prepare:{name}")
+            or (1, [{"start_line": 1, "text": name}], [])
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "check_servers",
+        lambda **kwargs: events.append(f"load:{kwargs['mode']}") or (True, "ready"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_generate_contexts",
+        lambda name, *_args, **_kwargs: events.append(f"context:{name}"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_load_prepared_doc",
+        lambda *_args: ([{"start_line": 1, "text": "x"}], []),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_embed_doc",
+        lambda name, *_args, **_kwargs: events.append(f"embed:{name}"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "stop_server",
+        lambda url, **_kwargs: events.append(f"stop:{url}"),
+    )
+    monkeypatch.setattr(cli, "run_embedding_canary", lambda: events.append("canary"))
+    monkeypatch.setattr(
+        cli, "quantize_vectors", lambda _conn: events.append("finalize")
+    )
+    monkeypatch.setattr(cli, "_prune_missing_documents", lambda *_args: 0)
+    monkeypatch.setattr(cli, "_commit_index_signatures", lambda *_args: None)
+    monkeypatch.setattr(
+        cli, "get_cache", lambda: type("Cache", (), {"clear": lambda self: None})()
+    )
+    monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(cli, "emit", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(cli, "status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(cli, "report_scope", lambda *_args: None)
+    monkeypatch.setattr(cli, "_report_phase_runtime", lambda *_args, **_kwargs: None)
+
+    cli._run_index_mode()
+
+    assert events.index("prepare:one") < events.index("prepare:two")
+    assert events.index("prepare:two") < events.index("load:index_context")
+    assert events.index("load:index_context") < events.index("context:one")
+    assert events.index("context:two") < events.index("load:index_embed")
+    assert events.index("load:index_embed") < events.index("embed:one")
+    assert events.index("embed:two") < events.index("finalize")
 
 
 def test_sync_index_signatures_marks_rebuild_without_immediate_data_clear(monkeypatch):
@@ -721,7 +959,6 @@ def test_sync_index_signatures_marks_rebuild_without_immediate_data_clear(monkey
     )
     conn.commit()
 
-    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli, "_context_pipeline_signature", lambda: "new-context")
     monkeypatch.setattr(cli, "_embedding_pipeline_signature", lambda: "same-embed")
     monkeypatch.setattr(cli, "_chunk_pipeline_signature", lambda: "same-chunk")
@@ -751,7 +988,7 @@ def test_sync_index_signatures_marks_rebuild_without_immediate_data_clear(monkey
 def test_list_mode_reports_structured_error_on_sqlite_operational_error(monkeypatch):
     from sova import cli
 
-    lines: list[tuple[str, str]] = []
+    lines: list[tuple[str, dict]] = []
 
     monkeypatch.setattr(cli, "find_docs", list)
     monkeypatch.setattr(
@@ -759,17 +996,18 @@ def test_list_mode_reports_structured_error_on_sqlite_operational_error(monkeypa
         "list_docs",
         lambda _docs: (_ for _ in ()).throw(sqlite3.OperationalError("")),
     )
-    monkeypatch.setattr(cli, "report", lambda name, msg: lines.append((name, msg)))
+    monkeypatch.setattr(
+        cli,
+        "report_error",
+        lambda summary, **kwargs: lines.append((summary, kwargs)),
+    )
 
     with pytest.raises(SystemExit) as exc:
         cli._run_list_mode()
 
     assert exc.value.code == 1
-    assert any(
-        name == "error" and "database extension unavailable" in msg
-        for name, msg in lines
-    )
-    assert any(name == "action" and "sova-install" in msg for name, msg in lines)
+    assert lines[0][0] == "database extension unavailable"
+    assert "sova-install" in lines[0][1]["action"]
 
 
 def test_reset_is_not_a_command_and_fails_as_unknown_project(monkeypatch):
@@ -843,7 +1081,6 @@ def test_embed_doc_persists_partial_window_progress_on_failure(monkeypatch):
     monkeypatch.setattr(cli, "stop_server", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli, "run_embedding_canary", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
 
     with pytest.raises(RuntimeError, match="embedding failed for doc"):
         cli._embed_doc("doc", 1, chunks, [], conn)
@@ -920,7 +1157,6 @@ def test_embed_doc_retry_only_embeds_unfinished_tail(monkeypatch):
     monkeypatch.setattr(cli, "stop_server", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli, "run_embedding_canary", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(cli, "report", lambda *args, **kwargs: None)
 
     cli._embed_doc("doc", 1, chunks, [], conn)
 
@@ -969,7 +1205,7 @@ def test_embed_doc_reports_absolute_progress(monkeypatch):
     conn.commit()
 
     chunks = [{"start_line": line, "text": f"chunk {line}"} for line in range(1, 21)]
-    reports: list[tuple[str, str]] = []
+    reports: list[tuple[str, int, int]] = []
 
     def fake_get_embeddings_batch(texts, on_batch=None):
         batch = [[1.0, 0.0] for _ in texts]
@@ -983,12 +1219,84 @@ def test_embed_doc_reports_absolute_progress(monkeypatch):
 
     monkeypatch.setattr(cli, "get_embeddings_batch", fake_get_embeddings_batch)
     monkeypatch.setattr(cli, "embedding_to_blob", lambda _emb: b"emb")
-    monkeypatch.setattr(cli, "report", lambda name, msg: reports.append((name, msg)))
+    monkeypatch.setattr(
+        cli,
+        "progress",
+        lambda phase, done, total, **kwargs: reports.append((phase, done, total)),
+    )
 
     cli._embed_doc("doc", 1, chunks, [], conn)
 
-    assert any(
-        name == "embed" and "20/20 chunks" in msg.replace(",", "")
-        for name, msg in reports
-    )
+    assert ("embed", 20, 20) in reports
     conn.close()
+
+
+def test_context_pipeline_signature_tracks_exact_model_artifact(monkeypatch):
+    from sova import cli
+
+    current = cli._context_pipeline_signature()
+    monkeypatch.setattr(cli.config, "CONTEXT_MODEL_HF_FILE", "another-model.gguf")
+
+    assert cli._context_pipeline_signature() != current
+
+
+def test_download_reports_models_as_structured_items(monkeypatch):
+    from sova import cli
+
+    events: list[tuple[str, str, dict]] = []
+    monkeypatch.setattr(cli, "is_service_installed", lambda _label: True)
+    monkeypatch.setattr(cli, "is_model_cached", lambda _label: True)
+    monkeypatch.setattr(
+        cli,
+        "emit",
+        lambda event_type, message, **kwargs: events.append(
+            (event_type, message, kwargs)
+        ),
+    )
+
+    cli._run_download_mode()
+
+    cached = [event for event in events if event[0] == "download_cached"]
+    assert [(message, kwargs["item"]) for _, message, kwargs in cached] == [
+        ("cached", "embedding"),
+        ("cached", "chat"),
+    ]
+    assert events[-1][1] == "All models are cached"
+
+
+def test_download_failure_surfaces_service_diagnostics(monkeypatch):
+    from sova import cli
+
+    errors: list[dict] = []
+    monkeypatch.setattr(
+        cli,
+        "_DOWNLOAD_SERVICES",
+        [("chat", "com.sova.chat", cli.config.CONTEXT_SERVER_URL)],
+    )
+    monkeypatch.setattr(cli, "_DOWNLOAD_STALL_TIMEOUT_S", -1.0)
+    monkeypatch.setattr(cli, "is_service_installed", lambda _label: True)
+    monkeypatch.setattr(cli, "is_model_cached", lambda _label: False)
+    monkeypatch.setattr(cli, "is_service_running", lambda _label: False)
+    monkeypatch.setattr(cli, "get_model_status", lambda _label: "starting")
+    monkeypatch.setattr(cli, "get_service_diagnostics", lambda _url: "file not found")
+    monkeypatch.setattr(cli, "start_service", lambda _label: None)
+    monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(cli, "emit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        cli,
+        "_report_error_block",
+        lambda summary, **kwargs: errors.append({"summary": summary, **kwargs}),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli._run_download_mode()
+
+    assert exc.value.code == 1
+    assert errors == [
+        {
+            "summary": "model download failed",
+            "cause": "file not found",
+            "action": "check the model configuration and re-run: sova-install",
+            "detail": "log: ~/.sova/logs/chat.err.log",
+        }
+    ]

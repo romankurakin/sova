@@ -1,120 +1,474 @@
-"""Shared plain-text UI helpers."""
+"""Terminal output as a small, renderer-independent event stream."""
 
+from __future__ import annotations
+
+import json
+import sys
 import time
-from typing import Self
+from dataclasses import asdict, dataclass, field
+from typing import Any, Literal, TextIO
 
-_LABEL_WIDTH = 9
+from rich.console import Console
+from rich.live import Live
+from rich.spinner import Spinner
+from rich.text import Text
 
-# Sentinel marking a section break between table rows.
-_SECTION_BREAK: tuple[str, ...] = ("\x00section-break\x00",)
-
-
-def _label(name: str) -> str:
-    padded = f"{name}:".ljust(_LABEL_WIDTH)
-    return f"{padded}"
+OutputMode = Literal["auto", "plain", "json"]
 
 
-def format_line(name: str, msg: str) -> str:
-    """Build one formatted output line."""
-    return f"{_label(name)} {msg}"
+@dataclass(frozen=True)
+class Event:
+    """A stable user-facing event, independent of terminal rendering."""
+
+    type: str
+    message: str
+    level: str = "info"
+    phase: str | None = None
+    item: str | None = None
+    current: int | None = None
+    total: int | None = None
+    unit: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = {
+            key: value for key, value in asdict(self).items() if value is not None
+        }
+        if not payload["data"]:
+            payload.pop("data")
+        return payload
 
 
-def report(name: str, msg: str) -> None:
-    print(format_line(name, msg), flush=True)
+def _human_duration(seconds: float) -> str:
+    seconds = max(0.0, seconds)
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    if seconds < 3600:
+        return f"{seconds / 60:.0f}m"
+    return f"{seconds / 3600:.1f}h"
 
 
-def print_gap(lines: int = 1) -> None:
-    """Print vertical spacing between output sections."""
-    for _ in range(max(0, lines)):
-        print()
+def _progress_text(event: Event) -> str:
+    parts = [event.phase or "working"]
+    if event.current is not None:
+        amount = f"{event.current:,}"
+        if event.total is not None:
+            amount += f"/{event.total:,}"
+        if event.unit:
+            amount += f" {event.unit}"
+        parts.append(amount)
+    if event.item:
+        parts.append(event.item)
+
+    doc_index = event.data.get("document_index")
+    doc_total = event.data.get("document_total")
+    if doc_index is not None and doc_total is not None:
+        parts.append(f"document {doc_index}/{doc_total}")
+
+    rate = event.data.get("rate")
+    if isinstance(rate, int | float) and rate > 0:
+        parts.append(f"{rate:.2g} {event.unit or 'items'}/s")
+
+    elapsed = event.data.get("elapsed_s")
+    if isinstance(elapsed, int | float):
+        parts.append(f"elapsed {_human_duration(float(elapsed))}")
+
+    headroom = event.data.get("memory_headroom_gib")
+    if isinstance(headroom, int | float) and headroom < 1.0:
+        parts.append(f"{headroom:.1f} GiB free")
+    return "  ".join(parts)
 
 
-class Table:
-    """Minimal aligned plain-text table."""
+def _event_text(event: Event) -> str:
+    """Render an optional work item as a stable first column."""
+    if not event.item:
+        return event.message
+    raw_width = event.data.get("item_width", len(event.item))
+    width = int(raw_width) if isinstance(raw_width, int | float) else len(event.item)
+    return f"  {event.item.ljust(max(len(event.item), width))}  {event.message}"
 
-    def __init__(self, *, title: str | None = None, show_header: bool = True) -> None:
-        self.title = title
-        self.show_header = show_header
-        self._columns: list[dict] = []
-        self._rows: list[tuple[str, ...]] = []
 
-    def add_column(self, header: str = "", *, justify: str = "left", **_style) -> None:
-        self._columns.append({"header": str(header), "justify": justify})
+def _status_text(event: Event) -> str:
+    if event.type == "progress":
+        return _progress_text(event)
+    parts = [part for part in (event.phase, event.item, event.message) if part]
+    return "  ".join(parts)
 
-    def add_row(self, *cells: object) -> None:
-        self._rows.append(tuple("" if c is None else str(c) for c in cells))
 
-    def add_section(self) -> None:
-        """Mark a section break, rendered as a blank line."""
-        self._rows.append(_SECTION_BREAK)
+def _status_renderable(event: Event) -> Spinner:
+    """Render every active operation as the same single status line."""
+    return Spinner("dots", text=Text(_status_text(event)))
 
-    @property
-    def row_count(self) -> int:
-        return sum(1 for row in self._rows if row is not _SECTION_BREAK)
 
-    def render_lines(self) -> list[str]:
-        data_rows = [row for row in self._rows if row is not _SECTION_BREAK]
-        n_cols = max([len(self._columns)] + [len(row) for row in data_rows] or [0])
-        if n_cols == 0:
-            return []
-        columns = list(self._columns)
-        while len(columns) < n_cols:
-            columns.append({"header": "", "justify": "left"})
+class _Renderer:
+    def emit(self, event: Event) -> None:
+        raise NotImplementedError
 
-        grid: list[tuple[str, ...] | None] = []
-        if self.show_header and any(c["header"] for c in columns):
-            grid.append(tuple(c["header"] for c in columns))
-        for row in self._rows:
-            if row is _SECTION_BREAK:
-                grid.append(None)
-            else:
-                grid.append(row + ("",) * (n_cols - len(row)))
+    def close(self) -> None:
+        return None
 
-        widths = [
-            max(
-                (len(row[i]) for row in grid if row is not None and i < len(row)),
-                default=0,
+
+class PlainRenderer(_Renderer):
+    """Append-only output for pipes, CI, log files, and simple terminals."""
+
+    def __init__(
+        self,
+        *,
+        stdout: TextIO,
+        stderr: TextIO,
+        progress_interval_s: float = 30.0,
+    ) -> None:
+        self.stdout = stdout
+        self.stderr = stderr
+        self.progress_interval_s = progress_interval_s
+        self._last_progress_at: dict[tuple[str | None, str | None], float] = {}
+        self._last_status: str | None = None
+
+    def emit(self, event: Event) -> None:
+        if event.type == "result":
+            self._render_result(event)
+            return
+        if event.type == "table":
+            self._render_table(event)
+            return
+        if event.type == "progress":
+            key = (event.phase, event.item)
+            now = time.monotonic()
+            final = (
+                event.current is not None
+                and event.total is not None
+                and event.current >= event.total
             )
-            for i in range(n_cols)
-        ]
-        lines: list[str] = []
-        if self.title:
-            lines.append(self.title)
-        for row in grid:
-            if row is None:
-                lines.append("")
-                continue
-            cells = []
-            for i, cell in enumerate(row):
-                if columns[i]["justify"] == "right":
-                    cells.append(cell.rjust(widths[i]))
-                else:
-                    cells.append(cell.ljust(widths[i]))
-            lines.append("  ".join(cells).rstrip())
-        return lines
+            if (
+                not final
+                and now - self._last_progress_at.get(key, 0.0)
+                < self.progress_interval_s
+            ):
+                return
+            self._last_progress_at[key] = now
+            print(_progress_text(event), file=self.stderr, flush=True)
+            return
+        if event.type == "status":
+            rendered = _status_text(event)
+            if rendered == self._last_status:
+                return
+            self._last_status = rendered
+        if event.type == "error":
+            print(f"Error: {event.message}", file=self.stderr, flush=True)
+            if cause := event.data.get("cause"):
+                print(f"  {cause}", file=self.stderr, flush=True)
+            if action := event.data.get("action"):
+                print(f"  Try: {action}", file=self.stderr, flush=True)
+            if detail := event.data.get("detail"):
+                print(f"  {detail}", file=self.stderr, flush=True)
+            return
+        if event.type == "status":
+            print(_status_text(event), file=self.stderr, flush=True)
+        else:
+            print(_event_text(event), file=self.stderr, flush=True)
+
+    def _render_result(self, event: Event) -> None:
+        record = event.data
+        location = str(record.get("location", ""))
+        score = record.get("score")
+        if score is not None:
+            print(f"{location}  {float(score):.2f}", file=self.stdout)
+        else:
+            print(location, file=self.stdout)
+        if diagnostic := record.get("diagnostic"):
+            print(f"  {diagnostic}", file=self.stdout)
+        body = str(record.get("text", ""))
+        for line in body.splitlines() or [body]:
+            print(f"  {line}", file=self.stdout)
+        if not record.get("last", False):
+            print(file=self.stdout)
+
+    def _render_table(self, event: Event) -> None:
+        columns = [str(value) for value in event.data.get("columns", [])]
+        rows = [[str(value) for value in row] for row in event.data.get("rows", [])]
+        alignments = [str(value) for value in event.data.get("alignments", [])]
+        sections = {int(value) for value in event.data.get("sections", [])}
+        if event.message and event.message != "table":
+            print(event.message, file=self.stdout)
+        widths = [len(value) for value in columns]
+        for row in rows:
+            while len(widths) < len(row):
+                widths.append(0)
+            for index, value in enumerate(row):
+                widths[index] = max(widths[index], len(value))
+        if columns:
+            print(
+                "  ".join(
+                    value.rjust(widths[index])
+                    if index < len(alignments) and alignments[index] == "right"
+                    else value.ljust(widths[index])
+                    for index, value in enumerate(columns)
+                ).rstrip(),
+                file=self.stdout,
+            )
+        for row_index, row in enumerate(rows):
+            if row_index in sections:
+                print(file=self.stdout)
+            print(
+                "  ".join(
+                    value.rjust(widths[index])
+                    if index < len(alignments) and alignments[index] == "right"
+                    else value.ljust(widths[index])
+                    for index, value in enumerate(row)
+                ).rstrip(),
+                file=self.stdout,
+            )
 
 
-def make_table(
+class JsonRenderer(_Renderer):
+    """Newline-delimited JSON for agents and automation."""
+
+    def __init__(self, stdout: TextIO) -> None:
+        self.stdout = stdout
+
+    def emit(self, event: Event) -> None:
+        print(
+            json.dumps(event.to_dict(), ensure_ascii=False, sort_keys=True),
+            file=self.stdout,
+            flush=True,
+        )
+
+
+class LiveRenderer(_Renderer):
+    """A compact TTY renderer that updates one stable status region."""
+
+    def __init__(self, *, stdout: TextIO, stderr: TextIO) -> None:
+        self.stdout = stdout
+        self.stderr = stderr
+        self.console = Console(file=stderr, stderr=True, highlight=False)
+        self._live: Live | None = None
+
+    def _ensure_live(self) -> Live:
+        if self._live is None:
+            self._live = Live(
+                console=self.console,
+                refresh_per_second=4,
+                transient=True,
+                redirect_stdout=False,
+                redirect_stderr=False,
+            )
+            self._live.start()
+        return self._live
+
+    def _set_status(self, event: Event) -> None:
+        self._ensure_live().update(_status_renderable(event), refresh=True)
+
+    def _print_permanent(self, message: str, *, style: str | None = None) -> None:
+        if self._live is not None:
+            self._live.console.print(message, style=style)
+        else:
+            self.console.print(message, style=style)
+
+    def emit(self, event: Event) -> None:
+        if event.type in {"progress", "status", "interrupting"}:
+            self._set_status(event)
+            return
+        if event.type == "result":
+            self.close()
+            PlainRenderer(stdout=self.stdout, stderr=self.stderr)._render_result(event)
+            return
+        if event.type == "table":
+            self.close()
+            PlainRenderer(stdout=self.stdout, stderr=self.stderr)._render_table(event)
+            return
+        if event.type == "error":
+            self.close()
+            self._print_permanent(f"Error: {event.message}", style="bold red")
+            if cause := event.data.get("cause"):
+                self._print_permanent(f"  {cause}")
+            if action := event.data.get("action"):
+                self._print_permanent(f"  Try: {action}")
+            if detail := event.data.get("detail"):
+                self._print_permanent(f"  {detail}", style="dim")
+            return
+        if event.type in {"completed", "failed", "interrupted", "cancelled"}:
+            self.close()
+        style = "yellow" if event.level == "warning" else None
+        self._print_permanent(_event_text(event), style=style)
+
+    def close(self) -> None:
+        if self._live is not None:
+            self._live.stop()
+            self._live = None
+
+
+class Reporter:
+    """Stateful event publisher shared by all CLI commands."""
+
+    def __init__(self, renderer: _Renderer) -> None:
+        self.renderer = renderer
+        self.document_index: int | None = None
+        self.document_total: int | None = None
+        self._progress_started: dict[tuple[str, str | None], tuple[float, int]] = {}
+        self._memory_headroom_gib: float | None = None
+        self._low_memory_reported = False
+
+    def emit(self, event: Event) -> None:
+        self.renderer.emit(event)
+
+    def scope(self, document_index: int | None, document_total: int | None) -> None:
+        self.document_index = document_index
+        self.document_total = document_total
+
+    def status(
+        self,
+        message: str,
+        *,
+        phase: str | None = None,
+        item: str | None = None,
+    ) -> None:
+        self.emit(Event("status", message, phase=phase, item=item))
+
+    def progress(
+        self,
+        phase: str,
+        current: int,
+        total: int,
+        *,
+        item: str | None = None,
+        unit: str = "items",
+    ) -> None:
+        key = (phase, item)
+        now = time.monotonic()
+        started, initial = self._progress_started.setdefault(key, (now, current))
+        elapsed = max(0.0, now - started)
+        advanced = max(0, current - initial)
+        data: dict[str, Any] = {"elapsed_s": round(elapsed, 3)}
+        if elapsed > 0 and advanced > 0:
+            data["rate"] = round(advanced / elapsed, 4)
+        if self.document_index is not None and self.document_total is not None:
+            data["document_index"] = self.document_index
+            data["document_total"] = self.document_total
+        if self._memory_headroom_gib is not None:
+            data["memory_headroom_gib"] = self._memory_headroom_gib
+        self.emit(
+            Event(
+                "progress",
+                "",
+                phase=phase,
+                item=item,
+                current=current,
+                total=total,
+                unit=unit,
+                data=data,
+            )
+        )
+
+    def runtime(self, *, memory_headroom_gib: float | None) -> None:
+        self._memory_headroom_gib = memory_headroom_gib
+        if memory_headroom_gib is None:
+            return
+        if memory_headroom_gib < 0.5 and not self._low_memory_reported:
+            self._low_memory_reported = True
+            self.emit(
+                Event(
+                    "warning",
+                    f"Low memory: {memory_headroom_gib:.1f} GiB free",
+                    level="warning",
+                    data={"memory_headroom_gib": memory_headroom_gib},
+                )
+            )
+        elif memory_headroom_gib >= 1.0:
+            self._low_memory_reported = False
+
+    def close(self) -> None:
+        self.renderer.close()
+
+
+_reporter: Reporter | None = None
+_output_mode: OutputMode = "auto"
+
+
+def configure_output(mode: OutputMode = "auto") -> Reporter:
+    """Configure output for one CLI invocation."""
+    global _output_mode, _reporter
+    _output_mode = mode
+    if _reporter is not None:
+        _reporter.close()
+    if mode == "json":
+        renderer: _Renderer = JsonRenderer(sys.stdout)
+    elif mode == "plain" or not sys.stderr.isatty():
+        renderer = PlainRenderer(stdout=sys.stdout, stderr=sys.stderr)
+    else:
+        renderer = LiveRenderer(stdout=sys.stdout, stderr=sys.stderr)
+    _reporter = Reporter(renderer)
+    return _reporter
+
+
+def is_json_output() -> bool:
+    return _output_mode == "json"
+
+
+def get_reporter() -> Reporter:
+    global _reporter
+    if _reporter is None:
+        _reporter = Reporter(PlainRenderer(stdout=sys.stdout, stderr=sys.stderr))
+    return _reporter
+
+
+def close_output() -> None:
+    global _reporter
+    if _reporter is not None:
+        _reporter.close()
+    _reporter = None
+
+
+def emit(
+    event_type: str,
+    message: str,
     *,
-    title: str | None = None,
-    show_header: bool = True,
-    header_style: str = "dim",
-) -> Table:
-    """Create a table with shared CLI defaults."""
-    del header_style
-    return Table(title=title, show_header=show_header)
-
-
-def render_table(
-    table: Table, *, gap_before: bool = False, gap_after: bool = False
+    level: str = "info",
+    phase: str | None = None,
+    item: str | None = None,
+    data: dict[str, Any] | None = None,
 ) -> None:
-    """Render a table with optional spacing around it."""
-    if gap_before:
-        print_gap()
-    for line in table.render_lines():
-        print(line)
-    if gap_after:
-        print_gap()
+    get_reporter().emit(
+        Event(
+            event_type,
+            message,
+            level=level,
+            phase=phase,
+            item=item,
+            data=data or {},
+        )
+    )
+
+
+def status(
+    message: str,
+    *,
+    phase: str | None = None,
+    item: str | None = None,
+) -> None:
+    get_reporter().status(message, phase=phase, item=item)
+
+
+def progress(
+    phase: str,
+    current: int,
+    total: int,
+    *,
+    item: str | None = None,
+    unit: str = "items",
+) -> None:
+    get_reporter().progress(phase, current, total, item=item, unit=unit)
+
+
+def scope(document_index: int | None, document_total: int | None) -> None:
+    get_reporter().scope(document_index, document_total)
+
+
+def runtime(*, memory_headroom_gib: float | None) -> None:
+    get_reporter().runtime(memory_headroom_gib=memory_headroom_gib)
+
+
+def result(data: dict[str, Any]) -> None:
+    emit("result", str(data.get("location", "result")), data=data)
 
 
 def report_error(
@@ -124,95 +478,70 @@ def report_error(
     action: str | None = None,
     detail: str | None = None,
 ) -> None:
-    """Print a structured, user-facing error block."""
-    report("error", summary)
-    if cause:
-        report("cause", cause)
-    if action:
-        report("action", action)
-    if detail:
-        report("detail", detail)
+    data = {
+        key: value
+        for key, value in {"cause": cause, "action": action, "detail": detail}.items()
+        if value
+    }
+    emit("error", summary, level="error", data=data)
 
 
-def report_mode(mode: str, detail: str | None = None) -> None:
-    """Print mode header in a consistent, low-noise format."""
-    if detail:
-        report("mode", f"{mode} | {detail}")
-    else:
-        report("mode", mode)
+class Table:
+    """Small structured table that renders consistently in text and JSON."""
+
+    def __init__(self, *, title: str | None = None, show_header: bool = True) -> None:
+        self.title = title
+        self.show_header = show_header
+        self._columns: list[str] = []
+        self._alignments: list[str] = []
+        self._rows: list[tuple[str, ...]] = []
+        self._sections: list[int] = []
+
+    def add_column(self, header: str = "", **style: Any) -> None:
+        self._columns.append(str(header))
+        self._alignments.append(str(style.get("justify", "left")))
+
+    def add_row(self, *cells: object) -> None:
+        self._rows.append(tuple("" if cell is None else str(cell) for cell in cells))
+
+    def add_section(self) -> None:
+        if self._rows and len(self._rows) not in self._sections:
+            self._sections.append(len(self._rows))
+
+    @property
+    def row_count(self) -> int:
+        return len(self._rows)
 
 
-def report_step(step: str, detail: str | None = None) -> None:
-    """Print pipeline step marker."""
-    if detail:
-        report("step", f"{step} | {detail}")
-    else:
-        report("step", step)
+def make_table(
+    *,
+    title: str | None = None,
+    show_header: bool = True,
+    header_style: str = "dim",
+) -> Table:
+    del header_style
+    return Table(title=title, show_header=show_header)
 
 
-def report_runtime(summary: str) -> None:
-    """Print compact runtime status."""
-    report("runtime", summary)
-
-
-def report_event(message: str) -> None:
-    """Print generic event line."""
-    report("event", message)
-
-
-class Progress:
-    """Throttled plain-text progress reporting."""
-
-    def __init__(self, name: str, min_interval_s: float = 5.0) -> None:
-        self._name = name
-        self._min_interval_s = min_interval_s
-        self._tasks: list[dict] = []
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> bool:
-        if exc_type is None:
-            for task in self._tasks:
-                self._emit(task, force=True)
-        return False
-
-    def add_task(
-        self, description: str = "", total: int | None = None, completed: int = 0, **_kw
-    ) -> int:
-        del description
-        self._tasks.append(
-            {"total": total, "done": completed, "last_ts": 0.0, "printed": None}
-        )
-        return len(self._tasks) - 1
-
-    def update(self, task_id: int, advance: int = 1, **_kw) -> None:
-        task = self._tasks[task_id]
-        task["done"] += advance
-        done_all = task["total"] is not None and task["done"] >= task["total"]
-        self._emit(task, force=done_all)
-
-    def _emit(self, task: dict, force: bool = False) -> None:
-        if task["printed"] == task["done"]:
-            return
-        now = time.monotonic()
-        if not force and (now - task["last_ts"]) < self._min_interval_s:
-            return
-        task["last_ts"] = now
-        task["printed"] = task["done"]
-        if task["total"] is not None:
-            report(self._name, f"{task['done']:,}/{task['total']:,}")
-        else:
-            report(self._name, f"{task['done']:,}")
-
-
-def report_progress(name: str) -> Progress:
-    return Progress(name)
+def render_table(
+    table: Table, *, gap_before: bool = False, gap_after: bool = False
+) -> None:
+    del gap_before, gap_after
+    emit(
+        "table",
+        table.title or "table",
+        data={
+            "columns": table._columns if table.show_header else [],
+            "alignments": table._alignments,
+            "rows": table._rows,
+            "sections": table._sections,
+        },
+    )
 
 
 def fmt_duration(seconds: float) -> str:
     if seconds < 60:
         return f"{seconds:>6.1f}s"
-    elif seconds < 3600:
+    if seconds < 3600:
         return f"{seconds / 60:>6.1f}m"
     return f"{seconds / 3600:>6.1f}h"

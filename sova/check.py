@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from sova.external import run_process
+
 
 def main() -> None:
     venv = Path(sys.executable).parent
@@ -17,7 +19,12 @@ def main() -> None:
     failed = []
     for name, cmd in checks:
         header = f"  {name}"
-        result = subprocess.run(cmd, capture_output=True, check=False, text=True)
+        result = run_process(
+            cmd,
+            runner=subprocess.run,
+            text=True,
+            operation=f"{name} check",
+        )
         if result.returncode != 0:
             print(f"FAIL {header}")
             # Show output on failure.
