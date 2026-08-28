@@ -109,12 +109,13 @@ sova --json search <project-id> "your query"
 sova --json doctor <project-id>
 ```
 
-Indexing checkpoints every completed context and embedding batch. Re-running
-the command resumes current-pipeline work. Changed PDFs are re-extracted, and
-documents removed from the source directory are removed from the searchable
-index. Markdown files placed directly in the source directory are also
-supported; generated Markdown under Sova's data directory is never treated as
-a source document.
+Indexing checkpoints each successful PDF conversion, tokenized document,
+generated context, and embedding batch. Re-running the command reuses every
+complete current-pipeline checkpoint without loading a model unnecessarily.
+Changed PDFs are re-extracted, and documents removed from the source directory
+are removed from the searchable index. Markdown files placed directly in the
+source directory are also supported; generated Markdown under Sova's data
+directory is never treated as a source document.
 
 ## Install / Remove
 

@@ -27,7 +27,7 @@ def _database() -> sqlite3.Connection:
         """
         CREATE TABLE documents (
             id INTEGER PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL,
-            expected_chunks INTEGER, source_signature TEXT
+            expected_chunks INTEGER, source_signature TEXT, chunk_signature TEXT
         );
         CREATE TABLE sections (
             id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL, title TEXT NOT NULL
@@ -53,7 +53,8 @@ def _database() -> sqlite3.Connection:
             ('pipeline.context.signature', 'context-v1'),
             ('pipeline.embedding.signature', 'embed-v1'),
             ('pipeline.chunk.signature', 'chunk-v1');
-        INSERT INTO documents VALUES (1, 'doc', '/tmp/doc.md', 1, 'source-v1');
+        INSERT INTO documents
+        VALUES (1, 'doc', '/tmp/doc.md', 1, 'source-v1', 'chunk-v1');
         INSERT INTO sections VALUES (1, 1, 'Section');
         """
     )
@@ -195,6 +196,7 @@ def test_schema_migration_adds_pipeline_provenance_idempotently():
     assert "search_text" in chunk_columns
     assert "pipeline_signature" in context_columns
     assert "source_signature" in document_columns
+    assert "chunk_signature" in document_columns
     assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     conn.close()
 

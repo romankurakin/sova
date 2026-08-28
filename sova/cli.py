@@ -117,6 +117,7 @@ _RUNTIME_REFRESH_S = 20.0
 _META_CONTEXT_SIG = "pipeline.context.signature"
 _META_EMBED_SIG = "pipeline.embedding.signature"
 _META_CHUNK_SIG = "pipeline.chunk.signature"
+_META_SOURCE_SIG_PREFIX = "source.extract.signature."
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,22 @@ class _PreparedSource:
     name: str
     markdown_path: Path
     source_signature: str
+
+
+def _source_checkpoint_key(name: str) -> str:
+    return f"{_META_SOURCE_SIG_PREFIX}{name}"
+
+
+def _write_text_atomic(path: Path, text: str) -> None:
+    """Replace a generated text artifact only after its full write succeeds."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    try:
+        temporary.write_text(text, encoding="utf-8")
+        temporary.replace(path)
+    except OSError:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def _preview(text: str, max_chars: int = 48) -> str:
@@ -350,6 +367,7 @@ def _prepare_source(
         str(row[1]) for row in conn.execute("PRAGMA table_info(documents)")
     }
     stored_source_signature: str | None = None
+    stored_extract_signature = get_meta(conn, _source_checkpoint_key(name))
     if "source_signature" in document_columns:
         signature_row = conn.execute(
             "SELECT source_signature FROM documents WHERE name = ?", (name,)
@@ -357,12 +375,13 @@ def _prepare_source(
         if signature_row and signature_row[0]:
             stored_source_signature = str(signature_row[0])
 
+    effective_extract_signature = stored_extract_signature or stored_source_signature
     needs_extract = bool(
         pdf_path
         and (
             not md_path
             or not md_path.exists()
-            or stored_source_signature != source_signature
+            or effective_extract_signature != source_signature
         )
     )
     if needs_extract:
@@ -373,7 +392,9 @@ def _prepare_source(
             data_dir = config.get_data_dir()
             data_dir.mkdir(parents=True, exist_ok=True)
             md_path = data_dir / f"{name}.md"
-            md_path.write_text(markdown, encoding="utf-8")
+            _write_text_atomic(md_path, markdown)
+            set_meta(conn, _source_checkpoint_key(name), source_signature)
+            conn.commit()
             lines = len(markdown.splitlines())
             status(
                 f"Prepared {lines:,} lines in "
@@ -389,6 +410,11 @@ def _prepare_source(
             )
             return None
 
+    elif pdf_path and stored_extract_signature != source_signature:
+        # Migrate a completed pre-checkpoint extraction without repeating OCR.
+        set_meta(conn, _source_checkpoint_key(name), source_signature)
+        conn.commit()
+
     assert md_path is not None and md_path.exists()
     return _PreparedSource(name, md_path, source_signature)
 
@@ -396,11 +422,13 @@ def _prepare_source(
 def _tokenize_doc(
     source: _PreparedSource,
     conn: sqlite3.Connection,
+    chunk_signature: str | None = None,
 ) -> tuple[int, list[dict], list[dict]]:
     """Create exact model-token chunks and synchronize their durable rows."""
     name = source.name
     md_path = source.markdown_path
     source_signature = source.source_signature
+    chunk_signature = chunk_signature or _chunk_pipeline_signature()
     status("Tokenizing", phase="tokenize", item=name)
     document_columns = {
         str(row[1]) for row in conn.execute("PRAGMA table_info(documents)")
@@ -415,7 +443,24 @@ def _tokenize_doc(
     row = conn.execute("SELECT id FROM documents WHERE name = ?", (name,)).fetchone()
     if row:
         doc_id = row[0]
-        if "source_signature" in document_columns:
+        if {"source_signature", "chunk_signature"} <= document_columns:
+            conn.execute(
+                """
+                UPDATE documents
+                SET path = ?, line_count = ?, expected_chunks = ?,
+                    source_signature = ?, chunk_signature = ?
+                WHERE id = ?
+                """,
+                (
+                    str(md_path),
+                    len(lines),
+                    len(chunks),
+                    source_signature,
+                    chunk_signature,
+                    doc_id,
+                ),
+            )
+        elif "source_signature" in document_columns:
             conn.execute(
                 """
                 UPDATE documents
@@ -434,7 +479,24 @@ def _tokenize_doc(
                 (str(md_path), len(lines), len(chunks), doc_id),
             )
     else:
-        if "source_signature" in document_columns:
+        if {"source_signature", "chunk_signature"} <= document_columns:
+            cursor = conn.execute(
+                """
+                INSERT INTO documents
+                    (name, path, line_count, expected_chunks,
+                     source_signature, chunk_signature)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    name,
+                    str(md_path),
+                    len(lines),
+                    len(chunks),
+                    source_signature,
+                    chunk_signature,
+                ),
+            )
+        elif "source_signature" in document_columns:
             cursor = conn.execute(
                 """
                 INSERT INTO documents
@@ -749,6 +811,106 @@ def _chunk_pipeline_signature() -> str:
     )
 
 
+def _current_tokenized_doc_id(
+    conn: sqlite3.Connection,
+    source: _PreparedSource,
+    chunk_signature: str,
+) -> int | None:
+    """Return a document only when its durable chunk checkpoint is complete."""
+    document_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(documents)")
+    }
+    if not {"source_signature", "chunk_signature"} <= document_columns:
+        return None
+    row = conn.execute(
+        """
+        SELECT id, expected_chunks
+        FROM documents
+        WHERE name = ? AND source_signature = ? AND chunk_signature = ?
+        """,
+        (source.name, source.source_signature, chunk_signature),
+    ).fetchone()
+    if row is None or row[1] is None:
+        return None
+    doc_id, expected_chunks = int(row[0]), int(row[1])
+    actual_chunks = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM chunks WHERE doc_id = ?", (doc_id,)
+        ).fetchone()[0]
+    )
+    return doc_id if actual_chunks == expected_chunks else None
+
+
+def _context_work_pending(
+    conn: sqlite3.Connection,
+    context_signature: str,
+    *,
+    force_rebuild: bool = False,
+) -> bool:
+    context_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(chunk_contexts)")
+    }
+    if "pipeline_signature" in context_columns:
+        return bool(
+            conn.execute(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM chunks c
+                    LEFT JOIN chunk_contexts cc ON cc.chunk_id = c.id
+                    WHERE cc.chunk_id IS NULL OR TRIM(cc.context) = ''
+                       OR cc.pipeline_signature IS NULL
+                       OR cc.pipeline_signature <> ?
+                )
+                """,
+                (context_signature,),
+            ).fetchone()[0]
+        )
+    if force_rebuild:
+        return bool(conn.execute("SELECT EXISTS(SELECT 1 FROM chunks)").fetchone()[0])
+    return bool(
+        conn.execute(
+            """
+            SELECT EXISTS(
+                SELECT 1 FROM chunks c
+                LEFT JOIN chunk_contexts cc ON cc.chunk_id = c.id
+                WHERE cc.chunk_id IS NULL OR TRIM(cc.context) = ''
+            )
+            """
+        ).fetchone()[0]
+    )
+
+
+def _embedding_work_pending(
+    conn: sqlite3.Connection,
+    embedding_signature: str,
+    *,
+    force_rebuild: bool = False,
+) -> bool:
+    chunk_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(chunks)")
+    }
+    if "embedding_signature" in chunk_columns:
+        return bool(
+            conn.execute(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM chunks
+                    WHERE embedding IS NULL OR embedding_signature IS NULL
+                       OR embedding_signature <> ?
+                )
+                """,
+                (embedding_signature,),
+            ).fetchone()[0]
+        )
+    if force_rebuild:
+        return bool(conn.execute("SELECT EXISTS(SELECT 1 FROM chunks)").fetchone()[0])
+    return bool(
+        conn.execute(
+            "SELECT EXISTS(SELECT 1 FROM chunks WHERE embedding IS NULL)"
+        ).fetchone()[0]
+    )
+
+
 def _sync_index_signatures(conn: sqlite3.Connection) -> _IndexSignatureState:
     current_context = _context_pipeline_signature()
     current_embed = _embedding_pipeline_signature()
@@ -758,6 +920,33 @@ def _sync_index_signatures(conn: sqlite3.Connection) -> _IndexSignatureState:
     stored_embed = get_meta(conn, _META_EMBED_SIG)
     stored_chunk = get_meta(conn, _META_CHUNK_SIG)
 
+    context_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(chunk_contexts)")
+    }
+    chunk_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(chunks)")
+    }
+    document_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(documents)")
+    }
+
+    # Schema v4 only had a project-wide completion marker. A completed v4
+    # index can be upgraded without paying for tokenization again.
+    if "chunk_signature" in document_columns and stored_chunk == current_chunk:
+        conn.execute(
+            """
+            UPDATE documents
+            SET chunk_signature = ?
+            WHERE chunk_signature IS NULL
+              AND expected_chunks IS NOT NULL
+              AND expected_chunks = (
+                  SELECT COUNT(*) FROM chunks WHERE chunks.doc_id = documents.id
+              )
+            """,
+            (current_chunk,),
+        )
+        conn.commit()
+
     has_contexts = conn.execute(
         "SELECT EXISTS(SELECT 1 FROM chunk_contexts)"
     ).fetchone()[0]
@@ -766,9 +955,67 @@ def _sync_index_signatures(conn: sqlite3.Connection) -> _IndexSignatureState:
     ).fetchone()[0]
     has_chunks = conn.execute("SELECT EXISTS(SELECT 1 FROM chunks)").fetchone()[0]
 
-    context_changed = bool(has_contexts) and stored_context != current_context
-    embed_changed = bool(has_embeddings) and stored_embed != current_embed
-    chunk_changed = bool(has_chunks) and stored_chunk != current_chunk
+    if "pipeline_signature" in context_columns:
+        context_changed = bool(
+            conn.execute(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM chunk_contexts
+                    WHERE TRIM(context) = ''
+                       OR pipeline_signature IS NULL
+                       OR pipeline_signature <> ?
+                )
+                """,
+                (current_context,),
+            ).fetchone()[0]
+        )
+    else:
+        context_changed = bool(has_contexts) and stored_context != current_context
+
+    if "embedding_signature" in chunk_columns:
+        embed_changed = bool(
+            conn.execute(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM chunks
+                    WHERE embedding IS NOT NULL
+                      AND (embedding_signature IS NULL OR embedding_signature <> ?)
+                )
+                """,
+                (current_embed,),
+            ).fetchone()[0]
+        )
+    else:
+        embed_changed = bool(has_embeddings) and stored_embed != current_embed
+
+    unknown_chunk_checkpoint = False
+    if "chunk_signature" in document_columns:
+        chunk_changed = bool(
+            conn.execute(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM documents d
+                    WHERE d.chunk_signature IS NOT NULL
+                      AND d.chunk_signature <> ?
+                      AND EXISTS(SELECT 1 FROM chunks c WHERE c.doc_id = d.id)
+                )
+                """,
+                (current_chunk,),
+            ).fetchone()[0]
+        )
+        unknown_chunk_checkpoint = bool(
+            conn.execute(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM documents d
+                    WHERE d.chunk_signature IS NULL
+                      AND EXISTS(SELECT 1 FROM chunks c WHERE c.doc_id = d.id)
+                )
+                """
+            ).fetchone()[0]
+        )
+    else:
+        chunk_changed = bool(has_chunks) and stored_chunk != current_chunk
 
     if context_changed:
         emit(
@@ -787,6 +1034,23 @@ def _sync_index_signatures(conn: sqlite3.Connection) -> _IndexSignatureState:
         emit(
             "pipeline_changed",
             "Chunking changed. Synchronizing document chunks.",
+            phase="prepare",
+        )
+
+    final_markers_incomplete = bool(
+        (has_contexts and stored_context != current_context)
+        or (has_embeddings and stored_embed != current_embed)
+        or (has_chunks and stored_chunk != current_chunk)
+    )
+    if (
+        (final_markers_incomplete or unknown_chunk_checkpoint)
+        and not context_changed
+        and not embed_changed
+        and not chunk_changed
+    ):
+        emit(
+            "pipeline_resuming",
+            "Resuming interrupted index. Reusing completed work.",
             phase="prepare",
         )
 
@@ -814,17 +1078,45 @@ def _prune_missing_documents(conn: sqlite3.Connection, source_names: set[str]) -
         str(row[0]) for row in conn.execute("SELECT name FROM documents").fetchall()
     }
     stale = sorted(existing - source_names)
-    if not stale:
-        return 0
-    placeholders = ",".join("?" for _ in stale)
-    conn.execute(f"DELETE FROM documents WHERE name IN ({placeholders})", stale)
-    conn.commit()
-    emit(
-        "sources_reconciled",
-        f"Removed {len(stale)} stale indexed document(s)",
-        phase="prepare",
-        data={"documents": stale},
+    if stale:
+        placeholders = ",".join("?" for _ in stale)
+        conn.execute(f"DELETE FROM documents WHERE name IN ({placeholders})", stale)
+
+    has_index_meta = bool(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'index_meta'"
+        ).fetchone()
     )
+    checkpoint_rows = (
+        conn.execute(
+            "SELECT key FROM index_meta WHERE key LIKE ?",
+            (f"{_META_SOURCE_SIG_PREFIX}%",),
+        ).fetchall()
+        if has_index_meta
+        else []
+    )
+    stale_checkpoint_keys = [
+        str(row[0])
+        for row in checkpoint_rows
+        if str(row[0])[len(_META_SOURCE_SIG_PREFIX) :] not in source_names
+    ]
+    if stale_checkpoint_keys:
+        placeholders = ",".join("?" for _ in stale_checkpoint_keys)
+        conn.execute(
+            f"DELETE FROM index_meta WHERE key IN ({placeholders})",
+            stale_checkpoint_keys,
+        )
+
+    if not stale and not stale_checkpoint_keys:
+        return 0
+    conn.commit()
+    if stale:
+        emit(
+            "sources_reconciled",
+            f"Removed {len(stale)} stale indexed document(s)",
+            phase="prepare",
+            data={"documents": stale},
+        )
     return len(stale)
 
 
@@ -1587,44 +1879,81 @@ def _run_index_mode() -> None:
         # This dedicated phase starts only after OCR and releases the embedding
         # model before the larger context model is admitted.
         if not interrupted and not failed:
-            report_scope(None, None)
-            status("Loading model", phase="tokenize")
-            ok, msg = check_servers(
-                on_status=lambda message: status(
-                    message.replace(":", "", 1), phase="tokenize"
-                ),
-                mode="index_embed",
-            )
-            if not ok:
-                failed = True
-                _report_error(RuntimeError(msg))
-                _report_relevant_service_diags(RuntimeError(msg), mode="index_embed")
-            else:
-                status(msg, phase="tokenize")
-                tokenize_runtime_tick = _make_runtime_reporter(
-                    "index.tokenize", "embedding", mode="index"
+            tokenization_plan = [
+                (
+                    source,
+                    _current_tokenized_doc_id(
+                        conn, source, signature_state.chunk_sig
+                    ),
                 )
-                tokenize_runtime_tick(True)
-                try:
-                    for doc_index, source in enumerate(sources, start=1):
-                        report_scope(doc_index, len(sources))
-                        doc_id, chunks, sections = _tokenize_doc(source, conn)
-                        prepared.append((source.name, doc_id))
-                        del chunks, sections
-                        tokenize_runtime_tick(False)
-                except KeyboardInterrupt:
-                    interrupted = True
-                    emit("interrupting", "Saving tokenized documents")
-                except (OSError, RuntimeError, sqlite3.Error, ValueError) as e:
+                for source in sources
+            ]
+            needs_tokenizer = any(doc_id is None for _, doc_id in tokenization_plan)
+            if not needs_tokenizer:
+                prepared.extend(
+                    (source.name, doc_id)
+                    for source, doc_id in tokenization_plan
+                    if doc_id is not None
+                )
+                status("Reused tokenized documents", phase="tokenize")
+            else:
+                report_scope(None, None)
+                status("Loading model", phase="tokenize")
+                ok, msg = check_servers(
+                    on_status=lambda message: status(
+                        message.replace(":", "", 1), phase="tokenize"
+                    ),
+                    mode="index_embed",
+                )
+                if not ok:
                     failed = True
-                    _report_error(e)
-                    _report_relevant_service_diags(e, mode="index_embed")
-                finally:
-                    stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
+                    _report_error(RuntimeError(msg))
+                    _report_relevant_service_diags(
+                        RuntimeError(msg), mode="index_embed"
+                    )
+                else:
+                    status(msg, phase="tokenize")
+                    tokenize_runtime_tick = _make_runtime_reporter(
+                        "index.tokenize", "embedding", mode="index"
+                    )
+                    tokenize_runtime_tick(True)
+                    try:
+                        for doc_index, (source, current_doc_id) in enumerate(
+                            tokenization_plan, start=1
+                        ):
+                            report_scope(doc_index, len(tokenization_plan))
+                            if current_doc_id is not None:
+                                prepared.append((source.name, current_doc_id))
+                                continue
+                            doc_id, chunks, sections = _tokenize_doc(
+                                source, conn, signature_state.chunk_sig
+                            )
+                            prepared.append((source.name, doc_id))
+                            del chunks, sections
+                            tokenize_runtime_tick(False)
+                    except KeyboardInterrupt:
+                        interrupted = True
+                        emit("interrupting", "Saving tokenized documents")
+                    except (OSError, RuntimeError, sqlite3.Error, ValueError) as e:
+                        failed = True
+                        _report_error(e)
+                        _report_relevant_service_diags(e, mode="index_embed")
+                    finally:
+                        stop_server(
+                            config.EMBEDDING_SERVER_URL, suppress_interrupt=True
+                        )
 
         # Context is generated only after every source is fully prepared. The
         # model is loaded once for the whole project and unloaded before embed.
-        if not interrupted and not failed:
+        if (
+            not interrupted
+            and not failed
+            and _context_work_pending(
+                conn,
+                signature_state.context_sig,
+                force_rebuild=signature_state.force_rebuild_context,
+            )
+        ):
             report_scope(None, None)
             status("Loading model", phase="context")
             ok, msg = check_servers(
@@ -1666,9 +1995,19 @@ def _run_index_mode() -> None:
                     _report_relevant_service_diags(e, mode="index_context")
                 finally:
                     stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
+        elif not interrupted and not failed:
+            status("Reused generated contexts", phase="context")
 
         # Embedding starts with the context model fully released.
-        if not interrupted and not failed:
+        if (
+            not interrupted
+            and not failed
+            and _embedding_work_pending(
+                conn,
+                signature_state.embed_sig,
+                force_rebuild=signature_state.force_rebuild_embed,
+            )
+        ):
             report_scope(None, None)
             status("Loading model", phase="embed")
             stop_server(config.EMBEDDING_SERVER_URL)
@@ -1714,6 +2053,8 @@ def _run_index_mode() -> None:
                     _report_error(e)
                     _report_relevant_service_diags(e, mode="index_embed")
                     stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
+        elif not interrupted and not failed:
+            status("Reused embeddings", phase="embed")
 
         # Finalize the searchable vector index only after all durable rows exist.
         if not interrupted and not failed:

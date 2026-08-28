@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from sova import config
 from sova.config import EMBEDDING_DIM, VECTOR_EXT
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def _check_schema_version(conn: sqlite3.Connection) -> int:
@@ -53,6 +53,8 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         document_columns = _column_names(conn, "documents")
         if document_columns and "source_signature" not in document_columns:
             conn.execute("ALTER TABLE documents ADD COLUMN source_signature TEXT")
+        if document_columns and "chunk_signature" not in document_columns:
+            conn.execute("ALTER TABLE documents ADD COLUMN chunk_signature TEXT")
 
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
@@ -72,7 +74,7 @@ def init_db() -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS documents (
             id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
             path TEXT NOT NULL, line_count INTEGER, expected_chunks INTEGER,
-            source_signature TEXT,
+            source_signature TEXT, chunk_signature TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS sections (

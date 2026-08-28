@@ -152,6 +152,11 @@ class TestInterruptHandling:
             "_tokenize_doc",
             lambda *_args, **_kwargs: (1, [{"start_line": 1, "text": "x"}], []),
         )
+        monkeypatch.setattr(cli, "_current_tokenized_doc_id", lambda *_args: None)
+        monkeypatch.setattr(cli, "_context_work_pending", lambda *_args, **_kwargs: True)
+        monkeypatch.setattr(
+            cli, "_embedding_work_pending", lambda *_args, **_kwargs: True
+        )
         monkeypatch.setattr(
             cli,
             "_generate_contexts",
@@ -837,6 +842,73 @@ def test_prune_missing_documents_removes_stale_search_rows():
     conn.close()
 
 
+def test_prepare_source_reuses_extraction_checkpoint_before_tokenization(
+    monkeypatch, tmp_path
+):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY, name TEXT UNIQUE, source_signature TEXT
+        );
+        CREATE TABLE index_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
+    pdf = tmp_path / "source.pdf"
+    pdf.write_bytes(b"stable pdf bytes")
+    data_dir = tmp_path / "data"
+    extractions: list[Path] = []
+    monkeypatch.setattr(cli.config, "get_data_dir", lambda: data_dir)
+    monkeypatch.setattr(
+        cli,
+        "extract_pdf",
+        lambda path: extractions.append(path) or "# Extracted\n\nBody\n",
+    )
+    monkeypatch.setattr(cli, "status", lambda *_args, **_kwargs: None)
+
+    first = cli._prepare_source("manual", pdf, None, conn)
+    assert first is not None
+    assert first.markdown_path.read_text(encoding="utf-8") == "# Extracted\n\nBody\n"
+    assert conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 0
+
+    second = cli._prepare_source("manual", pdf, first.markdown_path, conn)
+
+    assert second == first
+    assert extractions == [pdf]
+    assert cli.get_meta(conn, cli._source_checkpoint_key("manual")) == first.source_signature
+    conn.close()
+
+
+def test_current_tokenized_doc_requires_complete_matching_checkpoint(tmp_path):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY, name TEXT UNIQUE,
+            expected_chunks INTEGER, source_signature TEXT, chunk_signature TEXT
+        );
+        CREATE TABLE chunks (id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL);
+        INSERT INTO documents
+        VALUES (1, 'manual', 2, 'source-v1', 'chunks-v1');
+        INSERT INTO chunks VALUES (1, 1), (2, 1);
+        """
+    )
+    source = cli._PreparedSource("manual", tmp_path / "manual.md", "source-v1")
+
+    assert cli._current_tokenized_doc_id(conn, source, "chunks-v1") == 1
+    conn.execute("DELETE FROM chunks WHERE id = 2")
+    assert cli._current_tokenized_doc_id(conn, source, "chunks-v1") is None
+    conn.close()
+
+
 def test_index_with_empty_source_preserves_existing_database_rows(
     monkeypatch, tmp_path
 ):
@@ -911,6 +983,9 @@ def test_index_prepares_every_document_before_loading_models(monkeypatch, tmp_pa
             or (1, [{"start_line": 1, "text": source.name}], [])
         ),
     )
+    monkeypatch.setattr(cli, "_current_tokenized_doc_id", lambda *_args: None)
+    monkeypatch.setattr(cli, "_context_work_pending", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(cli, "_embedding_work_pending", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(
         cli,
         "check_servers",
@@ -1028,6 +1103,62 @@ def test_sync_index_signatures_marks_rebuild_without_immediate_data_clear(monkey
         "SELECT value FROM index_meta WHERE key = 'pipeline.context.signature'"
     ).fetchone()[0]
     assert stored == "new-context"
+    conn.close()
+
+
+def test_sync_index_signatures_resumes_current_rows_without_false_rebuild(monkeypatch):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY, expected_chunks INTEGER,
+            chunk_signature TEXT
+        );
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY, doc_id INTEGER,
+            embedding BLOB, embedding_signature TEXT
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY, context TEXT NOT NULL,
+            model TEXT NOT NULL, pipeline_signature TEXT
+        );
+        CREATE TABLE index_meta (
+            key TEXT PRIMARY KEY, value TEXT NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO documents VALUES (1, 2, 'chunks-current');
+        INSERT INTO chunks VALUES
+            (1, 1, X'01', 'embed-current'),
+            (2, 1, NULL, NULL);
+        INSERT INTO chunk_contexts
+        VALUES (1, 'saved context', 'model', 'context-current');
+        """
+    )
+    events: list[tuple[str, str]] = []
+    monkeypatch.setattr(cli, "_context_pipeline_signature", lambda: "context-current")
+    monkeypatch.setattr(cli, "_embedding_pipeline_signature", lambda: "embed-current")
+    monkeypatch.setattr(cli, "_chunk_pipeline_signature", lambda: "chunks-current")
+    monkeypatch.setattr(
+        cli,
+        "emit",
+        lambda event, message, **_kwargs: events.append((event, message)),
+    )
+
+    state = cli._sync_index_signatures(conn)
+
+    assert state.force_rebuild_context is False
+    assert state.force_rebuild_embed is False
+    assert events == [
+        ("pipeline_resuming", "Resuming interrupted index. Reusing completed work.")
+    ]
+    assert conn.execute("SELECT context FROM chunk_contexts").fetchone()[0] == (
+        "saved context"
+    )
+    assert conn.execute("SELECT embedding FROM chunks WHERE id = 1").fetchone()[0] == (
+        b"\x01"
+    )
     conn.close()
 
 

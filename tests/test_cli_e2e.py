@@ -19,7 +19,12 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
     project_root = tmp_path / "projects"
     monkeypatch.setattr(projects, "_PROJECTS_ROOT", project_root)
     monkeypatch.setattr(projects, "_REGISTRY_PATH", project_root / "registry.json")
-    monkeypatch.setattr(cli, "check_servers", lambda **_kwargs: (True, "Model ready"))
+    server_modes: list[str] = []
+    monkeypatch.setattr(
+        cli,
+        "check_servers",
+        lambda **kwargs: server_modes.append(kwargs["mode"]) or (True, "Model ready"),
+    )
     monkeypatch.setattr(cli, "stop_server", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(cli, "run_embedding_canary", lambda **_kwargs: None)
     monkeypatch.setattr(cli, "quantize_vectors", lambda _conn: None)
@@ -47,11 +52,13 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
         return vectors
 
     monkeypatch.setattr(cli, "get_embeddings_batch", embed)
-    monkeypatch.setattr(
-        cli,
-        "get_token_counts_batch",
-        lambda texts: [len(text.split()) for text in texts],
-    )
+    tokenization_calls: list[list[str]] = []
+
+    def count_tokens(texts):
+        tokenization_calls.append(texts)
+        return [len(text.split()) for text in texts]
+
+    monkeypatch.setattr(cli, "get_token_counts_batch", count_tokens)
 
     monkeypatch.setattr(sys, "argv", ["sova", "--json", "index", str(docs)])
     cli.main()
@@ -62,6 +69,10 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
     assert first_events[0]["type"] == "run_started"
     assert first_events[-1]["type"] == "completed"
     assert len(context_calls) == 1
+    first_tokenization_count = len(tokenization_calls)
+    assert first_tokenization_count > 0
+    first_server_load_count = len(server_modes)
+    assert first_server_load_count == 3
 
     project = projects.get_project("documents")
     assert project is not None
@@ -97,6 +108,8 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
 
     assert second_events[-1]["type"] == "completed"
     assert len(context_calls) == 1
+    assert len(tokenization_calls) == first_tokenization_count
+    assert len(server_modes) == first_server_load_count
 
     (docs / "manual.md").write_text(
         "# Account access\n\n"
@@ -112,6 +125,8 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
 
     assert changed_events[-1]["type"] == "completed"
     assert len(context_calls) == 2
+    assert len(tokenization_calls) > first_tokenization_count
+    assert len(server_modes) == first_server_load_count + 3
 
     monkeypatch.setattr(sys, "argv", ["sova", "--json", "doctor", "documents"])
     cli.main()

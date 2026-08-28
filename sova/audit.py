@@ -219,6 +219,30 @@ def audit_database(
                 )
             )
 
+    if "chunk_signature" not in document_columns:
+        findings.append(
+            Finding(
+                "documents.missing_chunk_provenance",
+                "Documents do not record their chunk pipeline signature",
+            )
+        )
+    else:
+        unsigned_chunks = conn.execute(
+            """
+            SELECT COUNT(*) FROM documents d
+            WHERE d.chunk_signature IS NULL
+              AND EXISTS(SELECT 1 FROM chunks c WHERE c.doc_id = d.id)
+            """
+        ).fetchone()[0]
+        if unsigned_chunks:
+            findings.append(
+                Finding(
+                    "documents.unsigned_chunks",
+                    "Tokenized documents have no chunk pipeline signature",
+                    int(unsigned_chunks),
+                )
+            )
+
     context_columns = _columns(conn, "chunk_contexts")
     if "pipeline_signature" not in context_columns:
         findings.append(
