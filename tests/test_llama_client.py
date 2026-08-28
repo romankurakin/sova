@@ -319,6 +319,64 @@ def test_embedding_token_budget_uses_dynamic_margin():
         assert _embedding_token_budget() == 4096
 
 
+def test_token_counts_batch_splits_one_server_response(monkeypatch):
+    from sova import llama_client
+
+    tokenized = {
+        "<|endoftext|>": [99],
+        "hello<|endoftext|>привет<|endoftext|>": [1, 99, 2, 3, 99],
+    }
+    calls: list[str] = []
+
+    def tokenize(text: str) -> list[int]:
+        calls.append(text)
+        return tokenized[text]
+
+    llama_client._TOKENIZE_SEPARATOR_IDS.clear()
+    monkeypatch.setattr(llama_client, "_token_ids_via_server", tokenize)
+
+    assert llama_client.get_token_counts_batch(["hello", "привет", ""]) == [1, 2, 0]
+    assert calls == [
+        "<|endoftext|>",
+        "hello<|endoftext|>привет<|endoftext|>",
+    ]
+
+
+def test_token_counts_batch_bounds_request_size(monkeypatch):
+    from sova import llama_client
+
+    groups: list[list[str]] = []
+    monkeypatch.setattr(llama_client, "_EMBED_TOKENIZE_BATCH_CHARS", 8)
+    monkeypatch.setattr(
+        llama_client,
+        "_token_counts_group",
+        lambda texts: groups.append(list(texts)) or [len(text) for text in texts],
+    )
+
+    assert llama_client.get_token_counts_batch(["aaaa", "bbbb", "cc"]) == [4, 4, 2]
+    assert groups == [["aaaa"], ["bbbb"], ["cc"]]
+
+
+def test_token_count_request_disables_bos_and_parses_batch_markers(monkeypatch):
+    from sova import llama_client
+
+    captured: dict = {}
+
+    def post(_url, payload, timeout):
+        captured.update(payload)
+        assert timeout == llama_client._EMBED_TOKENIZE_TIMEOUT_S
+        return {"tokens": [1, 2]}
+
+    monkeypatch.setattr(llama_client, "_post_json", post)
+
+    assert llama_client._token_count_via_server("hello") == 2
+    assert captured == {
+        "content": "hello",
+        "add_special": False,
+        "parse_special": True,
+    }
+
+
 class TestGetEmbeddingsBatch:
     def test_returns_list_of_embeddings(self):
         from sova.llama_client import get_embeddings_batch
@@ -600,6 +658,25 @@ class TestGenerateContext:
             prompt = captured["body"]["messages"][1]["content"]
             assert "prev text" in prompt
             assert "next text" in prompt
+
+    def test_target_passage_is_not_truncated(self):
+        from sova.llama_client import generate_context
+
+        captured = {}
+        target = "start " + ("content " * 300) + "TARGET_END_SENTINEL"
+
+        with patch(
+            "sova.llama_client.urllib.request.urlopen",
+            side_effect=self._mock_with_health(
+                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                captured,
+            ),
+        ):
+            generate_context("doc1", "Chapter > Section", target)
+
+        prompt = captured["body"]["messages"][1]["content"]
+        assert "TARGET_END_SENTINEL" in prompt
+        assert "Chapter > Section" in prompt
 
     def test_empty_surrounding_uses_placeholders(self):
         from sova.llama_client import generate_context

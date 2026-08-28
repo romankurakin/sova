@@ -34,7 +34,8 @@ def _database() -> sqlite3.Connection:
         );
         CREATE TABLE chunks (
             id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL, section_id INTEGER,
-            text TEXT NOT NULL, embedding BLOB, embedding_signature TEXT,
+            section_path TEXT NOT NULL, text TEXT NOT NULL,
+            search_text TEXT NOT NULL, embedding BLOB, embedding_signature TEXT,
             FOREIGN KEY (doc_id) REFERENCES documents(id)
         );
         CREATE TABLE chunk_contexts (
@@ -47,7 +48,7 @@ def _database() -> sqlite3.Connection:
             created_at REAL, model TEXT, candidate_count INTEGER
         );
         CREATE TABLE index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-        CREATE VIRTUAL TABLE chunks_fts USING fts5(text);
+        CREATE VIRTUAL TABLE chunks_fts USING fts5(search_text);
         INSERT INTO index_meta VALUES
             ('pipeline.context.signature', 'context-v1'),
             ('pipeline.embedding.signature', 'embed-v1'),
@@ -57,14 +58,16 @@ def _database() -> sqlite3.Connection:
         """
     )
     conn.execute(
-        "INSERT INTO chunks VALUES (1, 1, 1, 'text', ?, 'embed-v1')",
+        "INSERT INTO chunks VALUES (1, 1, 1, 'Section', 'text', 'Context. text', ?, 'embed-v1')",
         (bytes(config.EMBEDDING_DIM * 4),),
     )
     conn.execute(
         "INSERT INTO chunk_contexts VALUES (1, 'Context.', ?, 'context-v1')",
         (config.CONTEXT_MODEL,),
     )
-    conn.execute("INSERT INTO chunks_fts(rowid, text) VALUES (1, 'text')")
+    conn.execute(
+        "INSERT INTO chunks_fts(rowid, search_text) VALUES (1, 'Context. text')"
+    )
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
     return conn
@@ -188,6 +191,8 @@ def test_schema_migration_adds_pipeline_provenance_idempotently():
     }
     document_columns = {row[1] for row in conn.execute("PRAGMA table_info(documents)")}
     assert "embedding_signature" in chunk_columns
+    assert "section_path" in chunk_columns
+    assert "search_text" in chunk_columns
     assert "pipeline_signature" in context_columns
     assert "source_signature" in document_columns
     assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION

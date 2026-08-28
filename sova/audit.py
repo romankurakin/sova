@@ -36,6 +36,8 @@ _REQUIRED_COLUMNS = {
         "id",
         "doc_id",
         "section_id",
+        "section_path",
+        "search_text",
         "text",
         "embedding",
     },
@@ -48,7 +50,7 @@ _REQUIRED_COLUMNS = {
         "candidate_count",
     },
     "index_meta": {"key", "value"},
-    "chunks_fts": {"text"},
+    "chunks_fts": {"search_text"},
 }
 
 
@@ -313,7 +315,7 @@ def audit_database(
                 )
             sample_mismatches = 0
             for chunk_id, text in conn.execute(
-                "SELECT id, text FROM chunks ORDER BY id LIMIT 32"
+                "SELECT id, search_text FROM chunks ORDER BY id LIMIT 32"
             ).fetchall():
                 terms = re.findall(r"[^\W_]{2,}", str(text), flags=re.UNICODE)
                 if not terms:

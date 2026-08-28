@@ -1,5 +1,6 @@
 """Tests for extract module."""
 
+import re
 import tempfile
 import types
 from pathlib import Path
@@ -8,12 +9,26 @@ from unittest.mock import patch
 import pytest
 
 from sova.extract import (
-    chunk_text,
+    chunk_text as _chunk_text,
+)
+from sova.extract import (
     extract_pdf,
     find_docs,
     find_section,
     parse_sections,
 )
+
+
+def _token_counts(texts: list[str]) -> list[int]:
+    return [len(re.findall(r"\w+|[^\w\s]", text)) for text in texts]
+
+
+def chunk_text(lines: list[str], target_tokens: int = 768) -> list[dict]:
+    return _chunk_text(
+        lines,
+        target_tokens=target_tokens,
+        count_tokens_batch=_token_counts,
+    )
 
 
 @pytest.mark.filterwarnings(
@@ -74,6 +89,14 @@ class TestParseSections:
         sections = parse_sections(lines)
         assert [s["level"] for s in sections] == [1, 2, 3, 4, 5, 6]
 
+    def test_optional_closing_hashes_are_supported(self):
+        sections = parse_sections(["## Release notes ##", "content"])
+        assert sections[0]["title"] == "Release notes"
+
+    def test_hash_inside_a_real_title_is_supported(self):
+        sections = parse_sections(["# C# Language Guide", "content"])
+        assert sections[0]["title"] == "C# Language Guide"
+
     def test_no_headers(self):
         lines = ["Just some text", "More text", "No headers here"]
         assert parse_sections(lines) == []
@@ -91,9 +114,9 @@ class TestChunkText:
 
     def test_small_text(self):
         lines = ["Short text"] * 5
-        # Too few words, should return empty.
         chunks = chunk_text(lines)
-        assert chunks == []
+        assert len(chunks) == 1
+        assert chunks[0]["text"].count("Short text") == 5
 
     def test_single_chunk(self):
         lines = ["Word " * 100] * 2  # ~200 words.
@@ -114,12 +137,122 @@ class TestChunkText:
             assert chunk["word_count"] > 0
             assert "text" in chunk
 
-    def test_respects_target_words(self):
+    def test_respects_target_tokens(self):
         # Chunks split at blank lines, so include them.
         lines = (["Word " * 100] * 5 + [""]) * 4  # 2000 words with breaks.
-        chunks = chunk_text(lines, target_words=500)
+        chunks = chunk_text(lines, target_tokens=500)
         # Should create multiple chunks at blank line boundaries.
         assert len(chunks) >= 2
+
+    def test_indivisible_long_line_does_not_pull_following_lines_over_budget(self):
+        lines = ["x" * 100, "short line"]
+
+        chunks = _chunk_text(
+            lines,
+            target_tokens=20,
+            count_tokens_batch=lambda texts: [len(text) for text in texts],
+        )
+
+        assert [(chunk["start_line"], chunk["end_line"]) for chunk in chunks] == [
+            (1, 1),
+            (2, 2),
+        ]
+
+    def test_heading_starts_its_own_structural_chunk(self):
+        lines = [
+            "Tail of the previous section.",
+            "",
+            "## Medium any code model",
+            "The medany model addresses data relative to the program counter.",
+        ]
+        chunks = chunk_text(lines, target_tokens=10_000)
+        assert len(chunks) == 2
+        assert chunks[0]["text"] == "Tail of the previous section."
+        assert chunks[1]["text"].startswith("## Medium any code model")
+
+    def test_deep_field_labels_are_soft_boundaries(self):
+        lines = [
+            "##### Instruction",
+            "intro",
+            "###### Purpose",
+            "purpose text",
+            "###### Attributes",
+            "attribute text",
+        ]
+
+        chunks = chunk_text(lines, target_tokens=10_000)
+
+        assert len(chunks) == 1
+        assert "###### Purpose" in chunks[0]["text"]
+        assert "###### Attributes" in chunks[0]["text"]
+
+    def test_heading_is_not_orphaned_from_a_large_first_paragraph(self):
+        lines = ["## Large section", "", "detail " * 100]
+        chunks = chunk_text(lines, target_tokens=20)
+        assert len(chunks) == 1
+        assert chunks[0]["text"].startswith("## Large section\n\n")
+
+    def test_outline_only_parent_is_carried_by_child_path_not_indexed(self):
+        lines = ["# Parent", "", "## Child", "", "Useful child content."]
+        chunks = chunk_text(lines)
+        assert len(chunks) == 1
+        assert chunks[0]["text"].startswith("## Child")
+        sections = parse_sections(lines)
+        child = find_section(sections, chunks[0]["start_line"])
+        assert child is not None
+        assert sections[child]["path"] == "Parent > Child"
+
+    def test_assembler_comments_are_not_headings(self):
+        lines = [
+            "# Smallest negative number: lui a0, 0x80000 # a0 = 0xffffffff80000000 addi a0, a0, -0x800",
+            "",
+            "#### **5.2. Medium any code model**",
+            "The medium any code model uses PC-relative addressing.",
+            "# Calculate address .Ltmp2: auipc a0, %pcrel_hi(symbol) addi a0, a0, %pcrel_lo(.Ltmp2)",
+        ]
+        sections = parse_sections(lines)
+        assert [section["title"] for section in sections] == [
+            "5.2. Medium any code model"
+        ]
+        chunks = chunk_text(lines, target_tokens=10_000)
+        assert len(chunks) == 2
+        assert "Smallest negative" in chunks[0]["text"]
+        assert "Calculate address" in chunks[1]["text"]
+
+    def test_fenced_code_headings_are_not_sections(self):
+        lines = ["# API", "```asm", "# comment", "```", "## Details", "text"]
+        sections = parse_sections(lines)
+        assert [section["title"] for section in sections] == ["API", "Details"]
+
+    def test_decorative_parser_icons_are_not_sections(self):
+        lines = ["# Chapter", "# ", "## **Attributes**", "text"]
+        sections = parse_sections(lines)
+        assert [section["path"] for section in sections] == [
+            "Chapter",
+            "Chapter > Attributes",
+        ]
+
+    def test_section_paths_follow_heading_hierarchy(self):
+        lines = ["# Chapter", "## Section", "### Detail", "## Sibling"]
+        sections = parse_sections(lines)
+        assert [section["path"] for section in sections] == [
+            "Chapter",
+            "Chapter > Section",
+            "Chapter > Section > Detail",
+            "Chapter > Sibling",
+        ]
+
+    def test_uses_the_injected_token_counter(self):
+        calls: list[list[str]] = []
+
+        def counter(texts: list[str]) -> list[int]:
+            calls.append(texts)
+            return [len(text) for text in texts]
+
+        chunks = _chunk_text(["hello"], count_tokens_batch=counter)
+
+        assert chunks[0]["text"] == "hello"
+        assert calls
 
 
 class TestFindSection:

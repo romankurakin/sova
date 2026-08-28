@@ -29,7 +29,10 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
 
     def generate_context(_doc, _section, text, _previous, _next):
         context_calls.append(text)
-        return "Account access requires verified identity and recorded approval."
+        return (
+            "Account access requires verified identity, recorded approval, "
+            "and the retrieval-only provenance sentinel."
+        )
 
     monkeypatch.setattr(cli, "generate_context", generate_context)
 
@@ -44,6 +47,11 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
         return vectors
 
     monkeypatch.setattr(cli, "get_embeddings_batch", embed)
+    monkeypatch.setattr(
+        cli,
+        "get_token_counts_batch",
+        lambda texts: [len(text.split()) for text in texts],
+    )
 
     monkeypatch.setattr(sys, "argv", ["sova", "--json", "index", str(docs)])
     cli.main()
@@ -60,14 +68,25 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
     conn = cli.sqlite3.connect(project.db_path)
     row = conn.execute(
         """
-        SELECT cc.pipeline_signature, c.embedding_signature
+        SELECT cc.pipeline_signature, c.embedding_signature, c.section_path,
+               c.text, c.search_text
         FROM chunk_contexts cc JOIN chunks c ON c.id = cc.chunk_id
         """
     ).fetchone()
-    assert row == (
+    assert row[0:3] == (
         cli._context_pipeline_signature(),
         cli._embedding_pipeline_signature(),
+        "Account access",
     )
+    assert "retrieval-only provenance sentinel" not in row[3]
+    assert "retrieval-only provenance sentinel" in row[4]
+    fts_hit = conn.execute(
+        """
+        SELECT rowid FROM chunks_fts
+        WHERE chunks_fts MATCH '"retrieval" "provenance" "sentinel"'
+        """
+    ).fetchone()
+    assert fts_hit is not None
     conn.close()
 
     monkeypatch.setattr(sys, "argv", ["sova", "--json", "index", "documents"])

@@ -29,12 +29,14 @@ from sova.db import (
     set_meta,
 )
 from sova.extract import (
+    add_section_paths,
     chunk_text,
     extract_pdf,
     find_docs,
     find_section,
     parse_sections,
 )
+from sova.index_text import contextualized_text
 from sova.llama_client import (
     CONTEXT_SYSTEM_PROMPT,
     CONTEXT_USER_PROMPT,
@@ -45,6 +47,7 @@ from sova.llama_client import (
     get_model_status,
     get_query_embedding,
     get_service_diagnostics,
+    get_token_counts_batch,
     is_model_cached,
     is_service_installed,
     is_service_running,
@@ -106,7 +109,7 @@ _EMBED_WINDOW_CHUNKS = 256
 _EMBED_RECYCLE_CHUNKS = 1800
 _EMBED_RECYCLE_PAUSE_S = 2.0
 _EMBED_RECYCLE_CANARY_REQUESTS = 4
-_EMBED_PREFIX_VERSION = "chunk-prefix.v1"
+_EMBED_PREFIX_VERSION = "chunk-prefix.v2"
 _CONTEXT_RETRY_ATTEMPTS = 2
 _CONTEXT_RECYCLE_PAUSE_S = 2.0
 _RUNTIME_REFRESH_S = 20.0
@@ -123,6 +126,13 @@ class _IndexSignatureState:
     context_sig: str
     embed_sig: str
     chunk_sig: str
+
+
+@dataclass(frozen=True)
+class _PreparedSource:
+    name: str
+    markdown_path: Path
+    source_signature: str
 
 
 def _preview(text: str, max_chars: int = 48) -> str:
@@ -318,13 +328,13 @@ def _make_runtime_reporter(
     return tick
 
 
-def _prepare_doc(
+def _prepare_source(
     name: str,
     pdf_path: Path | None,
     md_path: Path | None,
     conn: sqlite3.Connection,
-) -> tuple[int, list[dict], list[dict]] | None:
-    """Extract, chunk, and store a document.  Returns (doc_id, chunks, sections) or None."""
+) -> _PreparedSource | None:
+    """Extract one source while model services remain fully unloaded."""
     status("Preparing", phase="prepare", item=name)
 
     source_path = pdf_path or md_path
@@ -380,12 +390,27 @@ def _prepare_doc(
             return None
 
     assert md_path is not None and md_path.exists()
+    return _PreparedSource(name, md_path, source_signature)
+
+
+def _tokenize_doc(
+    source: _PreparedSource,
+    conn: sqlite3.Connection,
+) -> tuple[int, list[dict], list[dict]]:
+    """Create exact model-token chunks and synchronize their durable rows."""
+    name = source.name
+    md_path = source.markdown_path
+    source_signature = source.source_signature
+    status("Tokenizing", phase="tokenize", item=name)
+    document_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(documents)")
+    }
 
     text = md_path.read_text(encoding="utf-8")
     lines = text.split("\n")
 
     sections = parse_sections(lines)
-    chunks = chunk_text(lines)
+    chunks = chunk_text(lines, count_tokens_batch=get_token_counts_batch)
 
     row = conn.execute("SELECT id FROM documents WHERE name = ?", (name,)).fetchone()
     if row:
@@ -499,19 +524,30 @@ def _prepare_doc(
 
     existing_rows = conn.execute(
         """
-        SELECT id, start_line, end_line, word_count, text, section_id, is_index
+        SELECT id, start_line, end_line, word_count, text, section_id,
+               section_path, search_text, is_index
         FROM chunks
         WHERE doc_id = ?
         ORDER BY id
         """,
         (doc_id,),
     ).fetchall()
-    existing_by_start: dict[int, tuple[int, int, int, str, int | None, int]] = {}
+    existing_by_start: dict[
+        int, tuple[int, int, int, str, int | None, str, str, int]
+    ] = {}
     duplicate_ids: list[int] = []
     for row_data in existing_rows:
-        chunk_id, start_line, end_line, word_count, text_value, section_id, is_idx = (
-            row_data
-        )
+        (
+            chunk_id,
+            start_line,
+            end_line,
+            word_count,
+            text_value,
+            section_id,
+            section_path,
+            search_text,
+            is_idx,
+        ) = row_data
         if start_line in existing_by_start:
             duplicate_ids.append(chunk_id)
             continue
@@ -521,6 +557,8 @@ def _prepare_doc(
             word_count,
             text_value,
             section_id,
+            str(section_path),
+            str(search_text),
             is_idx,
         )
 
@@ -534,48 +572,66 @@ def _prepare_doc(
         sec_idx = find_section(sections, start_line)
         sec_line = sections[sec_idx]["start_line"] if sec_idx is not None else None
         sec_id = section_ids.get(sec_line)
+        sec_path = str(sections[sec_idx]["path"]) if sec_idx is not None else ""
         is_idx = 1 if is_index_like(chunk["text"]) else 0
+        base_search_text = contextualized_text(name, sec_path, chunk["text"])
 
         existing = existing_by_start.get(start_line)
         if existing is None:
             conn.execute(
                 """
-                INSERT INTO chunks (doc_id, section_id, start_line, end_line, word_count, text, is_index)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO chunks
+                    (doc_id, section_id, section_path, start_line, end_line,
+                     word_count, text, search_text, is_index)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     doc_id,
                     sec_id,
+                    sec_path,
                     start_line,
                     chunk["end_line"],
                     chunk["word_count"],
                     chunk["text"],
+                    base_search_text,
                     is_idx,
                 ),
             )
             continue
 
-        chunk_id, end_line, word_count, text_value, old_section_id, old_is_idx = (
-            existing
-        )
+        (
+            chunk_id,
+            end_line,
+            word_count,
+            text_value,
+            old_section_id,
+            old_section_path,
+            _old_search_text,
+            old_is_idx,
+        ) = existing
         content_changed = (
             end_line != chunk["end_line"]
             or word_count != chunk["word_count"]
             or text_value != chunk["text"]
             or old_is_idx != is_idx
         )
-        if content_changed:
+        retrieval_changed = content_changed or old_section_path != sec_path
+        if retrieval_changed:
             conn.execute(
                 """
                 UPDATE chunks
-                SET section_id = ?, end_line = ?, word_count = ?, text = ?, is_index = ?, embedding = NULL
+                SET section_id = ?, section_path = ?, end_line = ?, word_count = ?,
+                    text = ?, search_text = ?, is_index = ?, embedding = NULL,
+                    embedding_signature = NULL
                 WHERE id = ?
                 """,
                 (
                     sec_id,
+                    sec_path,
                     chunk["end_line"],
                     chunk["word_count"],
                     chunk["text"],
+                    base_search_text,
                     is_idx,
                     chunk_id,
                 ),
@@ -649,7 +705,7 @@ def _load_prepared_doc(
             (doc_id,),
         ).fetchall()
     ]
-    return chunks, sections
+    return chunks, add_section_paths(sections)
 
 
 def _signature(parts: list[str]) -> str:
@@ -665,7 +721,7 @@ def _context_pipeline_signature() -> str:
             config.CONTEXT_MODEL_HF_FILE,
             CONTEXT_SYSTEM_PROMPT,
             CONTEXT_USER_PROMPT,
-            "input-clipping:previous=500,target=1000,next=500",
+            "input:previous-tail=500,target=full,next-head=500,section=breadcrumb",
             "response:json-schema,max_tokens=192,temperature=0,reasoning=low",
             "validation:sentence.v2",
         ]
@@ -684,7 +740,13 @@ def _embedding_pipeline_signature() -> str:
 
 
 def _chunk_pipeline_signature() -> str:
-    return _signature([str(config.CHUNK_SIZE), "chunk-text.v1"])
+    return _signature(
+        [
+            str(config.CHUNK_TARGET_TOKENS),
+            config.EMBEDDING_MODEL,
+            "structure-token-chunks.v4",
+        ]
+    )
 
 
 def _sync_index_signatures(conn: sqlite3.Connection) -> _IndexSignatureState:
@@ -850,7 +912,7 @@ def _generate_contexts(
         emit_progress = _make_progress_reporter("context", absolute_total, item=name)
         for done, (i, chunk, chunk_id) in enumerate(chunks_needing_context, start=1):
             sec_idx = find_section(sections, chunk["start_line"])
-            sec_title = sections[sec_idx]["title"] if sec_idx is not None else None
+            sec_title = sections[sec_idx]["path"] if sec_idx is not None else None
             prev_text = chunks[i - 1]["text"] if i > 0 else ""
             next_text = chunks[i + 1]["text"] if i + 1 < len(chunks) else ""
 
@@ -896,7 +958,19 @@ def _generate_contexts(
                     """,
                     (chunk_id, ctx, config.CONTEXT_MODEL),
                 )
-            if "embedding_signature" in chunk_columns:
+            search_text = contextualized_text(
+                name, sec_title, chunk["text"], context=ctx
+            )
+            if {"embedding_signature", "search_text"} <= chunk_columns:
+                conn.execute(
+                    """
+                    UPDATE chunks
+                    SET search_text = ?, embedding = NULL, embedding_signature = NULL
+                    WHERE id = ?
+                    """,
+                    (search_text, chunk_id),
+                )
+            elif "embedding_signature" in chunk_columns:
                 conn.execute(
                     """
                     UPDATE chunks
@@ -992,17 +1066,11 @@ def _embed_doc(
 
             for i, chunk, chunk_id in window:
                 sec_idx = find_section(sections, chunk["start_line"])
-                sec_title = sections[sec_idx]["title"] if sec_idx is not None else None
-                prefix = f"[{name}"
-                if sec_title:
-                    prefix += f" | {sec_title}"
-                prefix += "]\n\n"
-
+                sec_title = sections[sec_idx]["path"] if sec_idx is not None else None
                 llm_ctx = context_map.get(chunk_id)
-                if llm_ctx and llm_ctx.strip():
-                    prefix += llm_ctx.strip() + "\n\n"
-
-                window_texts.append(prefix + chunk["text"])
+                window_texts.append(
+                    contextualized_text(name, sec_title, chunk["text"], context=llm_ctx)
+                )
                 window_chunk_ids.append(chunk_id)
 
             remaining_texts = list(window_texts)
@@ -1483,6 +1551,7 @@ def _run_index_mode() -> None:
     start_time = time.time()
     interrupted = False
     failed = False
+    sources: list[_PreparedSource] = []
     prepared: list[tuple[str, int]] = []
 
     project_id = config.get_active_project_id() or "project"
@@ -1502,19 +1571,56 @@ def _run_index_mode() -> None:
         try:
             for doc_index, doc in enumerate(docs, start=1):
                 report_scope(doc_index, len(docs))
-                result = _prepare_doc(doc["name"], doc["pdf"], doc["md"], conn)
-                if result is None:
+                source = _prepare_source(doc["name"], doc["pdf"], doc["md"], conn)
+                if source is None:
                     failed = True
                     break
-                doc_id, _chunks, _sections = result
-                prepared.append((doc["name"], doc_id))
-                del result, _chunks, _sections
+                sources.append(source)
         except KeyboardInterrupt:
             interrupted = True
             emit("interrupting", "Saving prepared documents")
-        except (OSError, RuntimeError, sqlite3.Error) as e:
+        except (OSError, RuntimeError, sqlite3.Error, ValueError) as e:
             failed = True
             _report_error(e)
+
+        # Exact chunk boundaries use the tokenizer embedded in the real GGUF.
+        # This dedicated phase starts only after OCR and releases the embedding
+        # model before the larger context model is admitted.
+        if not interrupted and not failed:
+            report_scope(None, None)
+            status("Loading model", phase="tokenize")
+            ok, msg = check_servers(
+                on_status=lambda message: status(
+                    message.replace(":", "", 1), phase="tokenize"
+                ),
+                mode="index_embed",
+            )
+            if not ok:
+                failed = True
+                _report_error(RuntimeError(msg))
+                _report_relevant_service_diags(RuntimeError(msg), mode="index_embed")
+            else:
+                status(msg, phase="tokenize")
+                tokenize_runtime_tick = _make_runtime_reporter(
+                    "index.tokenize", "embedding", mode="index"
+                )
+                tokenize_runtime_tick(True)
+                try:
+                    for doc_index, source in enumerate(sources, start=1):
+                        report_scope(doc_index, len(sources))
+                        doc_id, chunks, sections = _tokenize_doc(source, conn)
+                        prepared.append((source.name, doc_id))
+                        del chunks, sections
+                        tokenize_runtime_tick(False)
+                except KeyboardInterrupt:
+                    interrupted = True
+                    emit("interrupting", "Saving tokenized documents")
+                except (OSError, RuntimeError, sqlite3.Error, ValueError) as e:
+                    failed = True
+                    _report_error(e)
+                    _report_relevant_service_diags(e, mode="index_embed")
+                finally:
+                    stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)
 
         # Context is generated only after every source is fully prepared. The
         # model is loaded once for the whole project and unloaded before embed.

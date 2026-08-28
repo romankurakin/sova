@@ -6,7 +6,76 @@ import struct
 import pytest
 
 from sova.config import EMBEDDING_DIM
-from sova.db import embedding_to_blob, get_doc_status, get_meta, set_meta
+from sova.db import embedding_to_blob, get_doc_status, get_meta, init_db, set_meta
+
+
+def test_init_db_migrates_raw_fts_to_contextual_search_text(monkeypatch, tmp_path):
+    from sova import config
+
+    db_path = tmp_path / "indexed.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, path TEXT NOT NULL,
+            line_count INTEGER, expected_chunks INTEGER, source_signature TEXT
+        );
+        CREATE TABLE sections (
+            id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL, title TEXT NOT NULL,
+            level INTEGER NOT NULL, start_line INTEGER NOT NULL, end_line INTEGER
+        );
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL, section_id INTEGER,
+            start_line INTEGER NOT NULL, end_line INTEGER NOT NULL,
+            word_count INTEGER NOT NULL, text TEXT NOT NULL, embedding BLOB,
+            embedding_signature TEXT, is_index INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE chunk_contexts (
+            chunk_id INTEGER PRIMARY KEY, context TEXT NOT NULL, model TEXT NOT NULL,
+            pipeline_signature TEXT NOT NULL DEFAULT ''
+        );
+        CREATE TABLE query_cache (
+            id INTEGER PRIMARY KEY, embedding BLOB NOT NULL,
+            vector_results BLOB NOT NULL, created_at REAL NOT NULL,
+            model TEXT NOT NULL, candidate_count INTEGER NOT NULL
+        );
+        CREATE TABLE index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE VIRTUAL TABLE chunks_fts USING fts5(
+            text, content='chunks', content_rowid='id', tokenize='porter unicode61'
+        );
+        INSERT INTO documents VALUES (1, 'manual', '/tmp/manual.md', 1, 1, 'sig');
+        INSERT INTO chunks
+            (id, doc_id, start_line, end_line, word_count, text)
+        VALUES (1, 1, 1, 1, 2, 'raw source');
+        INSERT INTO chunks_fts(rowid, text) VALUES (1, 'raw source');
+        PRAGMA user_version = 3;
+        """
+    )
+    conn.close()
+
+    monkeypatch.setattr(config, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(config, "get_db_path", lambda: db_path)
+    migrated = init_db()
+
+    chunk_columns = {
+        row[1] for row in migrated.execute("PRAGMA table_info(chunks)").fetchall()
+    }
+    fts_columns = {
+        row[1] for row in migrated.execute("PRAGMA table_info(chunks_fts)").fetchall()
+    }
+    assert {"section_path", "search_text"} <= chunk_columns
+    assert "search_text" in fts_columns
+    assert migrated.execute(
+        "SELECT rowid FROM chunks_fts WHERE chunks_fts MATCH 'raw'"
+    ).fetchone() == (1,)
+
+    migrated.execute(
+        "UPDATE chunks SET search_text = 'context-only sentinel raw source' WHERE id = 1"
+    )
+    assert migrated.execute(
+        "SELECT rowid FROM chunks_fts WHERE chunks_fts MATCH 'sentinel'"
+    ).fetchone() == (1,)
+    migrated.close()
 
 
 class TestGetDocStatus:

@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from sova import config
 from sova.config import EMBEDDING_DIM, VECTOR_EXT
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def _check_schema_version(conn: sqlite3.Connection) -> int:
@@ -32,6 +32,16 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         chunks_columns = _column_names(conn, "chunks")
         if "embedding_signature" not in chunks_columns:
             conn.execute("ALTER TABLE chunks ADD COLUMN embedding_signature TEXT")
+        if "section_path" not in chunks_columns:
+            conn.execute(
+                "ALTER TABLE chunks ADD COLUMN section_path TEXT NOT NULL DEFAULT ''"
+            )
+        if "search_text" not in chunks_columns:
+            conn.execute(
+                "ALTER TABLE chunks ADD COLUMN search_text TEXT NOT NULL DEFAULT ''"
+            )
+            if "text" in chunks_columns:
+                conn.execute("UPDATE chunks SET search_text = text")
 
         context_columns = _column_names(conn, "chunk_contexts")
         if "pipeline_signature" not in context_columns:
@@ -75,6 +85,8 @@ def init_db() -> sqlite3.Connection:
             start_line INTEGER NOT NULL, end_line INTEGER NOT NULL,
             word_count INTEGER NOT NULL, text TEXT NOT NULL, embedding BLOB,
             embedding_signature TEXT,
+            section_path TEXT NOT NULL DEFAULT '',
+            search_text TEXT NOT NULL DEFAULT '',
             is_index INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
         );
@@ -104,31 +116,52 @@ def init_db() -> sqlite3.Connection:
     """)
     _migrate_schema(conn)
 
+    fts_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chunks_fts'"
+    ).fetchone()
+    rebuild_fts = not bool(fts_exists)
+    recreate_fts = bool(
+        fts_exists and "search_text" not in _column_names(conn, "chunks_fts")
+    )
+    if recreate_fts:
+        rebuild_fts = True
+        conn.executescript("""
+            DROP TRIGGER IF EXISTS chunks_ai;
+            DROP TRIGGER IF EXISTS chunks_ad;
+            DROP TRIGGER IF EXISTS chunks_au;
+            DROP TABLE chunks_fts;
+        """)
+
     conn.executescript("""
         CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-            text,
+            search_text,
             content='chunks',
             content_rowid='id',
             tokenize='porter unicode61'
         );
 
-        CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
-            INSERT INTO chunks_fts(rowid, text) VALUES (new.id, new.text);
-        END;
-        CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
-            INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES('delete', old.id, old.text);
-        END;
+        DROP TRIGGER IF EXISTS chunks_ai;
+        DROP TRIGGER IF EXISTS chunks_ad;
         DROP TRIGGER IF EXISTS chunks_au;
-        CREATE TRIGGER chunks_au AFTER UPDATE OF text ON chunks BEGIN
-            INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES('delete', old.id, old.text);
-            INSERT INTO chunks_fts(rowid, text) VALUES (new.id, new.text);
+        CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
+            INSERT INTO chunks_fts(rowid, search_text) VALUES (new.id, new.search_text);
+        END;
+        CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid, search_text)
+            VALUES('delete', old.id, old.search_text);
+        END;
+        CREATE TRIGGER chunks_au AFTER UPDATE OF search_text ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid, search_text)
+            VALUES('delete', old.id, old.search_text);
+            INSERT INTO chunks_fts(rowid, search_text)
+            VALUES (new.id, new.search_text);
         END;
     """)
 
     # Rebuild if a crash or older schema left the external-content index out of sync.
     fts_count = conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]
     chunk_count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    if fts_count != chunk_count:
+    if rebuild_fts or fts_count != chunk_count:
         conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
         conn.commit()
 

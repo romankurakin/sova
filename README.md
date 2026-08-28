@@ -17,32 +17,44 @@ Services start on demand — no memory used until you run a search or index.
 
 ```mermaid
 flowchart LR
-    A["documents"] --> B["chunking"]
+    A["documents"] --> X["extraction"]
+    X --> B["exact tokenization + chunking"]
     B --> C["context generation"]
     C --> D["embedding"]
     D --> E["vector store"]
     B --> F["FTS index"]
 ```
 
-PDFs are converted to Markdown, split into chunks, then indexed into two
-retrieval artifacts: a vector store and an FTS index.
+PDFs are converted to Markdown, split into structure-aware chunks, then indexed
+into two retrieval artifacts: a vector store and an FTS index. Headings are hard
+boundaries through level five; deepest field labels remain in the text but may
+coalesce into one chunk. Paragraph groups target an exact embedding-model token
+budget, and each
+chunk retains its full heading path. Code fences and code-like `#` comments are
+not treated as document headings. An individual source line is never broken, so
+a pathological generated table row may exceed the 768-token target while still
+remaining below the embedding model's safe input limit.
 
 Indexing is deliberately sequential on unified-memory machines: Sova unloads
 both models while it prepares every source (including layout analysis and OCR),
-loads the context model once for the context phase, releases it, then loads the
-embedding model. The source PDFs are read-only.
+briefly loads the embedding model to form exact tokenizer-aligned chunks, and
+releases it. It then runs context generation and embedding as separate model
+phases, unloading each model before the next. The source PDFs are read-only.
 
 **Context generation** — at index time, a local LLM
-(`qwen3.8-27b`) generates a one-sentence summary situating
-each chunk within its document and section. This context is prepended to the
-chunk text before embedding, so vectors capture meaning beyond the raw text [1].
-Format: `[doc | section]\n\n{chunk_context}\n\n{chunk_text}`.
+(`qwen3.8-27b`) reads the complete target chunk and generates a one-sentence
+summary situating it within the document and full heading path. This context is
+prepended to the chunk text for both dense and lexical indexing, while the
+stored source text remains unchanged [1]. Format:
+`[doc | heading > path]\n\n{chunk_context}\n\n{chunk_text}`.
 
 **Embedding + vector store** — contextualized chunk text is embedded with
 `qwen3-embedding-4b` and stored for semantic retrieval.
 
-**FTS index** — BM25 full-text retrieval catches exact terms that vectors can
-miss. Porter stemming handles plurals and verb forms.
+**Contextual FTS index** — BM25 indexes the same document name, heading path,
+generated context, and source chunk used by dense retrieval. It catches exact
+terms and disambiguating document context that vectors can miss. Porter
+stemming handles plurals and verb forms.
 
 ```mermaid
 flowchart LR

@@ -5,6 +5,7 @@ import importlib
 import re
 import sys
 import warnings
+from collections.abc import Callable
 from pathlib import Path
 from typing import TextIO
 
@@ -79,67 +80,432 @@ def extract_pdf(pdf_path: Path) -> str:
     )
 
 
+_HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)\s*$")
+_FENCE_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
+
+
+def _heading(line: str, *, in_fence: bool) -> tuple[int, str] | None:
+    """Return a trustworthy Markdown heading, excluding code-like comments."""
+    if in_fence:
+        return None
+    match = _HEADING_RE.match(line)
+    if not match:
+        return None
+
+    raw_title = re.sub(r"\s+#+\s*$", "", match.group(2)).strip()
+    # PDF conversion can leave assembler/shell comments at column zero. Such.
+    # lines often contain another comment marker, inline markup, or dense code.
+    # punctuation. Treating them as headings corrupts both boundaries and paths.
+    if re.search(r"\s#\s", raw_title) or "<u>" in raw_title.lower():
+        return None
+    code_punctuation = sum(raw_title.count(char) for char in "%={}[]()")
+    if code_punctuation >= 3 and len(raw_title) >= 80:
+        return None
+
+    title = raw_title
+    for marker in ("**", "__", "*", "_", "`"):
+        if title.startswith(marker) and title.endswith(marker):
+            title = title[len(marker) : -len(marker)].strip()
+            break
+    title = " ".join(title.split())
+    if not title or not any(char.isalnum() for char in title):
+        return None
+    return len(match.group(1)), title[:200]
+
+
+def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
+    """Return ``(line, level, title)`` headings outside fenced code."""
+    headings: list[tuple[int, int, str]] = []
+    fence: str | None = None
+    for i, line in enumerate(lines, start=1):
+        fence_match = _FENCE_RE.match(line)
+        if fence_match:
+            marker = fence_match.group(1)
+            marker_char = marker[0]
+            if fence is None:
+                fence = marker_char
+            elif fence == marker_char:
+                fence = None
+            continue
+        parsed = _heading(line, in_fence=fence is not None)
+        if parsed is not None:
+            level, title = parsed
+            headings.append((i, level, title))
+    return headings
+
+
 def parse_sections(lines: list[str]) -> list[dict]:
-    """Parse markdown headers into sections."""
+    """Parse Markdown headings into sections with hierarchical breadcrumbs."""
     sections = []
-    for i, line in enumerate(lines):
-        match = re.match(r"^(#{1,6})\s+(.+)$", line)
-        if match:
-            sections.append(
-                {
-                    "title": match.group(2).strip()[:200],
-                    "level": len(match.group(1)),
-                    "start_line": i + 1,
-                    "end_line": None,
-                }
-            )
+    for line, level, title in _headings(lines):
+        sections.append(
+            {
+                "title": title,
+                "level": level,
+                "start_line": line,
+                "end_line": None,
+            }
+        )
     for i, s in enumerate(sections):
         next_start = sections[i + 1]["start_line"] if i + 1 < len(sections) else None
         s["end_line"] = next_start - 1 if isinstance(next_start, int) else len(lines)
+    return add_section_paths(sections)
+
+
+def add_section_paths(sections: list[dict]) -> list[dict]:
+    """Add deterministic heading breadcrumbs to an ordered section list."""
+    ancestors: list[tuple[int, str]] = []
+    for section in sections:
+        level = int(section["level"])
+        title = str(section["title"])
+        while ancestors and ancestors[-1][0] >= level:
+            ancestors.pop()
+        section["path"] = " > ".join(
+            [ancestor_title for _, ancestor_title in ancestors] + [title]
+        )
+        ancestors.append((level, title))
     return sections
 
 
-def chunk_text(lines: list[str], target_words: int = config.CHUNK_SIZE) -> list[dict]:
-    """Split text into chunks of approximately target_words."""
-    chunks = []
-    current_lines, current_words, chunk_start = [], 0, 1
-
-    for i, line in enumerate(lines):
-        line_words = len(line.split())
-        current_lines.append(line)
-        current_words += line_words
-
-        # Two conditions to split: (1) reached target size AND at a natural.
-        # break (blank line or header), or (2) hit a header with enough content.
-        # (>50 words) to stand alone. This prevents both oversized chunks that.
-        # degrade embedding quality and tiny fragments under headers.
-        is_break = line.strip() == "" or line.startswith("#")
-        if (current_words >= target_words and is_break) or (
-            line.startswith("#") and current_words > 50
-        ):
-            text = "\n".join(current_lines).strip()
-            if text and current_words > 10:
-                chunks.append(
+def _paragraph_blocks(lines: list[str], start_line: int, end_line: int) -> list[dict]:
+    """Create line-preserving paragraph blocks for one structural section."""
+    blocks: list[dict] = []
+    block_lines: list[str] = []
+    block_start = start_line
+    for line_number in range(start_line, end_line + 1):
+        line = lines[line_number - 1]
+        if not block_lines:
+            block_start = line_number
+        block_lines.append(line)
+        if line.strip() == "":
+            text = "\n".join(block_lines).strip()
+            if text:
+                blocks.append(
                     {
-                        "start_line": chunk_start,
-                        "end_line": i + 1,
-                        "word_count": current_words,
+                        "start_line": block_start,
+                        "end_line": line_number,
                         "text": text,
                     }
                 )
-            current_lines, current_words, chunk_start = [], 0, i + 2
-
-    if current_lines:
-        text = "\n".join(current_lines).strip()
-        if text and current_words > 10:
-            chunks.append(
+            block_lines = []
+    if block_lines:
+        text = "\n".join(block_lines).strip()
+        if text:
+            blocks.append(
                 {
-                    "start_line": chunk_start,
-                    "end_line": len(lines),
-                    "word_count": current_words,
+                    "start_line": block_start,
+                    "end_line": end_line,
                     "text": text,
                 }
             )
+    return blocks
+
+
+def _validated_token_counts(
+    counter: Callable[[list[str]], list[int]], texts: list[str]
+) -> list[int]:
+    counts = counter(texts)
+    if len(counts) != len(texts):
+        raise RuntimeError(
+            f"tokenizer returned {len(counts)} counts for {len(texts)} texts"
+        )
+    if any(not isinstance(count, int) or count < 0 for count in counts):
+        raise RuntimeError("tokenizer returned an invalid token count")
+    return counts
+
+
+def _chunk_from_blocks(blocks: list[dict]) -> dict:
+    text = "\n\n".join(str(block["text"]) for block in blocks).strip()
+    return {
+        "start_line": int(blocks[0]["start_line"]),
+        "end_line": int(blocks[-1]["end_line"]),
+        "word_count": len(text.split()),
+        "text": text,
+    }
+
+
+def _fit_block_group(
+    blocks: list[dict],
+    *,
+    exact_count: int,
+    target_tokens: int,
+    minimum_fill: int,
+    count_tokens_batch: Callable[[list[str]], list[int]],
+) -> list[dict]:
+    """Split a rare over-budget planned group at an exact paragraph boundary."""
+    if exact_count <= target_tokens or len(blocks) == 1:
+        return [_chunk_from_blocks(blocks)]
+
+    prefix_texts = [
+        str(_chunk_from_blocks(blocks[:end])["text"]) for end in range(1, len(blocks))
+    ]
+    prefix_counts = _validated_token_counts(count_tokens_batch, prefix_texts)
+    valid_cuts = [
+        end
+        for end, count in enumerate(prefix_counts, start=1)
+        if minimum_fill <= count <= target_tokens
+    ]
+    if not valid_cuts:
+        # Keep a small heading attached to an indivisible oversized paragraph.
+        return [_chunk_from_blocks(blocks)]
+
+    cut = valid_cuts[-1]
+    left = blocks[:cut]
+    right = blocks[cut:]
+    left_count = prefix_counts[cut - 1]
+    right_text = str(_chunk_from_blocks(right)["text"])
+    right_count = _validated_token_counts(count_tokens_batch, [right_text])[0]
+    return _fit_block_group(
+        left,
+        exact_count=left_count,
+        target_tokens=target_tokens,
+        minimum_fill=minimum_fill,
+        count_tokens_batch=count_tokens_batch,
+    ) + _fit_block_group(
+        right,
+        exact_count=right_count,
+        target_tokens=target_tokens,
+        minimum_fill=minimum_fill,
+        count_tokens_batch=count_tokens_batch,
+    )
+
+
+def _chunk_from_lines(line_blocks: list[dict]) -> dict:
+    text = "\n".join(str(block["text"]) for block in line_blocks).strip()
+    return {
+        "start_line": int(line_blocks[0]["start_line"]),
+        "end_line": int(line_blocks[-1]["end_line"]),
+        "word_count": len(text.split()),
+        "text": text,
+    }
+
+
+def _fit_line_group(
+    line_blocks: list[dict],
+    *,
+    exact_count: int,
+    target_tokens: int,
+    count_tokens_batch: Callable[[list[str]], list[int]],
+) -> list[dict]:
+    if exact_count <= target_tokens or len(line_blocks) == 1:
+        return [_chunk_from_lines(line_blocks)]
+    prefix_texts = [
+        str(_chunk_from_lines(line_blocks[:end])["text"])
+        for end in range(1, len(line_blocks))
+    ]
+    prefix_counts = _validated_token_counts(count_tokens_batch, prefix_texts)
+    valid_cuts = [
+        end
+        for end, count in enumerate(prefix_counts, start=1)
+        if count <= target_tokens
+    ]
+    if not valid_cuts:
+        # The first source line is itself over budget. Keep that indivisible
+        # locator intact, then continue fitting the remaining lines normally.
+        first = line_blocks[:1]
+        rest = line_blocks[1:]
+        rest_count = _validated_token_counts(
+            count_tokens_batch, [str(_chunk_from_lines(rest)["text"])]
+        )[0]
+        return [_chunk_from_lines(first)] + _fit_line_group(
+            rest,
+            exact_count=rest_count,
+            target_tokens=target_tokens,
+            count_tokens_batch=count_tokens_batch,
+        )
+    cut = valid_cuts[-1]
+    left = line_blocks[:cut]
+    right = line_blocks[cut:]
+    right_count = _validated_token_counts(
+        count_tokens_batch, [str(_chunk_from_lines(right)["text"])]
+    )[0]
+    return [_chunk_from_lines(left)] + _fit_line_group(
+        right,
+        exact_count=right_count,
+        target_tokens=target_tokens,
+        count_tokens_batch=count_tokens_batch,
+    )
+
+
+def _split_oversized_block(
+    block: dict,
+    lines: list[str],
+    *,
+    target_tokens: int,
+    count_tokens_batch: Callable[[list[str]], list[int]],
+) -> list[dict]:
+    """Split a large paragraph or table at source line boundaries."""
+    line_blocks = [
+        {"start_line": line_number, "end_line": line_number, "text": line}
+        for line_number in range(int(block["start_line"]), int(block["end_line"]) + 1)
+        if (line := lines[line_number - 1]).strip()
+    ]
+    if len(line_blocks) <= 1:
+        return [block]
+
+    line_counts = _validated_token_counts(
+        count_tokens_batch, [str(line_block["text"]) for line_block in line_blocks]
+    )
+    newline_tokens = _validated_token_counts(count_tokens_batch, ["\n"])[0]
+    groups: list[list[dict]] = []
+    pending: list[dict] = []
+    pending_tokens = 0
+    for line_block, line_count in zip(line_blocks, line_counts, strict=True):
+        candidate_tokens = pending_tokens + line_count
+        if pending:
+            candidate_tokens += newline_tokens
+        if pending and candidate_tokens > target_tokens:
+            groups.append(pending)
+            pending = []
+            candidate_tokens = line_count
+        pending.append(line_block)
+        pending_tokens = candidate_tokens
+    if pending:
+        groups.append(pending)
+
+    exact_counts = _validated_token_counts(
+        count_tokens_batch,
+        [str(_chunk_from_lines(group)["text"]) for group in groups],
+    )
+    chunks: list[dict] = []
+    for group, exact_count in zip(groups, exact_counts, strict=True):
+        chunks.extend(
+            _fit_line_group(
+                group,
+                exact_count=exact_count,
+                target_tokens=target_tokens,
+                count_tokens_batch=count_tokens_batch,
+            )
+        )
+    return chunks
+
+
+def chunk_text(
+    lines: list[str],
+    target_tokens: int = config.CHUNK_TARGET_TOKENS,
+    *,
+    count_tokens_batch: Callable[[list[str]], list[int]],
+) -> list[dict]:
+    """Split text on structural boundaries using exact model token counts."""
+    if not lines or not any(line.strip() for line in lines):
+        return []
+    target_tokens = max(1, target_tokens)
+    minimum_fill = min(96, max(16, target_tokens // 8))
+    separator_tokens = _validated_token_counts(count_tokens_batch, ["\n\n"])[0]
+
+    # H1-H5 are hard semantic boundaries. H6 is intentionally soft: PDF
+    # converters commonly use it for every field label, table caption, and
+    # instruction attribute. Keeping the heading text while allowing adjacent
+    # H6 blocks to coalesce avoids tens of thousands of tiny model calls.
+    section_starts = [line for line, level, _title in _headings(lines) if level < 6]
+    segment_starts = sorted({1, *section_starts})
+    segments: list[list[dict]] = []
+
+    for segment_index, segment_start in enumerate(segment_starts):
+        segment_end = (
+            segment_starts[segment_index + 1] - 1
+            if segment_index + 1 < len(segment_starts)
+            else len(lines)
+        )
+        nonblank = [
+            lines[line_number - 1]
+            for line_number in range(segment_start, segment_end + 1)
+            if lines[line_number - 1].strip()
+        ]
+        if len(nonblank) == 1 and _heading(nonblank[0], in_fence=False) is not None:
+            # An outline-only parent is already represented in every descendant's.
+            # breadcrumb and adds no searchable source content of its own.
+            continue
+        blocks = _paragraph_blocks(lines, segment_start, segment_end)
+        if blocks:
+            segments.append(blocks)
+
+    all_blocks = [block for blocks in segments for block in blocks]
+    all_counts = _validated_token_counts(
+        count_tokens_batch, [str(block["text"]) for block in all_blocks]
+    )
+    for block, token_count in zip(all_blocks, all_counts, strict=True):
+        block["tokens"] = token_count
+
+    planned_groups: list[list[dict]] = []
+    for blocks in segments:
+        pending: list[dict] = []
+        pending_tokens = 0
+
+        def flush() -> None:
+            nonlocal pending, pending_tokens
+            if not pending:
+                return
+            planned_groups.append(pending)
+            pending = []
+            pending_tokens = 0
+
+        for block in blocks:
+            block_tokens = int(block["tokens"])
+            if block_tokens > target_tokens:
+                attach_heading = bool(pending and pending_tokens < minimum_fill)
+                split_budget = (
+                    max(1, target_tokens - pending_tokens - separator_tokens)
+                    if attach_heading
+                    else target_tokens
+                )
+                split_chunks = _split_oversized_block(
+                    block,
+                    lines,
+                    target_tokens=split_budget,
+                    count_tokens_batch=count_tokens_batch,
+                )
+                split_blocks = [
+                    {
+                        "start_line": chunk["start_line"],
+                        "end_line": chunk["end_line"],
+                        "text": chunk["text"],
+                    }
+                    for chunk in split_chunks
+                ]
+                if attach_heading:
+                    planned_groups.append(pending + [split_blocks[0]])
+                    pending = []
+                    pending_tokens = 0
+                    split_blocks = split_blocks[1:]
+                else:
+                    flush()
+                planned_groups.extend([[split_block] for split_block in split_blocks])
+                continue
+            candidate_tokens = pending_tokens + block_tokens
+            if pending:
+                candidate_tokens += separator_tokens
+            if (
+                pending
+                and pending_tokens >= minimum_fill
+                and candidate_tokens > target_tokens
+            ):
+                flush()
+                candidate_tokens = block_tokens
+            pending.append(block)
+            pending_tokens = candidate_tokens
+            if pending_tokens >= target_tokens:
+                flush()
+        flush()
+
+    # The additive planning above minimizes server calls. Verify the actual
+    # assembled strings in one batch: tokenization across paragraph boundaries
+    # can only be trusted after the final text has been formed.
+    exact_counts = _validated_token_counts(
+        count_tokens_batch,
+        [str(_chunk_from_blocks(group)["text"]) for group in planned_groups],
+    )
+    chunks: list[dict] = []
+    for group, exact_count in zip(planned_groups, exact_counts, strict=True):
+        chunks.extend(
+            _fit_block_group(
+                group,
+                exact_count=exact_count,
+                target_tokens=target_tokens,
+                minimum_fill=minimum_fill,
+                count_tokens_batch=count_tokens_batch,
+            )
+        )
     return chunks
 
 

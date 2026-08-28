@@ -142,8 +142,15 @@ class TestInterruptHandling:
         )
         monkeypatch.setattr(
             cli,
-            "_prepare_doc",
-            lambda *args, **kwargs: (1, [{"start_line": 1, "text": "x"}], []),
+            "_prepare_source",
+            lambda name, *_args, **_kwargs: cli._PreparedSource(
+                name, Path(f"/tmp/{name}.md"), "sig"
+            ),
+        )
+        monkeypatch.setattr(
+            cli,
+            "_tokenize_doc",
+            lambda *_args, **_kwargs: (1, [{"start_line": 1, "text": "x"}], []),
         )
         monkeypatch.setattr(
             cli,
@@ -464,10 +471,16 @@ def test_generate_contexts_is_idempotent_on_duplicate_chunk_start_lines(monkeypa
     conn.close()
 
 
-def test_prepare_doc_updates_changed_chunk_text_and_clears_context_and_embedding(
+def test_tokenize_doc_updates_changed_chunk_text_and_clears_context_and_embedding(
     monkeypatch, tmp_path
 ):
     from sova import cli
+
+    monkeypatch.setattr(
+        cli,
+        "get_token_counts_batch",
+        lambda texts: [len(text.split()) for text in texts],
+    )
 
     conn = sqlite3.connect(":memory:")
     conn.executescript(
@@ -496,6 +509,9 @@ def test_prepare_doc_updates_changed_chunk_text_and_clears_context_and_embedding
             word_count INTEGER NOT NULL,
             text TEXT NOT NULL,
             embedding BLOB,
+            embedding_signature TEXT,
+            section_path TEXT NOT NULL DEFAULT '',
+            search_text TEXT NOT NULL DEFAULT '',
             is_index INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE chunk_contexts (
@@ -508,7 +524,7 @@ def test_prepare_doc_updates_changed_chunk_text_and_clears_context_and_embedding
 
     md = tmp_path / "doc.md"
     md.write_text("\n".join(["alpha"] * 12) + "\n", encoding="utf-8")
-    prepared = cli._prepare_doc("doc", None, md, conn)
+    prepared = cli._tokenize_doc(cli._PreparedSource("doc", md, "sig-1"), conn)
     assert prepared is not None
     doc_id, chunks, _ = prepared
     assert doc_id == 1
@@ -526,7 +542,7 @@ def test_prepare_doc_updates_changed_chunk_text_and_clears_context_and_embedding
     conn.commit()
 
     md.write_text("\n".join(["changed"] * 12) + "\n", encoding="utf-8")
-    cli._prepare_doc("doc", None, md, conn)
+    cli._tokenize_doc(cli._PreparedSource("doc", md, "sig-2"), conn)
 
     row = conn.execute(
         "SELECT text, embedding FROM chunks WHERE id = ?", (chunk_id,)
@@ -540,10 +556,16 @@ def test_prepare_doc_updates_changed_chunk_text_and_clears_context_and_embedding
     conn.close()
 
 
-def test_prepare_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
+def test_tokenize_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
     monkeypatch, tmp_path
 ):
     from sova import cli
+
+    monkeypatch.setattr(
+        cli,
+        "get_token_counts_batch",
+        lambda texts: [len(text.split()) for text in texts],
+    )
 
     conn = sqlite3.connect(":memory:")
     conn.executescript(
@@ -572,6 +594,9 @@ def test_prepare_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
             word_count INTEGER NOT NULL,
             text TEXT NOT NULL,
             embedding BLOB,
+            embedding_signature TEXT,
+            section_path TEXT NOT NULL DEFAULT '',
+            search_text TEXT NOT NULL DEFAULT '',
             is_index INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE chunk_contexts (
@@ -583,20 +608,20 @@ def test_prepare_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
     )
 
     md = tmp_path / "doc.md"
-    first_lines = ["# H"] + ["w"] * 520 + [""] + ["tail"] * 20
+    first_lines = ["# H"] + ["w"] * 820 + [""] + ["tail"] * 20
     md.write_text("\n".join(first_lines) + "\n", encoding="utf-8")
-    cli._prepare_doc("doc", None, md, conn)
+    cli._tokenize_doc(cli._PreparedSource("doc", md, "sig-1"), conn)
     starts_before = [
         r[0]
         for r in conn.execute(
             "SELECT start_line FROM chunks ORDER BY start_line"
         ).fetchall()
     ]
-    assert starts_before == [1, 523]
+    assert starts_before == [1, 768, 823]
 
     second_lines = ["intro"] * 30 + first_lines
     md.write_text("\n".join(second_lines) + "\n", encoding="utf-8")
-    prepared = cli._prepare_doc("doc", None, md, conn)
+    prepared = cli._tokenize_doc(cli._PreparedSource("doc", md, "sig-2"), conn)
     assert prepared is not None
     _, parsed_chunks, _ = prepared
     starts_after = [
@@ -605,7 +630,7 @@ def test_prepare_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
             "SELECT start_line FROM chunks ORDER BY start_line"
         ).fetchall()
     ]
-    assert starts_after == [1, 553]
+    assert starts_after == [1, 31, 798, 853]
     expected = conn.execute(
         "SELECT expected_chunks FROM documents WHERE name = 'doc'"
     ).fetchone()[0]
@@ -613,10 +638,16 @@ def test_prepare_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
     conn.close()
 
 
-def test_prepare_doc_keeps_context_and_embedding_when_only_section_ids_reorder(
+def test_tokenize_doc_keeps_context_and_embedding_when_only_section_ids_reorder(
     monkeypatch, tmp_path
 ):
     from sova import cli
+
+    monkeypatch.setattr(
+        cli,
+        "get_token_counts_batch",
+        lambda texts: [len(text.split()) for text in texts],
+    )
 
     conn = sqlite3.connect(":memory:")
     conn.executescript(
@@ -645,6 +676,9 @@ def test_prepare_doc_keeps_context_and_embedding_when_only_section_ids_reorder(
             word_count INTEGER NOT NULL,
             text TEXT NOT NULL,
             embedding BLOB,
+            embedding_signature TEXT,
+            section_path TEXT NOT NULL DEFAULT '',
+            search_text TEXT NOT NULL DEFAULT '',
             is_index INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE chunk_contexts (
@@ -660,8 +694,8 @@ def test_prepare_doc_keeps_context_and_embedding_when_only_section_ids_reorder(
     md1.write_text("# A\n\n" + "\n".join(["x"] * 20) + "\n", encoding="utf-8")
     md2.write_text("# B\n\n" + "\n".join(["y"] * 20) + "\n", encoding="utf-8")
 
-    cli._prepare_doc("doc1", None, md1, conn)
-    cli._prepare_doc("doc2", None, md2, conn)
+    cli._tokenize_doc(cli._PreparedSource("doc1", md1, "sig-1"), conn)
+    cli._tokenize_doc(cli._PreparedSource("doc2", md2, "sig-2"), conn)
 
     row = conn.execute(
         "SELECT id FROM chunks WHERE doc_id = (SELECT id FROM documents WHERE name = 'doc1')"
@@ -674,7 +708,7 @@ def test_prepare_doc_keeps_context_and_embedding_when_only_section_ids_reorder(
     )
     conn.commit()
 
-    cli._prepare_doc("doc1", None, md1, conn)
+    cli._tokenize_doc(cli._PreparedSource("doc1", md1, "sig-1"), conn)
 
     chunk = conn.execute(
         "SELECT embedding FROM chunks WHERE id = ?", (chunk_id,)
@@ -863,10 +897,18 @@ def test_index_prepares_every_document_before_loading_models(monkeypatch, tmp_pa
     monkeypatch.setattr(cli, "find_docs", lambda: docs)
     monkeypatch.setattr(
         cli,
-        "_prepare_doc",
+        "_prepare_source",
         lambda name, *_args: (
             events.append(f"prepare:{name}")
-            or (1, [{"start_line": 1, "text": name}], [])
+            or cli._PreparedSource(name, tmp_path / f"{name}.md", "sig")
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_tokenize_doc",
+        lambda source, *_args: (
+            events.append(f"tokenize:{source.name}")
+            or (1, [{"start_line": 1, "text": source.name}], [])
         ),
     )
     monkeypatch.setattr(
@@ -912,10 +954,14 @@ def test_index_prepares_every_document_before_loading_models(monkeypatch, tmp_pa
     cli._run_index_mode()
 
     assert events.index("prepare:one") < events.index("prepare:two")
-    assert events.index("prepare:two") < events.index("load:index_context")
+    embed_loads = [i for i, event in enumerate(events) if event == "load:index_embed"]
+    assert len(embed_loads) == 2
+    assert events.index("prepare:two") < embed_loads[0]
+    assert embed_loads[0] < events.index("tokenize:one")
+    assert events.index("tokenize:two") < events.index("load:index_context")
     assert events.index("load:index_context") < events.index("context:one")
-    assert events.index("context:two") < events.index("load:index_embed")
-    assert events.index("load:index_embed") < events.index("embed:one")
+    assert events.index("context:two") < embed_loads[1]
+    assert embed_loads[1] < events.index("embed:one")
     assert events.index("embed:two") < events.index("finalize")
 
 

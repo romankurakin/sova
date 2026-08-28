@@ -518,5 +518,6 @@ SEARCH_INDEX_PENALTY = -0.5
 SEARCH_DIVERSITY_DECAY = 0.95
 # Number of documents to embed per batch.
 BATCH_SIZE = 10
-# Target words per chunk.
-CHUNK_SIZE = 512
+# Exact embedding-model token budget per chunk. Counts come from the same
+# llama-server used for embeddings during a dedicated indexing phase.
+CHUNK_TARGET_TOKENS = 768

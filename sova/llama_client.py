@@ -67,6 +67,14 @@ _EMBED_TOKEN_SAFETY_MARGIN_MIN = 128
 _EMBED_TOKEN_SAFETY_MARGIN_MAX = 256
 _EMBED_STABLE_TOKEN_BUDGET = 4096
 _EMBED_TOKENIZE_TIMEOUT_S = 20.0
+_EMBED_TOKENIZE_BATCH_CHARS = 250_000
+_TOKENIZE_SEPARATORS = (
+    "<|endoftext|>",
+    "<|im_start|>",
+    "<|vision_start|>",
+    "<|fim_prefix|>",
+)
+_TOKENIZE_SEPARATOR_IDS: dict[str, int] = {}
 _EMBED_HEADER_KEEP_TAIL_PARTS = 2
 _EMBED_RECOVERY_TOKEN_BUDGET_STEPS = (512, 256, 192)
 _EMBED_RECOVERY_MAX_ATTEMPTS = 6
@@ -712,17 +720,93 @@ def _embedding_token_budget() -> int:
     return min(_EMBED_STABLE_TOKEN_BUDGET, max(512, ctx_size - margin))
 
 
-def _token_count_via_server(text: str) -> int:
-    """Count tokens for a text using llama-server /tokenize."""
+def _token_ids_via_server(text: str) -> list[int]:
+    """Tokenize plain text with the running embedding model."""
     resp = _post_json(
         f"{EMBEDDING_SERVER_URL}/tokenize",
-        {"content": text},
+        {
+            "content": text,
+            "add_special": False,
+            "parse_special": True,
+        },
         timeout=_EMBED_TOKENIZE_TIMEOUT_S,
     )
     tokens = resp.get("tokens")
-    if not isinstance(tokens, list):
+    if not isinstance(tokens, list) or any(
+        not isinstance(token, int) for token in tokens
+    ):
         raise ServerError("invalid tokenize response: missing tokens")
-    return len(tokens)
+    return tokens
+
+
+def _token_count_via_server(text: str) -> int:
+    """Count tokens for a text using llama-server /tokenize."""
+    return len(_token_ids_via_server(text))
+
+
+def _separator_id(separator: str) -> int:
+    cached = _TOKENIZE_SEPARATOR_IDS.get(separator)
+    if cached is not None:
+        return cached
+    tokens = _token_ids_via_server(separator)
+    if len(tokens) != 1:
+        raise ServerError("embedding tokenizer did not recognize batch separator")
+    _TOKENIZE_SEPARATOR_IDS[separator] = tokens[0]
+    return tokens[0]
+
+
+def _token_counts_group(texts: list[str]) -> list[int]:
+    """Count a bounded group in one request using an unambiguous special token."""
+    if not texts:
+        return []
+    if len(texts) == 1:
+        return [_token_count_via_server(texts[0])]
+
+    separator = next(
+        (
+            candidate
+            for candidate in _TOKENIZE_SEPARATORS
+            if all(candidate not in text for text in texts)
+        ),
+        None,
+    )
+    if separator is None:
+        return [_token_count_via_server(text) for text in texts]
+
+    separator_id = _separator_id(separator)
+    tokens = _token_ids_via_server(separator.join(texts))
+    counts: list[int] = []
+    current = 0
+    for token in tokens:
+        if token == separator_id:
+            counts.append(current)
+            current = 0
+        else:
+            current += 1
+    counts.append(current)
+    if len(counts) != len(texts):
+        raise ServerError("embedding tokenizer returned ambiguous batch boundaries")
+    return counts
+
+
+def get_token_counts_batch(texts: list[str]) -> list[int]:
+    """Count many texts exactly with bounded local llama-server requests."""
+    if not texts:
+        return []
+    counts: list[int] = []
+    group: list[str] = []
+    group_chars = 0
+    for text in texts:
+        added_chars = len(text) + (len(_TOKENIZE_SEPARATORS[0]) if group else 0)
+        if group and group_chars + added_chars > _EMBED_TOKENIZE_BATCH_CHARS:
+            counts.extend(_token_counts_group(group))
+            group = []
+            group_chars = 0
+            added_chars = len(text)
+        group.append(text)
+        group_chars += added_chars
+    counts.extend(_token_counts_group(group))
+    return counts
 
 
 def _fit_text_to_token_budget(text: str, token_budget: int) -> str:
@@ -1155,7 +1239,7 @@ def generate_context(
         doc_name=doc_name,
         section_title=section_title or "(no section)",
         prev_chunk=prev_chunk[-500:] if prev_chunk else "(start of document)",
-        chunk_text=chunk_text[:1000],
+        chunk_text=chunk_text,
         next_chunk=next_chunk[:500] if next_chunk else "(end of document)",
     )
     resp = _post_json(
