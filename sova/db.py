@@ -9,7 +9,8 @@ from contextlib import contextmanager
 from sova import config
 from sova.config import EMBEDDING_DIM, VECTOR_EXT
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
+VECTOR_INDEX_STATE_KEY = "index.vector.state"
 
 
 def _check_schema_version(conn: sqlite3.Connection) -> int:
@@ -118,6 +119,35 @@ def init_db() -> sqlite3.Connection:
     """)
     _migrate_schema(conn)
 
+    # A durable marker survives interruption between saved embeddings and
+    # quantization. Existing indexes rebuild once to adopt this checkpoint.
+    conn.execute(
+        "INSERT OR IGNORE INTO index_meta (key, value) VALUES (?, 'pending')",
+        (VECTOR_INDEX_STATE_KEY,),
+    )
+    for suffix, event in (
+        ("ai", "INSERT"),
+        ("ad", "DELETE"),
+        (
+            "au",
+            (
+                "UPDATE OF id, embedding ON chunks "
+                "WHEN old.id IS NOT new.id OR old.embedding IS NOT new.embedding"
+            ),
+        ),
+    ):
+        clause = event if suffix == "au" else f"{event} ON chunks"
+        conn.execute(f"""
+            CREATE TRIGGER IF NOT EXISTS chunks_vector_{suffix} AFTER {clause}
+            BEGIN
+                INSERT INTO index_meta (key, value)
+                VALUES ('{VECTOR_INDEX_STATE_KEY}', 'pending')
+                ON CONFLICT(key) DO UPDATE SET value = 'pending';
+                DELETE FROM query_cache;
+            END
+        """)
+    conn.commit()
+
     fts_exists = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chunks_fts'"
     ).fetchone()
@@ -185,6 +215,15 @@ def connect_readonly() -> sqlite3.Connection:
     return conn
 
 
+def connect_writable() -> sqlite3.Connection:
+    """Open an existing database for routine writes without schema changes."""
+    conn = sqlite3.connect(
+        f"{config.get_db_path().resolve().as_uri()}?mode=rw", uri=True
+    )
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
 def quantize_vectors(conn: sqlite3.Connection) -> None:
     """Quantize vectors for fast native search."""
     expected_bytes = EMBEDDING_DIM * 4
@@ -199,6 +238,8 @@ def quantize_vectors(conn: sqlite3.Connection) -> None:
         )
     try:
         conn.execute("SELECT vector_quantize('chunks', 'embedding')")
+        conn.execute("DELETE FROM query_cache")
+        set_meta(conn, VECTOR_INDEX_STATE_KEY, "ready")
         conn.commit()
     except sqlite3.OperationalError as e:
         raise RuntimeError(f"vector quantization failed: {e}") from e
@@ -249,7 +290,7 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
 @contextmanager
 def get_connection(readonly: bool = False) -> Generator[sqlite3.Connection]:
     """Context manager for database connections."""
-    conn = connect_readonly() if readonly else init_db()
+    conn = connect_readonly() if readonly else connect_writable()
     try:
         yield conn
     finally:

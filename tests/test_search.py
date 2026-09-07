@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from sova.search import (
+    _exact_match_bonuses,
     compute_candidates,
     fuse_and_rank,
     is_index_like,
@@ -111,9 +112,8 @@ class TestRRFFusion:
 
 class TestComputeCandidates:
     def test_small_corpus(self):
-        # With few chunks, should return at least base_candidates.
         result = compute_candidates(10, 5)
-        assert result >= 20  # limit * 4.
+        assert result == 10
 
     def test_large_corpus(self):
         result = compute_candidates(100_000, 10)
@@ -131,7 +131,31 @@ class TestComputeCandidates:
 
     def test_zero_chunks(self):
         result = compute_candidates(0, 10)
-        assert result >= 40  # at least limit * 4.
+        assert result == 0
+
+
+@pytest.mark.parametrize(
+    ("text", "query"),
+    [
+        ("Ошибка подключения", "ОШИБКА ПОДКЛЮЧЕНИЯ"),
+        ("Überprüfung fehlgeschlagen", "ÜBERPRÜFUNG FEHLGESCHLAGEN"),
+        ("Ошибка HTTP подключения", "ошибка HTTP подключения"),
+        ("Сервер недоступен", '"СЕРВЕР" OR "НЕДОСТУПЕН"'),
+    ],
+)
+def test_unicode_fts_and_exact_bonuses(text, query):
+    conn = TestSearchFtsSingleChar._make_fts_db()
+    conn.execute("INSERT INTO chunks VALUES (2, ?)", (text,))
+    conn.execute("INSERT INTO chunks_fts(rowid, text) VALUES (2, ?)", (text,))
+    if " OR " in query:
+        # Query syntax remains literal: OR is a required word, not an operator.
+        assert search_fts(conn, query, 10) == []
+    else:
+        assert [row[0] for row in search_fts(conn, query, 10)] == [2]
+        assert _exact_match_bonuses(conn, [1, 2], query, 0.3, 0.15) == {
+            2: pytest.approx(0.45)
+        }
+    conn.close()
 
 
 class TestSearchFtsSingleChar:

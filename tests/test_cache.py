@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from sova.cache import SemanticCache, _cosine_sim_batch
+from sova.search import compute_candidates
 
 
 class TestCosineSimBatch:
@@ -150,3 +151,33 @@ class TestSemanticCache:
         assert cache.get(emb, min_candidates=2) is not None
         # Requesting at least 5 — should miss.
         assert cache.get(emb, min_candidates=5) is None
+
+    def test_identical_query_hits_when_corpus_is_smaller_than_candidate_floor(
+        self, cache_db
+    ):
+        cache, _conn = cache_db
+        emb = [1.0, 0.0]
+        results = [(i, 0.9) for i in range(20)]
+        cache.put(emb, results)
+        assert cache.get(emb, compute_candidates(20, 10)) == [list(r) for r in results]
+
+
+def test_cache_operations_preserve_database_schema(monkeypatch, tmp_path):
+    from sova import config
+    from sova.db import init_db
+
+    db_path = tmp_path / "indexed.db"
+    monkeypatch.setattr(config, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(config, "get_db_path", lambda: db_path)
+    conn = init_db()
+    schema_version = conn.execute("PRAGMA schema_version").fetchone()[0]
+    schema = conn.execute("SELECT sql FROM sqlite_master ORDER BY name").fetchall()
+    cache = SemanticCache()
+    cache.put([1.0, 0.0], [(1, 0.9)])
+    assert cache.get([1.0, 0.0]) == [[1, 0.9]]
+    cache.clear()
+    assert conn.execute("PRAGMA schema_version").fetchone()[0] == schema_version
+    assert (
+        conn.execute("SELECT sql FROM sqlite_master ORDER BY name").fetchall() == schema
+    )
+    conn.close()

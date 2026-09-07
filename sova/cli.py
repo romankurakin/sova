@@ -20,6 +20,7 @@ from sova.audit import Finding, audit_database
 from sova.cache import get_cache
 from sova.db import (
     SCHEMA_VERSION,
+    VECTOR_INDEX_STATE_KEY,
     connect_readonly,
     embedding_to_blob,
     get_doc_status,
@@ -886,9 +887,7 @@ def _embedding_work_pending(
     *,
     force_rebuild: bool = False,
 ) -> bool:
-    chunk_columns = {
-        str(row[1]) for row in conn.execute("PRAGMA table_info(chunks)")
-    }
+    chunk_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(chunks)")}
     if "embedding_signature" in chunk_columns:
         return bool(
             conn.execute(
@@ -923,9 +922,7 @@ def _sync_index_signatures(conn: sqlite3.Connection) -> _IndexSignatureState:
     context_columns = {
         str(row[1]) for row in conn.execute("PRAGMA table_info(chunk_contexts)")
     }
-    chunk_columns = {
-        str(row[1]) for row in conn.execute("PRAGMA table_info(chunks)")
-    }
+    chunk_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(chunks)")}
     document_columns = {
         str(row[1]) for row in conn.execute("PRAGMA table_info(documents)")
     }
@@ -1882,9 +1879,7 @@ def _run_index_mode() -> None:
             tokenization_plan = [
                 (
                     source,
-                    _current_tokenized_doc_id(
-                        conn, source, signature_state.chunk_sig
-                    ),
+                    _current_tokenized_doc_id(conn, source, signature_state.chunk_sig),
                 )
                 for source in sources
             ]
@@ -2059,10 +2054,13 @@ def _run_index_mode() -> None:
         # Finalize the searchable vector index only after all durable rows exist.
         if not interrupted and not failed:
             report_scope(None, None)
-            status("Building vector index", phase="finalize")
             try:
-                quantize_vectors(conn)
                 _prune_missing_documents(conn, {str(doc["name"]) for doc in docs})
+                if get_meta(conn, VECTOR_INDEX_STATE_KEY) != "ready":
+                    status("Building vector index", phase="finalize")
+                    quantize_vectors(conn)
+                else:
+                    status("Reused vector index", phase="finalize")
                 _commit_index_signatures(conn, signature_state)
             except (OSError, RuntimeError, sqlite3.Error) as e:
                 failed = True
@@ -2072,7 +2070,6 @@ def _run_index_mode() -> None:
                     action="retry indexing",
                 )
 
-        get_cache().clear()
         if interrupted:
             stop_server(config.CONTEXT_SERVER_URL, suppress_interrupt=True)
             stop_server(config.EMBEDDING_SERVER_URL, suppress_interrupt=True)

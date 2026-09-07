@@ -4,7 +4,7 @@ import sqlite3
 
 from sova import config
 from sova.audit import audit_database
-from sova.db import SCHEMA_VERSION, _migrate_schema
+from sova.db import SCHEMA_VERSION, VECTOR_INDEX_STATE_KEY, _migrate_schema
 
 _EXPECTED_SIGNATURES = {
     "pipeline.context.signature": "context-v1",
@@ -118,6 +118,33 @@ def test_audit_accepts_sqlite_vector_internal_tables():
     codes = {finding.code for finding in _audit(conn)}
 
     assert "schema.unknown_tables" not in codes
+    conn.close()
+
+
+def test_audit_accepts_pdf_and_vector_checkpoints_but_reports_unknown_keys():
+    conn = _database()
+    conn.executemany(
+        "INSERT INTO index_meta VALUES (?, ?)",
+        [
+            ("source.extract.signature.doc", "source-v1"),
+            (VECTOR_INDEX_STATE_KEY, "ready"),
+        ],
+    )
+    assert _audit(conn) == []
+    conn.execute("INSERT INTO index_meta VALUES ('unexpected.key', 'value')")
+    findings = _audit(conn)
+    assert len(findings) == 1
+    assert findings[0].code == "metadata.unknown_keys"
+    assert findings[0].count == 1
+    conn.close()
+
+
+def test_audit_reports_unfinished_vector_index():
+    conn = _database()
+    conn.execute(
+        "INSERT INTO index_meta VALUES (?, 'pending')", (VECTOR_INDEX_STATE_KEY,)
+    )
+    assert [finding.code for finding in _audit(conn)] == ["vectors.pending"]
     conn.close()
 
 

@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from sova import config
+from sova.db import VECTOR_INDEX_STATE_KEY
 
 _EXPECTED_TABLES = {
     "_sqliteai_vector",
@@ -28,6 +29,7 @@ _EXPECTED_META_KEYS = {
     "pipeline.context.signature",
     "pipeline.embedding.signature",
     "pipeline.chunk.signature",
+    VECTOR_INDEX_STATE_KEY,
 }
 _REQUIRED_COLUMNS = {
     "documents": {"id", "name"},
@@ -153,6 +155,13 @@ def audit_database(
         str(key): str(value)
         for key, value in conn.execute("SELECT key, value FROM index_meta").fetchall()
     }
+    if stored_signatures.get(VECTOR_INDEX_STATE_KEY) == "pending":
+        findings.append(
+            Finding(
+                "vectors.pending",
+                "Vector index has unfinished changes; resume indexing",
+            )
+        )
     stale_signature_keys = [
         key
         for key, expected in expected_signatures.items()
@@ -375,6 +384,7 @@ def audit_database(
         str(row[0])
         for row in conn.execute("SELECT key FROM index_meta ORDER BY key").fetchall()
         if str(row[0]) not in _EXPECTED_META_KEYS
+        and not str(row[0]).startswith("source.extract.signature.")
     ]
     if unknown_meta:
         findings.append(

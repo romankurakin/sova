@@ -16,7 +16,7 @@ from sova.config import (
     SEARCH_RRF_K,
     SEARCH_RRF_WEIGHT,
 )
-from sova.db import embedding_to_blob
+from sova.db import VECTOR_INDEX_STATE_KEY, embedding_to_blob, get_meta
 from sova.diversity import score_decay_diversify
 
 
@@ -24,6 +24,8 @@ def search_vector(
     conn: sqlite3.Connection, query_blob: bytes, candidates: int
 ) -> list[tuple[int, float]]:
     """Vector similarity search. Returns list of (chunk_id, similarity_score)."""
+    if get_meta(conn, VECTOR_INDEX_STATE_KEY) == "pending":
+        return []
     conn.execute(
         f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"
     )
@@ -57,6 +59,8 @@ def fallback_vector_scan(
     conn: sqlite3.Connection, query_emb: list[float], candidates: int
 ) -> list[tuple[int, float]]:
     """Fallback brute-force vector search when quantized index unavailable."""
+    if candidates <= 0:
+        return []
     query_norm = math.sqrt(sum(v * v for v in query_emb))
     if query_norm == 0:
         return []
@@ -102,9 +106,7 @@ def search_fts(
         # tokens are dropped because they're almost always noise and can.
         # cause FTS to return too many low-quality matches.
         fts_query = " ".join(
-            f'"{term}"'
-            for term in re.findall(r"[a-zA-Z0-9_-]+", query)
-            if len(term) >= 2
+            f'"{term}"' for term in re.findall(r"[\w-]+", query) if len(term) >= 2
         )
         if not fts_query:
             return []
@@ -166,7 +168,7 @@ def compute_candidates(total_chunks: int, limit: int) -> int:
     # but caps at 1500 to keep search latency bounded.
     base_candidates = max(limit * 4, 50)
     adaptive = min(total_chunks, max(150, int(total_chunks * 0.05), base_candidates))
-    return min(max(base_candidates, adaptive), 1500)
+    return max(0, min(total_chunks, max(base_candidates, adaptive), 1500))
 
 
 def get_vector_candidates(
@@ -179,6 +181,9 @@ def get_vector_candidates(
     if candidates is None:
         total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
         candidates = compute_candidates(total_chunks, limit)
+
+    if candidates <= 0:
+        return []
 
     query_blob = embedding_to_blob(query_emb)
 
@@ -205,34 +210,29 @@ def _exact_match_bonuses(
     if not chunk_ids or not query.strip():
         return {}
 
-    terms = [t for t in re.findall(r"[a-zA-Z0-9_-]+", query) if len(t) >= 2]
+    terms = [t.casefold() for t in re.findall(r"[\w-]+", query) if len(t) >= 2]
     if not terms:
         return {}
 
-    query_lower = query.strip().lower()
+    query_lower = query.strip().casefold()
     placeholders = ",".join("?" * len(chunk_ids))
 
-    # Single SQL query: check full phrase + each individual term via INSTR.
-    cols = ["CASE WHEN INSTR(LOWER(text), ?) > 0 THEN 1 ELSE 0 END"]
-    params: list = [query_lower]
-    for term in terms:
-        cols.append("CASE WHEN INSTR(LOWER(text), ?) > 0 THEN 1 ELSE 0 END")
-        params.append(term.lower())
-
-    select = ", ".join(cols)
+    # SQLite LOWER only folds ASCII. Fold each candidate once in Python so
+    # exact-match bonuses work for Unicode text and mixed-case queries too.
     rows = conn.execute(
-        f"SELECT id, {select} FROM chunks WHERE id IN ({placeholders})",
-        params + list(chunk_ids),
+        f"SELECT id, text FROM chunks WHERE id IN ({placeholders})",
+        chunk_ids,
     ).fetchall()
 
     bonuses: dict[int, float] = {}
-    for row in rows:
-        phrase_hit = row[1]
-        term_frac = sum(row[2:]) / len(terms)
+    for chunk_id, text in rows:
+        folded = text.casefold()
+        phrase_hit = query_lower in folded
+        term_frac = sum(term in folded for term in terms) / len(terms)
 
         bonus = phrase_bonus * phrase_hit + term_bonus * term_frac
         if bonus > 0:
-            bonuses[row[0]] = bonus
+            bonuses[chunk_id] = bonus
 
     return bonuses
 

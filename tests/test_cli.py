@@ -153,7 +153,9 @@ class TestInterruptHandling:
             lambda *_args, **_kwargs: (1, [{"start_line": 1, "text": "x"}], []),
         )
         monkeypatch.setattr(cli, "_current_tokenized_doc_id", lambda *_args: None)
-        monkeypatch.setattr(cli, "_context_work_pending", lambda *_args, **_kwargs: True)
+        monkeypatch.setattr(
+            cli, "_context_work_pending", lambda *_args, **_kwargs: True
+        )
         monkeypatch.setattr(
             cli, "_embedding_work_pending", lambda *_args, **_kwargs: True
         )
@@ -881,7 +883,10 @@ def test_prepare_source_reuses_extraction_checkpoint_before_tokenization(
 
     assert second == first
     assert extractions == [pdf]
-    assert cli.get_meta(conn, cli._source_checkpoint_key("manual")) == first.source_signature
+    assert (
+        cli.get_meta(conn, cli._source_checkpoint_key("manual"))
+        == first.source_signature
+    )
     conn.close()
 
 
@@ -953,6 +958,7 @@ def test_index_prepares_every_document_before_loading_models(monkeypatch, tmp_pa
 
     events: list[str] = []
     conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE index_meta (key TEXT PRIMARY KEY, value TEXT)")
     docs = [
         {"name": "one", "pdf": tmp_path / "one.pdf", "md": None},
         {"name": "two", "pdf": tmp_path / "two.pdf", "md": None},

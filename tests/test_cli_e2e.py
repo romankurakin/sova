@@ -27,7 +27,6 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
     )
     monkeypatch.setattr(cli, "stop_server", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(cli, "run_embedding_canary", lambda **_kwargs: None)
-    monkeypatch.setattr(cli, "quantize_vectors", lambda _conn: None)
     monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
 
     context_calls: list[str] = []
