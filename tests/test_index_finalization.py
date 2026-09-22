@@ -56,9 +56,9 @@ def indexed_project(monkeypatch, tmp_path):
         conn.execute(
             """
             INSERT INTO chunks
-                (id, doc_id, start_line, end_line, word_count, text, search_text,
+                (id, doc_id, start_line, end_line, word_count, text,
                  embedding, embedding_signature)
-            VALUES (?, ?, ?, ?, 2, 'source passage', 'source passage', ?, ?)
+            VALUES (?, ?, ?, ?, 2, 'source passage', ?, ?)
             """,
             (
                 chunk_id,
@@ -185,3 +185,77 @@ def test_legacy_index_rebuilds_once_to_adopt_vector_checkpoint(indexed_project):
     conn = connect_readonly()
     assert get_meta(conn, VECTOR_INDEX_STATE_KEY) == "ready"
     conn.close()
+
+
+@pytest.mark.parametrize("interrupt_compaction", [False, True])
+def test_text_migration_preserves_vector_index_and_resume(
+    indexed_project, monkeypatch, interrupt_compaction
+):
+    import sqlite3
+
+    from sova.db import _COMPACTION_PENDING_KEY
+
+    cache = SemanticCache()
+    cache.put([1.0, 0.0], [(50, 0.7)])
+    query = embedding_to_blob([1.0] + [0.0] * (config.EMBEDDING_DIM - 1))
+    conn = init_db()
+    before = search_vector(conn, query, 50)
+    embeddings = conn.execute(
+        "SELECT id, embedding, embedding_signature FROM chunks ORDER BY id"
+    ).fetchall()
+    cached = conn.execute("SELECT * FROM query_cache").fetchall()
+    # Model the previous stored column on an already quantized real index.
+    for name in ("chunks_ai", "chunks_ad", "chunks_au"):
+        conn.execute(f"DROP TRIGGER {name}")
+    conn.execute("ALTER TABLE chunks DROP COLUMN search_text")
+    conn.execute("ALTER TABLE chunks DROP COLUMN search_prefix")
+    conn.execute("ALTER TABLE chunks ADD COLUMN search_text TEXT NOT NULL DEFAULT ''")
+    conn.execute("UPDATE chunks SET search_text = text")
+    conn.execute("PRAGMA user_version = 6")
+    conn.commit()
+    conn.close()
+
+    if interrupt_compaction:
+        original_connect = sqlite3.connect
+
+        class InterruptedCompaction(sqlite3.Connection):
+            def execute(self, sql, parameters=(), /):
+                if sql == "VACUUM":
+                    raise sqlite3.OperationalError("simulated compaction interruption")
+                return super().execute(sql, parameters)
+
+        with monkeypatch.context() as failure:
+            failure.setattr(
+                sqlite3,
+                "connect",
+                lambda *a, **kw: original_connect(
+                    *a, **kw, factory=InterruptedCompaction
+                ),
+            )
+            with pytest.raises(
+                sqlite3.OperationalError, match="compaction interruption"
+            ):
+                init_db()
+        conn = connect_readonly()
+        assert get_meta(conn, _COMPACTION_PENDING_KEY) == "1"
+        assert search_vector(conn, query, 50) == before
+        conn.close()
+
+    conn = init_db()
+    assert get_meta(conn, _COMPACTION_PENDING_KEY) is None
+    assert get_meta(conn, VECTOR_INDEX_STATE_KEY) == "ready"
+    assert (
+        conn.execute(
+            "SELECT id, embedding, embedding_signature FROM chunks ORDER BY id"
+        ).fetchall()
+        == embeddings
+    )
+    assert conn.execute("SELECT * FROM query_cache").fetchall() == cached
+    assert search_vector(conn, query, 50) == before
+    conn.close()
+
+    def unexpected_quantization(_conn):
+        pytest.fail("Text-only migration must not recompute vectors or quantization")
+
+    monkeypatch.setattr(cli, "quantize_vectors", unexpected_quantization)
+    cli._run_index_mode()  # Fixture also rejects any model service startup.

@@ -31,15 +31,13 @@ Use a few focused reformulations when the first query is ambiguous. Prefer
 specific terminology likely to occur in the source over a long conversational
 question.
 
-## Read-only Diagnostics
+## Index status
 
 ```bash
 sova --json list <project-id>
-sova --json doctor <project-id>
 ```
 
-`doctor` is read-only and exits nonzero when it finds stale or inconsistent
-index state. Report those findings; do not repair or re-index automatically.
+Do not repair or re-index automatically.
 
 ## Mutating Operations
 

@@ -164,3 +164,17 @@ def test_read_only_activation_does_not_create_storage(monkeypatch, tmp_path):
     projects.activate(project)
 
     assert not project.root_dir.exists()
+
+
+def test_project_id_is_not_shadowed_by_local_directory(monkeypatch, tmp_path):
+    _isolate_registry(monkeypatch, tmp_path)
+    source = tmp_path / "source" / "docs"
+    source.mkdir(parents=True)
+    project = projects.add_project(source)
+    working = tmp_path / "working"
+    (working / "docs").mkdir(parents=True)
+    monkeypatch.chdir(working)
+
+    assert projects.get_project("docs") == project
+    assert projects.get_project(str(source)) == project
+    assert projects.get_project("./docs") is None

@@ -6,10 +6,10 @@ queries and 506 blinded pooled judgments for the
 
 ## Recorded results
 
-- `results/baseline.json` — the production hybrid search: vector retrieval,
+- `results/baseline.json` records the production hybrid search: vector retrieval,
   FTS, reciprocal-rank fusion, exact-match bonuses, index penalties, and
   diversity selection.
-- `results/multilingual-reranker-candidate.json` — an evaluated GTE
+- `results/multilingual-reranker-candidate.json` records an evaluated GTE
   multilingual reranker candidate. It met the latency budget but was rejected
   because it did not improve quality over the baseline.
 
@@ -35,8 +35,7 @@ An unjudged top-10 chunk is an error. Existing result files are never
 overwritten.
 
 Each result stores `experiment` as one plain-text sentence describing what was
-tested. The frozen suite hash is the only technical identity needed for a fair
-comparison.
+tested. Compare results only when the suite hash, initial database hash, `k`, and query IDs match.
 
 ## What is frozen
 
@@ -44,7 +43,7 @@ The suite records:
 
 - exact, conceptual, cross-document, natural-language, and negative queries;
 - English and Russian slices;
-- blinded 0–3 relevance judgments;
+- blinded 0 to 3 relevance judgments;
 - the exact corpus database SHA-256 and counts;
 - acceptance criteria and a suite SHA-256 copied into every result.
 

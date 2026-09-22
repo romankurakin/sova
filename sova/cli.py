@@ -16,10 +16,8 @@ from typer._click import exceptions as click_exceptions
 from typer.core import TyperGroup
 
 from sova import config, projects
-from sova.audit import Finding, audit_database
 from sova.cache import get_cache
 from sova.db import (
-    SCHEMA_VERSION,
     VECTOR_INDEX_STATE_KEY,
     connect_readonly,
     embedding_to_blob,
@@ -37,7 +35,7 @@ from sova.extract import (
     find_section,
     parse_sections,
 )
-from sova.index_text import contextualized_text
+from sova.index_text import contextualized_prefix, contextualized_text
 from sova.llama_client import (
     CONTEXT_SYSTEM_PROMPT,
     CONTEXT_USER_PROMPT,
@@ -588,16 +586,14 @@ def _tokenize_doc(
     existing_rows = conn.execute(
         """
         SELECT id, start_line, end_line, word_count, text, section_id,
-               section_path, search_text, is_index
+               section_path, is_index
         FROM chunks
         WHERE doc_id = ?
         ORDER BY id
         """,
         (doc_id,),
     ).fetchall()
-    existing_by_start: dict[
-        int, tuple[int, int, int, str, int | None, str, str, int]
-    ] = {}
+    existing_by_start: dict[int, tuple[int, int, int, str, int | None, str, int]] = {}
     duplicate_ids: list[int] = []
     for row_data in existing_rows:
         (
@@ -608,7 +604,6 @@ def _tokenize_doc(
             text_value,
             section_id,
             section_path,
-            search_text,
             is_idx,
         ) = row_data
         if start_line in existing_by_start:
@@ -621,7 +616,6 @@ def _tokenize_doc(
             text_value,
             section_id,
             str(section_path),
-            str(search_text),
             is_idx,
         )
 
@@ -637,7 +631,7 @@ def _tokenize_doc(
         sec_id = section_ids.get(sec_line)
         sec_path = str(sections[sec_idx]["path"]) if sec_idx is not None else ""
         is_idx = 1 if is_index_like(chunk["text"]) else 0
-        base_search_text = contextualized_text(name, sec_path, chunk["text"])
+        base_search_prefix = contextualized_prefix(name, sec_path)
 
         existing = existing_by_start.get(start_line)
         if existing is None:
@@ -645,7 +639,7 @@ def _tokenize_doc(
                 """
                 INSERT INTO chunks
                     (doc_id, section_id, section_path, start_line, end_line,
-                     word_count, text, search_text, is_index)
+                     word_count, text, search_prefix, is_index)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -656,7 +650,7 @@ def _tokenize_doc(
                     chunk["end_line"],
                     chunk["word_count"],
                     chunk["text"],
-                    base_search_text,
+                    base_search_prefix,
                     is_idx,
                 ),
             )
@@ -669,7 +663,6 @@ def _tokenize_doc(
             text_value,
             old_section_id,
             old_section_path,
-            _old_search_text,
             old_is_idx,
         ) = existing
         content_changed = (
@@ -684,7 +677,7 @@ def _tokenize_doc(
                 """
                 UPDATE chunks
                 SET section_id = ?, section_path = ?, end_line = ?, word_count = ?,
-                    text = ?, search_text = ?, is_index = ?, embedding = NULL,
+                    text = ?, search_prefix = ?, is_index = ?, embedding = NULL,
                     embedding_signature = NULL
                 WHERE id = ?
                 """,
@@ -694,7 +687,7 @@ def _tokenize_doc(
                     chunk["end_line"],
                     chunk["word_count"],
                     chunk["text"],
-                    base_search_text,
+                    base_search_prefix,
                     is_idx,
                     chunk_id,
                 ),
@@ -1247,17 +1240,15 @@ def _generate_contexts(
                     """,
                     (chunk_id, ctx, config.CONTEXT_MODEL),
                 )
-            search_text = contextualized_text(
-                name, sec_title, chunk["text"], context=ctx
-            )
-            if {"embedding_signature", "search_text"} <= chunk_columns:
+            search_prefix = contextualized_prefix(name, sec_title, context=ctx)
+            if {"embedding_signature", "search_prefix"} <= chunk_columns:
                 conn.execute(
                     """
                     UPDATE chunks
-                    SET search_text = ?, embedding = NULL, embedding_signature = NULL
+                    SET search_prefix = ?, embedding = NULL, embedding_signature = NULL
                     WHERE id = ?
                     """,
-                    (search_text, chunk_id),
+                    (search_prefix, chunk_id),
                 )
             elif "embedding_signature" in chunk_columns:
                 conn.execute(
@@ -2113,124 +2104,6 @@ def _run_projects_mode() -> None:
     render_table(table)
 
 
-def _run_doctor_mode() -> None:
-    """Run read-only integrity checks for the active project."""
-    db_path = config.get_db_path()
-    if not db_path.exists():
-        _report_error_block(
-            "database not ready",
-            cause="index database not found",
-            action="run: sova index <project>",
-        )
-        raise typer.Exit(1)
-    conn = connect_readonly()
-    try:
-        findings = audit_database(
-            conn,
-            expected_signatures={
-                _META_CONTEXT_SIG: _context_pipeline_signature(),
-                _META_EMBED_SIG: _embedding_pipeline_signature(),
-                _META_CHUNK_SIG: _chunk_pipeline_signature(),
-            },
-            expected_schema_version=SCHEMA_VERSION,
-        )
-        source_docs = find_docs()
-        source_names = {str(doc["name"]) for doc in source_docs}
-        tables = {
-            str(row[0])
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
-        }
-        if "documents" not in tables:
-            indexed_signatures = {}
-        else:
-            document_columns = {
-                str(row[1])
-                for row in conn.execute("PRAGMA table_info(documents)").fetchall()
-            }
-            if "source_signature" in document_columns:
-                indexed_signatures = {
-                    str(name): str(signature) if signature else ""
-                    for name, signature in conn.execute(
-                        "SELECT name, source_signature FROM documents ORDER BY name"
-                    )
-                }
-            else:
-                indexed_signatures = {
-                    str(row[0]): ""
-                    for row in conn.execute("SELECT name FROM documents ORDER BY name")
-                }
-    finally:
-        conn.close()
-    indexed_names = set(indexed_signatures)
-    stale_documents = sorted(indexed_names - source_names)
-    if stale_documents:
-        findings.append(
-            Finding(
-                "sources.missing",
-                "Indexed documents have no current source: "
-                + ", ".join(stale_documents[:5]),
-                len(stale_documents),
-            )
-        )
-    changed_sources = []
-    for doc in source_docs:
-        name = str(doc["name"])
-        source_path = doc.get("pdf") or doc.get("md")
-        if (
-            name in indexed_signatures
-            and indexed_signatures[name]
-            and isinstance(source_path, Path)
-            and _file_signature(source_path) != indexed_signatures[name]
-        ):
-            changed_sources.append(name)
-    if changed_sources:
-        findings.append(
-            Finding(
-                "sources.changed",
-                "Source content has changed since indexing: "
-                + ", ".join(changed_sources[:5]),
-                len(changed_sources),
-            )
-        )
-    data_dir = config.get_data_dir()
-    generated_names = (
-        {path.stem for path in data_dir.glob("*.md")} if data_dir.exists() else set()
-    )
-    orphan_generated = sorted(generated_names - source_names)
-    if orphan_generated:
-        findings.append(
-            Finding(
-                "sources.orphan_generated_markdown",
-                "Generated Markdown has no current source: "
-                + ", ".join(orphan_generated[:5]),
-                len(orphan_generated),
-            )
-        )
-    if not findings:
-        emit("audit_completed", "Database checks passed", data={"findings": 0})
-        return
-    for finding in findings:
-        emit(
-            "audit_finding",
-            f"{finding.message}: {finding.count}",
-            level="warning",
-            data={
-                "code": finding.code,
-                "count": finding.count,
-                "message": finding.message,
-            },
-        )
-    emit(
-        "audit_completed",
-        f"Database audit found {len(findings)} issue(s)",
-        level="warning",
-        data={"findings": len(findings)},
-    )
-    raise typer.Exit(1)
-
-
 app = typer.Typer(
     name="sova",
     add_completion=False,
@@ -2264,14 +2137,6 @@ def help_command(ctx: typer.Context) -> None:
 @app.command("projects", help="List configured projects")
 def projects_command() -> None:
     _run_projects_mode()
-
-
-@app.command("doctor", help="Check a project database without changing it")
-def doctor_command(
-    project: str = typer.Argument(..., help="Project id/path"),
-) -> None:
-    _activate_project_from_ref(project)
-    _run_doctor_mode()
 
 
 @app.command("download", help="Download all model files")
@@ -2424,7 +2289,7 @@ def main() -> None:
             )
             if isinstance(exit_code, int) and exit_code != 0:
                 sys.exit(exit_code)
-        except click_exceptions.Abort:
+        except typer.Abort:
             _handle_interrupt()
         except click_exceptions.ClickException as e:
             if json_requested:

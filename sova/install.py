@@ -246,7 +246,6 @@ _sova_completion() {
         __sova_add_matches "$cur" <<'SOVA_COMMANDS'
 help
 projects
-doctor
 download
 remove
 list
@@ -260,7 +259,7 @@ SOVA_COMMANDS
     fi
 
     case "$command_name" in
-        doctor|remove|list|index|search)
+        remove|list|index|search)
             if ((COMP_CWORD == command_index + 1)); then
                 if [[ "$cur" == -* ]]; then
                     case "$command_name" in
@@ -330,7 +329,6 @@ _sova() {
         commands=(
             'help:Show help'
             'projects:List configured projects'
-            'doctor:Check a project database'
             'download:Download model files'
             'remove:Remove a project'
             'list:List documents and index status'
@@ -349,7 +347,7 @@ _sova() {
     fi
 
     case "$command_name" in
-        doctor|remove|list|index|search)
+        remove|list|index|search)
             if ((CURRENT == command_index + 1)); then
                 if [[ "$cur" == -* ]]; then
                     case "$command_name" in
@@ -419,7 +417,7 @@ function __fish_sova_needs_project
         string match --quiet -- '-*' "$word"; and continue
         return 1
     end
-    contains -- "$command_name" doctor remove list index search
+    contains -- "$command_name" remove list index search
 end
 
 complete --command sova --erase
@@ -427,7 +425,6 @@ complete --command sova --no-files
 
 complete --command sova --condition __fish_sova_needs_command --arguments help --description 'Show help'
 complete --command sova --condition __fish_sova_needs_command --arguments projects --description 'List configured projects'
-complete --command sova --condition __fish_sova_needs_command --arguments doctor --description 'Check a project database'
 complete --command sova --condition __fish_sova_needs_command --arguments download --description 'Download model files'
 complete --command sova --condition __fish_sova_needs_command --arguments remove --description 'Remove a project'
 complete --command sova --condition __fish_sova_needs_command --arguments list --description 'List documents and index status'

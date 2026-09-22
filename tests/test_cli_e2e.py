@@ -6,7 +6,7 @@ import sys
 from sova import cli, config, projects
 
 
-def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
+def test_index_resume_end_to_end(monkeypatch, tmp_path, capsys):
     docs = tmp_path / "documents"
     docs.mkdir()
     (docs / "manual.md").write_text(
@@ -126,18 +126,3 @@ def test_index_resume_and_doctor_end_to_end(monkeypatch, tmp_path, capsys):
     assert len(context_calls) == 2
     assert len(tokenization_calls) > first_tokenization_count
     assert len(server_modes) == first_server_load_count + 3
-
-    monkeypatch.setattr(sys, "argv", ["sova", "--json", "doctor", "documents"])
-    cli.main()
-    audit_events = [
-        json.loads(line) for line in capsys.readouterr().out.splitlines() if line
-    ]
-
-    assert audit_events == [
-        {
-            "data": {"findings": 0},
-            "level": "info",
-            "message": "Database checks passed",
-            "type": "audit_completed",
-        }
-    ]

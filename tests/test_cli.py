@@ -518,7 +518,7 @@ def test_tokenize_doc_updates_changed_chunk_text_and_clears_context_and_embeddin
             embedding BLOB,
             embedding_signature TEXT,
             section_path TEXT NOT NULL DEFAULT '',
-            search_text TEXT NOT NULL DEFAULT '',
+            search_prefix TEXT,
             is_index INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE chunk_contexts (
@@ -603,7 +603,7 @@ def test_tokenize_doc_prunes_stale_chunks_when_chunk_boundaries_shift(
             embedding BLOB,
             embedding_signature TEXT,
             section_path TEXT NOT NULL DEFAULT '',
-            search_text TEXT NOT NULL DEFAULT '',
+            search_prefix TEXT,
             is_index INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE chunk_contexts (
@@ -685,7 +685,7 @@ def test_tokenize_doc_keeps_context_and_embedding_when_only_section_ids_reorder(
             embedding BLOB,
             embedding_signature TEXT,
             section_path TEXT NOT NULL DEFAULT '',
-            search_text TEXT NOT NULL DEFAULT '',
+            search_prefix TEXT,
             is_index INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE chunk_contexts (

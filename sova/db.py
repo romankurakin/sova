@@ -9,8 +9,9 @@ from contextlib import contextmanager
 from sova import config
 from sova.config import EMBEDDING_DIM, VECTOR_EXT
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 VECTOR_INDEX_STATE_KEY = "index.vector.state"
+_COMPACTION_PENDING_KEY = "storage.compaction.pending"
 
 
 def _check_schema_version(conn: sqlite3.Connection) -> int:
@@ -23,12 +24,122 @@ def _check_schema_version(conn: sqlite3.Connection) -> int:
 
 
 def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
-    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_xinfo({table})")}
+
+
+# SQLite trim() defaults to ASCII spaces; match Python str.strip() exactly.
+# Keep this expression self-contained so ordinary SQLite connections can read it.
+_STRIP_CODEPOINTS = (
+    *range(9, 14),
+    *range(28, 33),
+    133,
+    160,
+    5760,
+    *range(8192, 8203),
+    8232,
+    8233,
+    8239,
+    8287,
+    12288,
+)
+_SEARCH_TEXT_SQL = (
+    "CASE WHEN search_prefix IS NULL THEN text ELSE search_prefix || "
+    f"trim(text, char({','.join(map(str, _STRIP_CODEPOINTS))})) END"
+)
+
+
+def _drop_fts_triggers(conn: sqlite3.Connection) -> None:
+    for name in ("chunks_ai", "chunks_ad", "chunks_au"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+
+
+def _deduplicate_search_text(conn: sqlite3.Connection) -> bool:
+    columns = {row[1]: row for row in conn.execute("PRAGMA table_xinfo(chunks)")}
+    if "search_text" in columns and columns["search_text"][6] == 2:
+        return False
+    if "search_prefix" not in columns:
+        conn.execute("ALTER TABLE chunks ADD COLUMN search_prefix TEXT")
+    if "search_text" in columns:
+        # Preserve the actually indexed input, not a reconstruction from possibly
+        # newer document names or contexts. Bound memory for large corpora.
+        cursor = conn.execute("SELECT id, text, search_text FROM chunks ORDER BY id")
+        while rows := cursor.fetchmany(256):
+            prefixes = []
+            for chunk_id, source, search in rows:
+                if search == source:
+                    prefix = None  # Legacy raw text must retain whitespace too.
+                else:
+                    body = source.strip()
+                    if not isinstance(search, str) or not search.endswith(body):
+                        raise RuntimeError(
+                            f"cannot safely deduplicate search text for chunk {chunk_id}"
+                        )
+                    prefix = search[: -len(body)] if body else search
+                prefixes.append((prefix, chunk_id))
+            conn.executemany(
+                "UPDATE chunks SET search_prefix = ? WHERE id = ?", prefixes
+            )
+        if conn.execute(
+            f"SELECT 1 FROM chunks WHERE search_text IS NOT ({_SEARCH_TEXT_SQL}) LIMIT 1"
+        ).fetchone():
+            raise RuntimeError(
+                "search text reconstruction differs; migration cancelled"
+            )
+        _drop_fts_triggers(conn)
+        conn.execute("ALTER TABLE chunks DROP COLUMN search_text")
+    conn.execute(
+        "ALTER TABLE chunks ADD COLUMN search_text TEXT "
+        f"GENERATED ALWAYS AS ({_SEARCH_TEXT_SQL}) VIRTUAL"
+    )
+    return "search_text" in columns
+
+
+def _ensure_fts(conn: sqlite3.Connection) -> None:
+    exists = bool(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chunks_fts'"
+        ).fetchone()
+    )
+    rebuild = not exists
+    _drop_fts_triggers(conn)
+    if exists and "search_text" not in _column_names(conn, "chunks_fts"):
+        conn.execute("DROP TABLE chunks_fts")
+        rebuild = True
+    conn.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+            search_text, content='chunks', content_rowid='id',
+            tokenize='porter unicode61'
+        )
+    """)
+    conn.execute("""
+        CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
+            INSERT INTO chunks_fts(rowid, search_text) VALUES (new.id, new.search_text);
+        END
+    """)
+    conn.execute("""
+        CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid, search_text)
+            VALUES('delete', old.id, old.search_text);
+        END
+    """)
+    conn.execute("""
+        CREATE TRIGGER chunks_au AFTER UPDATE OF id, text, search_prefix ON chunks
+        WHEN old.id IS NOT new.id OR old.search_text IS NOT new.search_text
+        BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid, search_text)
+            VALUES('delete', old.id, old.search_text);
+            INSERT INTO chunks_fts(rowid, search_text) VALUES (new.id, new.search_text);
+        END
+    """)
+    if rebuild:
+        conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
 
 
 def _migrate_schema(conn: sqlite3.Connection) -> None:
     """Apply small, transactional schema upgrades to existing project databases."""
     _check_schema_version(conn)
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
     with conn:
         chunks_columns = _column_names(conn, "chunks")
         if "embedding_signature" not in chunks_columns:
@@ -37,12 +148,11 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             conn.execute(
                 "ALTER TABLE chunks ADD COLUMN section_path TEXT NOT NULL DEFAULT ''"
             )
-        if "search_text" not in chunks_columns:
+        if _deduplicate_search_text(conn):
             conn.execute(
-                "ALTER TABLE chunks ADD COLUMN search_text TEXT NOT NULL DEFAULT ''"
+                "INSERT OR REPLACE INTO index_meta (key, value) VALUES (?, '1')",
+                (_COMPACTION_PENDING_KEY,),
             )
-            if "text" in chunks_columns:
-                conn.execute("UPDATE chunks SET search_text = text")
 
         context_columns = _column_names(conn, "chunk_contexts")
         if "pipeline_signature" not in context_columns:
@@ -57,6 +167,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         if document_columns and "chunk_signature" not in document_columns:
             conn.execute("ALTER TABLE documents ADD COLUMN chunk_signature TEXT")
 
+        _ensure_fts(conn)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -89,7 +200,7 @@ def init_db() -> sqlite3.Connection:
             word_count INTEGER NOT NULL, text TEXT NOT NULL, embedding BLOB,
             embedding_signature TEXT,
             section_path TEXT NOT NULL DEFAULT '',
-            search_text TEXT NOT NULL DEFAULT '',
+            search_prefix TEXT,
             is_index INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
         );
@@ -117,7 +228,22 @@ def init_db() -> sqlite3.Connection:
         CREATE INDEX IF NOT EXISTS idx_query_cache_created ON query_cache(created_at);
         PRAGMA foreign_keys = ON;
     """)
-    _migrate_schema(conn)
+    try:
+        _migrate_schema(conn)
+        # DROP COLUMN releases payload but does not shrink the file. The durable
+        # marker retries compaction after interruption without redoing models or
+        # the migration. VACUUM itself is transactional.
+        if conn.execute(
+            "SELECT 1 FROM index_meta WHERE key = ?", (_COMPACTION_PENDING_KEY,)
+        ).fetchone():
+            conn.execute("VACUUM")
+            conn.execute(
+                "DELETE FROM index_meta WHERE key = ?", (_COMPACTION_PENDING_KEY,)
+            )
+            conn.commit()
+    except BaseException:
+        conn.close()
+        raise
 
     # A durable marker survives interruption between saved embeddings and
     # quantization. Existing indexes rebuild once to adopt this checkpoint.
@@ -147,55 +273,6 @@ def init_db() -> sqlite3.Connection:
             END
         """)
     conn.commit()
-
-    fts_exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chunks_fts'"
-    ).fetchone()
-    rebuild_fts = not bool(fts_exists)
-    recreate_fts = bool(
-        fts_exists and "search_text" not in _column_names(conn, "chunks_fts")
-    )
-    if recreate_fts:
-        rebuild_fts = True
-        conn.executescript("""
-            DROP TRIGGER IF EXISTS chunks_ai;
-            DROP TRIGGER IF EXISTS chunks_ad;
-            DROP TRIGGER IF EXISTS chunks_au;
-            DROP TABLE chunks_fts;
-        """)
-
-    conn.executescript("""
-        CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-            search_text,
-            content='chunks',
-            content_rowid='id',
-            tokenize='porter unicode61'
-        );
-
-        DROP TRIGGER IF EXISTS chunks_ai;
-        DROP TRIGGER IF EXISTS chunks_ad;
-        DROP TRIGGER IF EXISTS chunks_au;
-        CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
-            INSERT INTO chunks_fts(rowid, search_text) VALUES (new.id, new.search_text);
-        END;
-        CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
-            INSERT INTO chunks_fts(chunks_fts, rowid, search_text)
-            VALUES('delete', old.id, old.search_text);
-        END;
-        CREATE TRIGGER chunks_au AFTER UPDATE OF search_text ON chunks BEGIN
-            INSERT INTO chunks_fts(chunks_fts, rowid, search_text)
-            VALUES('delete', old.id, old.search_text);
-            INSERT INTO chunks_fts(rowid, search_text)
-            VALUES (new.id, new.search_text);
-        END;
-    """)
-
-    # Rebuild if a crash or older schema left the external-content index out of sync.
-    fts_count = conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]
-    chunk_count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    if rebuild_fts or fts_count != chunk_count:
-        conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
-        conn.commit()
 
     conn.execute(
         f"SELECT vector_init('chunks', 'embedding', 'type=FLOAT32,dimension={EMBEDDING_DIM},distance=COSINE')"

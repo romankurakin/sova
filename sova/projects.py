@@ -16,7 +16,6 @@ RESERVED_PROJECT_IDS = frozenset(
     {
         "help",
         "projects",
-        "doctor",
         "download",
         "remove",
         "list",
@@ -197,15 +196,15 @@ def get_project(ref: str) -> Project | None:
     if not ref:
         return None
 
-    maybe_path = Path(ref).expanduser()
-    if maybe_path.exists() and maybe_path.is_dir():
-        return _find_by_docs_dir(reg, _normalize(maybe_path))
-
     for entry in reg.get("projects", []):
         if not isinstance(entry, dict):
             continue
         if entry.get("id") == ref:
             return _entry_to_project(entry)
+
+    maybe_path = Path(ref).expanduser()
+    if maybe_path.exists() and maybe_path.is_dir():
+        return _find_by_docs_dir(reg, _normalize(maybe_path))
     return None
 
 
