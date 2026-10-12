@@ -11,7 +11,7 @@ fi
 
 UV_CACHE_DIR="${UV_CACHE_DIR:-$ROOT_DIR/.uv-cache}"
 PYINSTALLER_CONFIG_DIR="${PYINSTALLER_CONFIG_DIR:-$ROOT_DIR/.pyinstaller}"
-PYINSTALLER_SPEC="${PYINSTALLER_SPEC:-pyinstaller==6.18.0}"
+PYINSTALLER_SPEC="${PYINSTALLER_SPEC:-pyinstaller==6.22.3}"
 SITE_PACKAGES="$(echo "$ROOT_DIR"/.venv/lib/python3.*/site-packages)"
 PYTHONPATH_VALUE="$SITE_PACKAGES:$ROOT_DIR"
 if [[ -n "${PYTHONPATH:-}" ]]; then
