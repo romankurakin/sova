@@ -85,7 +85,7 @@ flowchart LR
 
 Sova combines vector and full-text results with reciprocal rank fusion [3]. Exact matches receive bonuses. Chunks resembling tables of contents or index pages receive penalties based on text density [2]. Diversity selection reduces similar passages in the output.
 
-The semantic cache reuses vector candidates for similar queries at a cosine similarity of at least 0.92. Each query still needs an embedding. Full-text search and final ranking use the current query.
+The vector cache reuses candidates only for an identical query embedding and candidate count. Each query still needs an embedding. Full-text search and final ranking use the current query. Use `--no-cache` to bypass cache reads and writes. Full-text search matches any query term and ranks matches with BM25; it also works when no vector candidates are available.
 
 See the [benchmark guide](benchmarks/README.md) for recorded results and acceptance criteria.
 

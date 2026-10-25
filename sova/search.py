@@ -100,30 +100,30 @@ def fallback_vector_scan(
 def search_fts(
     conn: sqlite3.Connection, query: str, limit: int
 ) -> list[tuple[int, float]]:
-    """FTS5 BM25 search. Returns list of (chunk_id, bm25_score)."""
-    try:
-        # Quote each term for exact matching in FTS5 syntax. Single-char.
-        # tokens are dropped because they're almost always noise and can.
-        # cause FTS to return too many low-quality matches.
-        fts_query = " ".join(
-            f'"{term}"' for term in re.findall(r"[\w-]+", query) if len(term) >= 2
-        )
-        if not fts_query:
-            return []
-
-        rows = conn.execute(
-            """
-            SELECT rowid, bm25(chunks_fts) as score
-            FROM chunks_fts
-            WHERE chunks_fts MATCH ?
-            ORDER BY score
-            LIMIT ?
-            """,
-            (fts_query, limit),
-        ).fetchall()
-        return [(row[0], abs(row[1])) for row in rows]
-    except sqlite3.Error:
+    """Retrieve matches to any query term, ranked by FTS5 BM25."""
+    if limit <= 0:
         return []
+    # Literal OR terms preserve useful matches when natural-language filler or
+    # another language is absent from the passage. Quote user terms so FTS
+    # operators cannot change the expression. Keep the single-character filter.
+    terms = dict.fromkeys(
+        term.casefold() for term in re.findall(r"[\w-]+", query) if len(term) >= 2
+    )
+    fts_query = " OR ".join(f'"{term}"' for term in terms)
+    if not fts_query:
+        return []
+    rows = conn.execute(
+        """
+        SELECT rowid, bm25(chunks_fts) as score
+        FROM chunks_fts
+        WHERE chunks_fts MATCH ?
+        ORDER BY score, rowid
+        LIMIT ?
+        """,
+        (fts_query, limit),
+    ).fetchall()
+    # Database errors must reach the caller, not masquerade as zero matches.
+    return [(row[0], abs(row[1])) for row in rows]
 
 
 def rrf_fusion(
@@ -244,7 +244,7 @@ def fuse_and_rank(
     limit: int,
 ) -> tuple[list[dict], int, int]:
     """Fuse vector results with FTS and rank. Returns (results, n_vector, n_fts)."""
-    if not vector_results:
+    if limit <= 0:
         return [], 0, 0
 
     rrf_k = SEARCH_RRF_K
@@ -255,15 +255,16 @@ def fuse_and_rank(
     diversity_decay = SEARCH_DIVERSITY_DECAY
 
     candidates = len(vector_results)
+    if not candidates:
+        total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        candidates = compute_candidates(total_chunks, limit)
 
     fts_results = search_fts(conn, query_text, candidates)
 
-    if fts_results:
-        rrf_scores = rrf_fusion([vector_results, fts_results], k=rrf_k)
-        fused_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
-    else:
-        fused_ids = [r[0] for r in vector_results]
-        rrf_scores = {r[0]: r[1] for r in vector_results}
+    # Keep the same score scale when either retriever has no matches. Using raw
+    # cosine here would change the relative weight of bonuses and penalties.
+    rrf_scores = rrf_fusion([vector_results, fts_results], k=rrf_k)
+    fused_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
 
     candidate_count = limit * SEARCH_FUSION_CANDIDATE_FACTOR
 

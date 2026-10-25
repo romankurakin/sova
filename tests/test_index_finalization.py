@@ -3,7 +3,7 @@
 import pytest
 
 from sova import cli, config
-from sova.cache import SemanticCache
+from sova.cache import VectorCache
 from sova.db import (
     VECTOR_INDEX_STATE_KEY,
     connect_readonly,
@@ -100,7 +100,7 @@ def test_unchanged_index_reuses_quantization_and_cache(indexed_project, monkeypa
         pytest.fail("An unchanged index should reuse its vector checkpoint")
 
     monkeypatch.setattr(cli, "quantize_vectors", unexpected_quantization)
-    cache = SemanticCache()
+    cache = VectorCache()
     cache.put([1.0, 0.0], [(50, 0.7)])
     conn = connect_readonly()
     cached = conn.execute("SELECT * FROM query_cache").fetchall()
@@ -117,7 +117,7 @@ def test_finalization_failure_preserves_pending_work_for_retry(
     indexed_project, monkeypatch
 ):
     (indexed_project / "removed.md").unlink()
-    cache = SemanticCache()
+    cache = VectorCache()
     cache.put([1.0, 0.0], [(1, 0.99)])
 
     def fail_quantization(_conn):
@@ -146,7 +146,7 @@ def test_finalization_failure_preserves_pending_work_for_retry(
 
 
 def test_embedding_changes_invalidate_cache_and_survive_reopening(indexed_project):
-    cache = SemanticCache()
+    cache = VectorCache()
     cache.put([1.0, 0.0], [(1, 0.99)])
     conn = init_db()
     query = [1.0] + [0.0] * (config.EMBEDDING_DIM - 1)
@@ -195,7 +195,7 @@ def test_text_migration_preserves_vector_index_and_resume(
 
     from sova.db import _COMPACTION_PENDING_KEY
 
-    cache = SemanticCache()
+    cache = VectorCache()
     cache.put([1.0, 0.0], [(50, 0.7)])
     query = embedding_to_blob([1.0] + [0.0] * (config.EMBEDDING_DIM - 1))
     conn = init_db()
@@ -259,3 +259,64 @@ def test_text_migration_preserves_vector_index_and_resume(
 
     monkeypatch.setattr(cli, "quantize_vectors", unexpected_quantization)
     cli._run_index_mode()  # Fixture also rejects any model service startup.
+
+
+def test_search_reuse_and_no_cache_match_fresh_results(indexed_project, monkeypatch):
+    query = [1.0] + [0.0] * (config.EMBEDDING_DIM - 1)
+    monkeypatch.setattr(cli, "get_query_embedding", lambda _text: query)
+    cache = VectorCache()
+    cache.clear()
+    monkeypatch.setattr(cli, "get_cache", lambda: cache)
+    reported = []
+    monkeypatch.setattr(cli, "report_result", reported.append)
+    real_search = cli.get_vector_candidates
+    scans = []
+
+    def scan(*args, **kwargs):
+        scans.append(1)
+        return real_search(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "get_vector_candidates", scan)
+    cli.search_semantic("source")
+    fresh = list(reported)
+    assert fresh
+    reported.clear()
+    cli.search_semantic("source")
+    assert reported == fresh
+    assert len(scans) == 1
+
+    with connect_readonly() as conn:
+        cached = conn.execute("SELECT * FROM query_cache").fetchall()
+
+    def forbidden_cache():
+        pytest.fail("--no-cache must not read, write, or instantiate the cache")
+
+    monkeypatch.setattr(cli, "get_cache", forbidden_cache)
+    reported.clear()
+    cli.search_semantic("source", use_cache=False)
+    assert reported == fresh
+    assert len(scans) == 2
+    with connect_readonly() as conn:
+        assert conn.execute("SELECT * FROM query_cache").fetchall() == cached
+
+
+def test_search_cache_write_failure_keeps_results(indexed_project, monkeypatch):
+    import sqlite3
+
+    query = [1.0] + [0.0] * (config.EMBEDDING_DIM - 1)
+    monkeypatch.setattr(cli, "get_query_embedding", lambda _text: query)
+    cache = VectorCache()
+    cache.clear()
+    monkeypatch.setattr(cli, "get_cache", lambda: cache)
+    reported = []
+    monkeypatch.setattr(cli, "report_result", reported.append)
+    cli.search_semantic("source", use_cache=False)
+    fresh = list(reported)
+
+    def readonly_cache(*args):
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+
+    monkeypatch.setattr(cache, "put", readonly_cache)
+    reported.clear()
+    cli.search_semantic("source")
+    assert reported == fresh

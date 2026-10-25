@@ -239,7 +239,9 @@ class TestInterruptHandling:
             check_calls.append(kwargs)
             return True, "ready"
 
-        def fake_search_semantic(query: str, limit: int, verbose: bool = False):
+        def fake_search_semantic(
+            query: str, limit: int, verbose: bool = False, *, use_cache: bool = True
+        ):
             del verbose
             search_calls.append((query, limit))
 
@@ -1483,3 +1485,21 @@ def test_download_failure_surfaces_service_diagnostics(monkeypatch):
             "detail": "log: ~/.sova/logs/chat.err.log",
         }
     ]
+
+
+@pytest.mark.parametrize("command", [[], ["search"]])
+def test_search_cli_forwards_no_cache(monkeypatch, command):
+    from sova import cli
+
+    calls = []
+    monkeypatch.setattr(cli, "_activate_project_from_ref", lambda _ref: None)
+    monkeypatch.setattr(
+        cli,
+        "_run_search_mode",
+        lambda query, limit, **kwargs: calls.append((query, limit, kwargs)),
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["sova", *command, "project", "page tables", "--no-cache"]
+    )
+    cli.main()
+    assert calls == [("page tables", 10, {"use_cache": False})]

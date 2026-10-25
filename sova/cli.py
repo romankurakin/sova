@@ -1514,22 +1514,23 @@ def search_semantic(
     query: str,
     limit: int = 10,
     verbose: bool = False,
+    *,
+    use_cache: bool = True,
 ) -> None:
     """Perform semantic search and display results."""
     if not config.get_db_path().exists():
         raise RuntimeError("index database not found")
 
     conn = connect_readonly()
-    cache = get_cache()
+    cache = get_cache() if use_cache else None
     try:
         query_emb = get_query_embedding(query)
 
-        # Compute min candidates before checking cache so we only accept cached.
-        # results that searched at least as broadly as we need.
+        # Depth is part of cache identity: a larger cached pool can change fusion.
         total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-        min_candidates = compute_candidates(total_chunks, limit)
-        cached_vectors = cache.get(query_emb, min_candidates)
-        if cached_vectors:
+        candidates = compute_candidates(total_chunks, limit)
+        cached_vectors = cache.get(query_emb, candidates) if cache else None
+        if cached_vectors is not None:
             status("Cache hit", phase="search")
             vector_results = cached_vectors
         else:
@@ -1537,9 +1538,13 @@ def search_semantic(
                 conn,
                 query_emb,
                 limit,
-                candidates=min_candidates,
+                candidates=candidates,
             )
-            cache.put(query_emb, vector_results)
+            if cache is not None:
+                try:
+                    cache.put(query_emb, vector_results)
+                except sqlite3.OperationalError:
+                    pass  # A read-only/locked cache must not prevent search.
         results, n_vector, n_fts = fuse_and_rank(
             conn,
             vector_results,
@@ -1650,7 +1655,7 @@ def _activate_project_from_ref(
     return project
 
 
-def _run_search_mode(query: str, limit: int) -> None:
+def _run_search_mode(query: str, limit: int, *, use_cache: bool = True) -> None:
     status(f'Query "{_preview(query)}"', phase="search")
     try:
         ok, msg = check_servers(
@@ -1674,7 +1679,7 @@ def _run_search_mode(query: str, limit: int) -> None:
         sys.exit(1)
     status(msg, phase="search")
     try:
-        search_semantic(query, limit, verbose=False)
+        search_semantic(query, limit, verbose=False, use_cache=use_cache)
     except KeyboardInterrupt:
         emit("interrupted", "Search interrupted")
         sys.exit(130)
@@ -2219,10 +2224,15 @@ def search_command(
         typer.Argument(help="Project id/path"),
     ],
     query: Annotated[list[str], typer.Argument(help="Search query text")],
-    limit: int = typer.Option(10, "-n", "--limit", help="Max results (default: 10)"),
+    limit: int = typer.Option(
+        10, "-n", "--limit", min=1, help="Max results (default: 10)"
+    ),
+    no_cache: bool = typer.Option(
+        False, "--no-cache", help="Bypass reading and writing the query cache"
+    ),
 ) -> None:
     _activate_project_from_ref(project)
-    _run_search_mode(" ".join(query), limit)
+    _run_search_mode(" ".join(query), limit, use_cache=not no_cache)
 
 
 _COMMAND_NAMES = set(projects.RESERVED_PROJECT_IDS)

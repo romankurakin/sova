@@ -140,21 +140,16 @@ class TestComputeCandidates:
         ("Ошибка подключения", "ОШИБКА ПОДКЛЮЧЕНИЯ"),
         ("Überprüfung fehlgeschlagen", "ÜBERPRÜFUNG FEHLGESCHLAGEN"),
         ("Ошибка HTTP подключения", "ошибка HTTP подключения"),
-        ("Сервер недоступен", '"СЕРВЕР" OR "НЕДОСТУПЕН"'),
     ],
 )
 def test_unicode_fts_and_exact_bonuses(text, query):
     conn = TestSearchFtsSingleChar._make_fts_db()
     conn.execute("INSERT INTO chunks VALUES (2, ?)", (text,))
     conn.execute("INSERT INTO chunks_fts(rowid, text) VALUES (2, ?)", (text,))
-    if " OR " in query:
-        # Query syntax remains literal: OR is a required word, not an operator.
-        assert search_fts(conn, query, 10) == []
-    else:
-        assert [row[0] for row in search_fts(conn, query, 10)] == [2]
-        assert _exact_match_bonuses(conn, [1, 2], query, 0.3, 0.15) == {
-            2: pytest.approx(0.45)
-        }
+    assert [row[0] for row in search_fts(conn, query, 10)] == [2]
+    assert _exact_match_bonuses(conn, [1, 2], query, 0.3, 0.15) == {
+        2: pytest.approx(0.45)
+    }
     conn.close()
 
 
@@ -265,3 +260,80 @@ class TestFuseAndRank:
             )
         finally:
             conn.close()
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "What does PLIC do?",
+        "Что делает PLIC?",
+        "PLIC неизвестное_слово",
+    ],
+)
+def test_fts_keeps_identifier_match_despite_absent_query_words(query):
+    conn = TestSearchFtsSingleChar._make_fts_db()
+    conn.execute("INSERT INTO chunks VALUES (2, 'PLIC handles external interrupts')")
+    conn.execute(
+        "INSERT INTO chunks_fts(rowid, text) VALUES (2, 'PLIC handles external interrupts')"
+    )
+    assert [r[0] for r in search_fts(conn, query, 10)] == [2]
+    conn.close()
+
+
+def test_fts_bm25_prefers_multiple_matching_terms():
+    conn = TestSearchFtsSingleChar._make_fts_db()
+    for chunk_id, text in [
+        (2, "virtual memory paging"),
+        (3, "virtual storage device"),
+        (4, "memory allocation policy"),
+    ]:
+        conn.execute("INSERT INTO chunks VALUES (?, ?)", (chunk_id, text))
+        conn.execute(
+            "INSERT INTO chunks_fts(rowid, text) VALUES (?, ?)", (chunk_id, text)
+        )
+    results = search_fts(conn, "virtual memory explanation", 10)
+    assert results[0][0] == 2
+    assert {r[0] for r in results} == {2, 3, 4}
+    assert search_fts(conn, "VIRTUAL virtual memory explanation", 10) == results
+    assert search_fts(conn, "virtual memory explanation", 1) == results[:1]
+    conn.close()
+
+
+def test_fts_treats_user_operators_as_literal_terms():
+    conn = TestSearchFtsSingleChar._make_fts_db()
+    assert [r[0] for r in search_fts(conn, "missing NOT hello", 10)] == [1]
+    assert search_fts(conn, '"missing" OR * NEAR ()', 10) == []
+    conn.close()
+
+
+def test_fts_does_not_hide_a_broken_index():
+    conn = sqlite3.connect(":memory:")
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        search_fts(conn, "timer", 10)
+    conn.close()
+
+
+def test_fts_only_hybrid_still_returns_hydrated_results():
+    conn = TestFuseAndRank._make_db()
+    results, n_vector, n_fts = fuse_and_rank(conn, [], "timer", 2)
+    assert len(results) == 2
+    assert n_vector == 0
+    assert n_fts == 2
+    assert all(r["fts_hit"] and r["text"] and r["path"] for r in results)
+    assert fuse_and_rank(conn, [], "nonexistent", 2) == ([], 0, 0)
+    conn.close()
+
+
+def test_vector_only_fusion_keeps_rrf_scale():
+    from sova import config
+
+    conn = TestFuseAndRank._make_db()
+    results, n_vector, n_fts = fuse_and_rank(
+        conn, [(1, 0.9), (2, 0.8)], "nonexistent", 2
+    )
+    assert (n_vector, n_fts) == (2, 0)
+    assert results[0]["rrf_score"] == pytest.approx(1 / (config.SEARCH_RRF_K + 1))
+    assert results[0]["final_score"] == pytest.approx(
+        config.SEARCH_RRF_WEIGHT / (config.SEARCH_RRF_K + 1)
+    )
+    conn.close()

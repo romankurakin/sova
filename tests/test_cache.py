@@ -5,49 +5,10 @@ import time
 from contextlib import contextmanager
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 
-from sova.cache import SemanticCache, _cosine_sim_batch
+from sova.cache import VectorCache
 from sova.search import compute_candidates
-
-
-class TestCosineSimBatch:
-    def test_identical_vectors(self):
-        query = np.array([1.0, 0.0, 0.0])
-        embeddings = np.array([[1.0, 0.0, 0.0]])
-        sims = _cosine_sim_batch(query, embeddings)
-        assert sims[0] == pytest.approx(1.0, abs=1e-6)
-
-    def test_orthogonal_vectors(self):
-        query = np.array([1.0, 0.0])
-        embeddings = np.array([[0.0, 1.0]])
-        sims = _cosine_sim_batch(query, embeddings)
-        assert sims[0] == pytest.approx(0.0, abs=1e-6)
-
-    def test_opposite_vectors(self):
-        query = np.array([1.0, 0.0])
-        embeddings = np.array([[-1.0, 0.0]])
-        sims = _cosine_sim_batch(query, embeddings)
-        assert sims[0] == pytest.approx(-1.0, abs=1e-6)
-
-    def test_batch_ordering(self):
-        query = np.array([1.0, 0.0])
-        embeddings = np.array(
-            [
-                [0.0, 1.0],  # orthogonal.
-                [1.0, 0.0],  # identical.
-                [0.5, 0.5],  # partial.
-            ]
-        )
-        sims = _cosine_sim_batch(query, embeddings)
-        assert sims[1] > sims[2] > sims[0]
-
-    def test_unnormalized_vectors(self):
-        query = np.array([3.0, 0.0])
-        embeddings = np.array([[5.0, 0.0]])
-        sims = _cosine_sim_batch(query, embeddings)
-        assert sims[0] == pytest.approx(1.0, abs=1e-6)
 
 
 def _make_cache_db():
@@ -72,7 +33,7 @@ def _make_cache_db():
 def cache_db():
     """Provide a cache instance backed by an in-memory DB."""
     conn = _make_cache_db()
-    cache = SemanticCache(threshold=0.92, max_size=3, ttl=3600)
+    cache = VectorCache(max_size=3, ttl=3600)
 
     @contextmanager
     def _fake_connection(readonly=False):
@@ -83,7 +44,7 @@ def cache_db():
     conn.close()
 
 
-class TestSemanticCache:
+class TestVectorCache:
     def test_miss_on_empty_cache(self, cache_db):
         cache, _conn = cache_db
         result = cache.get([1.0, 0.0, 0.0])
@@ -95,22 +56,21 @@ class TestSemanticCache:
         expected = [(1, 0.9), (2, 0.8)]
         cache.put(emb, expected)
         result = cache.get(emb)
-        # msgpack deserializes tuples as lists.
-        assert [list(t) for t in expected] == result
+        assert expected == result
 
     def test_miss_on_dissimilar_query(self, cache_db):
         cache, _conn = cache_db
         cache.put([1.0, 0.0, 0.0], [(1, 0.9)])
-        # Orthogonal vector — well below 0.92 threshold.
+        # A different vector cannot reuse the candidate list.
         result = cache.get([0.0, 1.0, 0.0])
         assert result is None
 
-    def test_hit_on_similar_query(self, cache_db):
+    def test_miss_on_similar_query(self, cache_db):
         cache, _conn = cache_db
         cache.put([1.0, 0.0, 0.0], [(1, 0.9)])
-        # Very close vector — should exceed 0.92 threshold.
+        # Similarity must not substitute candidates for another query.
         result = cache.get([0.99, 0.01, 0.0])
-        assert result is not None
+        assert result is None
 
     def test_clear(self, cache_db):
         cache, conn = cache_db
@@ -142,15 +102,16 @@ class TestSemanticCache:
         result = cache.get(emb)
         assert result is None
 
-    def test_min_candidates_filter(self, cache_db):
+    def test_candidate_depth_is_part_of_cache_identity(self, cache_db):
         cache, _conn = cache_db
         emb = [1.0, 0.0, 0.0]
         cache.put(emb, [(1, 0.9), (2, 0.8)])  # 2 candidates.
 
-        # Requesting at least 2 — should hit.
-        assert cache.get(emb, min_candidates=2) is not None
-        # Requesting at least 5 — should miss.
-        assert cache.get(emb, min_candidates=5) is None
+        # Only an equal depth may hit.
+        assert cache.get(emb, candidate_count=2) is not None
+        assert cache.get(emb, candidate_count=1) is None
+        # A shallower entry cannot serve a deeper search either.
+        assert cache.get(emb, candidate_count=5) is None
 
     def test_identical_query_hits_when_corpus_is_smaller_than_candidate_floor(
         self, cache_db
@@ -159,7 +120,7 @@ class TestSemanticCache:
         emb = [1.0, 0.0]
         results = [(i, 0.9) for i in range(20)]
         cache.put(emb, results)
-        assert cache.get(emb, compute_candidates(20, 10)) == [list(r) for r in results]
+        assert cache.get(emb, compute_candidates(20, 10)) == results
 
 
 def test_cache_operations_preserve_database_schema(monkeypatch, tmp_path):
@@ -172,12 +133,33 @@ def test_cache_operations_preserve_database_schema(monkeypatch, tmp_path):
     conn = init_db()
     schema_version = conn.execute("PRAGMA schema_version").fetchone()[0]
     schema = conn.execute("SELECT sql FROM sqlite_master ORDER BY name").fetchall()
-    cache = SemanticCache()
+    cache = VectorCache()
     cache.put([1.0, 0.0], [(1, 0.9)])
-    assert cache.get([1.0, 0.0]) == [[1, 0.9]]
+    assert cache.get([1.0, 0.0]) == [(1, 0.9)]
     cache.clear()
     assert conn.execute("PRAGMA schema_version").fetchone()[0] == schema_version
     assert (
         conn.execute("SELECT sql FROM sqlite_master ORDER BY name").fetchall() == schema
     )
     conn.close()
+
+
+def test_cache_miss_for_different_dimension(cache_db):
+    cache, _ = cache_db
+    cache.put([1.0, 0.0], [(1, 0.9)])
+    assert cache.get([1.0, 0.0, 0.0]) is None
+
+
+def test_cache_miss_for_different_model(cache_db):
+    cache, conn = cache_db
+    cache.put([1.0, 0.0], [(1, 0.9)])
+    conn.execute("UPDATE query_cache SET model = 'different-model'")
+    conn.commit()
+    assert cache.get([1.0, 0.0]) is None
+
+
+def test_cache_hit_survives_readonly_storage(cache_db):
+    cache, conn = cache_db
+    cache.put([1.0, 0.0], [(1, 0.9)])
+    conn.execute("PRAGMA query_only=ON")
+    assert cache.get([1.0, 0.0]) == [(1, 0.9)]
