@@ -1,6 +1,7 @@
 """Command-line interface."""
 
 import hashlib
+import importlib.metadata
 import re
 import signal
 import sqlite3
@@ -15,7 +16,7 @@ import typer
 from typer._click import exceptions as click_exceptions
 from typer.core import TyperGroup
 
-from sova import config, projects
+from sova import config, extract, pdf_structure, projects
 from sova.cache import get_cache
 from sova.db import (
     VECTOR_INDEX_STATE_KEY,
@@ -30,7 +31,9 @@ from sova.db import (
 from sova.extract import (
     add_section_paths,
     chunk_text,
-    extract_pdf,
+    context_neighbors,
+    context_scope,
+    extract_pdf_document,
     find_docs,
     find_section,
     parse_sections,
@@ -375,24 +378,45 @@ def _prepare_source(
             stored_source_signature = str(signature_row[0])
 
     effective_extract_signature = stored_extract_signature or stored_source_signature
+    extractor_signature = _signature(
+        [
+            Path(extract.__file__).read_text(),
+            Path(pdf_structure.__file__).read_text(),
+            *[
+                importlib.metadata.version(name)
+                for name in ("PyMuPDF", "pymupdf4llm", "pymupdf-layout")
+            ],
+        ]
+    )
     needs_extract = bool(
         pdf_path
         and (
             not md_path
             or not md_path.exists()
             or effective_extract_signature != source_signature
+            or get_meta(conn, _source_checkpoint_key(name) + ":extractor")
+            != extractor_signature
+            or not pdf_structure.valid_structure(md_path)
         )
     )
     if needs_extract:
         assert pdf_path is not None
         try:
             start = time.time()
-            markdown = extract_pdf(pdf_path)
+            document = extract_pdf_document(pdf_path)
+            markdown = document.markdown
             data_dir = config.get_data_dir()
             data_dir.mkdir(parents=True, exist_ok=True)
             md_path = data_dir / f"{name}.md"
             _write_text_atomic(md_path, markdown)
+            _write_text_atomic(
+                pdf_structure.structure_path(md_path),
+                pdf_structure.structure_json(document),
+            )
             set_meta(conn, _source_checkpoint_key(name), source_signature)
+            set_meta(
+                conn, _source_checkpoint_key(name) + ":extractor", extractor_signature
+            )
             conn.commit()
             lines = len(markdown.splitlines())
             status(
@@ -626,7 +650,7 @@ def _tokenize_doc(
         if start_line in planned_starts:
             continue
         planned_starts.add(start_line)
-        sec_idx = find_section(sections, start_line)
+        sec_idx = find_section(sections, start_line, chunk["end_line"])
         sec_line = sections[sec_idx]["start_line"] if sec_idx is not None else None
         sec_id = section_ids.get(sec_line)
         sec_path = str(sections[sec_idx]["path"]) if sec_idx is not None else ""
@@ -777,7 +801,7 @@ def _context_pipeline_signature() -> str:
             config.CONTEXT_MODEL_HF_FILE,
             CONTEXT_SYSTEM_PROMPT,
             CONTEXT_USER_PROMPT,
-            "input:previous-tail=500,target=full,next-head=500,section=breadcrumb",
+            "input:previous-tail=500,target=full,next-head=500,section=breadcrumb,same-owner.v1",
             "response:json-schema,max_tokens=192,temperature=0,reasoning=low",
             "validation:sentence.v2",
         ]
@@ -800,7 +824,7 @@ def _chunk_pipeline_signature() -> str:
         [
             str(config.CHUNK_TARGET_TOKENS),
             config.EMBEDDING_MODEL,
-            "structure-token-chunks.v4",
+            "structure-token-chunks.v6",
         ]
     )
 
@@ -1171,6 +1195,9 @@ def _generate_contexts(
             ).fetchall()
         }
     chunks_needing_context = []
+    chunks = [
+        chunk | {"context_scope": context_scope(sections, chunk)} for chunk in chunks
+    ]
     # Protect against duplicate start_line entries in chunk lists. This keeps.
     # context generation idempotent across interrupted/retried runs.
     planned_chunk_ids = set(existing_contexts)
@@ -1193,10 +1220,9 @@ def _generate_contexts(
         absolute_done_base = absolute_total - total
         emit_progress = _make_progress_reporter("context", absolute_total, item=name)
         for done, (i, chunk, chunk_id) in enumerate(chunks_needing_context, start=1):
-            sec_idx = find_section(sections, chunk["start_line"])
+            sec_idx = find_section(sections, chunk["start_line"], chunk["end_line"])
             sec_title = sections[sec_idx]["path"] if sec_idx is not None else None
-            prev_text = chunks[i - 1]["text"] if i > 0 else ""
-            next_text = chunks[i + 1]["text"] if i + 1 < len(chunks) else ""
+            prev_text, next_text = context_neighbors(chunks, i)
 
             ctx = ""
             for attempt in range(_CONTEXT_RETRY_ATTEMPTS):
@@ -1345,7 +1371,7 @@ def _embed_doc(
             window_chunk_ids: list[int] = []
 
             for i, chunk, chunk_id in window:
-                sec_idx = find_section(sections, chunk["start_line"])
+                sec_idx = find_section(sections, chunk["start_line"], chunk["end_line"])
                 sec_title = sections[sec_idx]["path"] if sec_idx is not None else None
                 llm_ctx = context_map.get(chunk_id)
                 window_texts.append(

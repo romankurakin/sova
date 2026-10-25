@@ -461,8 +461,8 @@ def test_generate_contexts_is_idempotent_on_duplicate_chunk_start_lines(monkeypa
     conn.commit()
 
     chunks = [
-        {"start_line": 10, "text": "first"},
-        {"start_line": 10, "text": "first duplicate"},
+        {"start_line": 10, "end_line": 10, "text": "first"},
+        {"start_line": 10, "end_line": 10, "text": "first duplicate"},
     ]
     sections: list[dict] = []
 
@@ -752,7 +752,7 @@ def test_generate_contexts_retries_on_empty_response(monkeypatch):
     conn.execute("INSERT INTO chunks (id, doc_id, start_line) VALUES (1, 1, 10)")
     conn.commit()
 
-    chunks = [{"start_line": 10, "text": "first"}]
+    chunks = [{"start_line": 10, "end_line": 10, "text": "first"}]
     sections: list[dict] = []
 
     responses = iter(["   ", "ctx after retry"])
@@ -810,7 +810,10 @@ def test_forced_context_migration_resumes_rows_already_written_by_new_pipeline(
     cli._generate_contexts(
         "doc",
         1,
-        [{"start_line": 10, "text": "first"}, {"start_line": 20, "text": "second"}],
+        [
+            {"start_line": 10, "end_line": 10, "text": "first"},
+            {"start_line": 20, "end_line": 20, "text": "second"},
+        ],
         [],
         conn,
         force_rebuild_context=True,
@@ -871,8 +874,19 @@ def test_prepare_source_reuses_extraction_checkpoint_before_tokenization(
     monkeypatch.setattr(cli.config, "get_data_dir", lambda: data_dir)
     monkeypatch.setattr(
         cli,
-        "extract_pdf",
-        lambda path: extractions.append(path) or "# Extracted\n\nBody\n",
+        "extract_pdf_document",
+        lambda path: (
+            extractions.append(path)
+            or cli.pdf_structure.ExtractedDocument(
+                "# Extracted\n\nBody\n",
+                {
+                    "schema_version": 1,
+                    "markdown_sha256": cli.hashlib.sha256(
+                        b"# Extracted\n\nBody\n"
+                    ).hexdigest(),
+                },
+            )
+        ),
     )
     monkeypatch.setattr(cli, "status", lambda *_args, **_kwargs: None)
 
@@ -1246,7 +1260,10 @@ def test_embed_doc_persists_partial_window_progress_on_failure(monkeypatch):
         )
     conn.commit()
 
-    chunks = [{"start_line": line, "text": f"chunk {line}"} for line in range(1, 21)]
+    chunks = [
+        {"start_line": line, "end_line": line, "text": f"chunk {line}"}
+        for line in range(1, 21)
+    ]
     attempts = {"count": 0}
 
     def fake_get_embeddings_batch(texts, on_batch=None):
@@ -1312,7 +1329,10 @@ def test_embed_doc_retry_only_embeds_unfinished_tail(monkeypatch):
         )
     conn.commit()
 
-    chunks = [{"start_line": line, "text": f"chunk {line}"} for line in range(1, 21)]
+    chunks = [
+        {"start_line": line, "end_line": line, "text": f"chunk {line}"}
+        for line in range(1, 21)
+    ]
     seen_lengths: list[int] = []
     calls = {"count": 0}
 
@@ -1389,7 +1409,10 @@ def test_embed_doc_reports_absolute_progress(monkeypatch):
         )
     conn.commit()
 
-    chunks = [{"start_line": line, "text": f"chunk {line}"} for line in range(1, 21)]
+    chunks = [
+        {"start_line": line, "end_line": line, "text": f"chunk {line}"}
+        for line in range(1, 21)
+    ]
     reports: list[tuple[str, int, int]] = []
 
     def fake_get_embeddings_batch(texts, on_batch=None):

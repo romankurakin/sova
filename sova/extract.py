@@ -11,6 +11,7 @@ from typing import TextIO
 
 from sova import config
 from sova.external import call_external
+from sova.pdf_structure import ExtractedDocument, adapt_pages
 
 
 def get_docs_dir() -> Path | None:
@@ -56,7 +57,12 @@ def find_docs() -> list[dict]:
 
 
 def extract_pdf(pdf_path: Path) -> str:
-    """Extract markdown from PDF using pymupdf4llm with layout analysis."""
+    """Return the searchable text of a structured PDF extraction."""
+    return extract_pdf_document(pdf_path).markdown
+
+
+def extract_pdf_document(pdf_path: Path) -> ExtractedDocument:
+    """Use layout blocks, outline and table spans from the installed extractor."""
     import pymupdf
 
     def capture_messages(stream: TextIO):
@@ -64,14 +70,18 @@ def extract_pdf(pdf_path: Path) -> str:
         pymupdf.set_messages(stream=stream)
         return lambda: pymupdf.set_messages(stream=previous)
 
-    def convert() -> str:
+    def convert() -> ExtractedDocument:
         # pymupdf4llm checks if pymupdf.layout was already imported to decide
         # whether to use layout analysis. Import it first or extraction silently
         # falls back to the lower-quality basic path.
         importlib.import_module("pymupdf.layout")
         import pymupdf4llm
 
-        return pymupdf4llm.to_markdown(str(pdf_path), header=False, footer=False)
+        with pymupdf.open(pdf_path) as pdf:
+            pages = pymupdf4llm.to_markdown(
+                pdf, header=False, footer=False, page_chunks=True, table_output="html"
+            )
+            return adapt_pages(pages, pdf)
 
     return call_external(
         "PDF extraction",
@@ -82,6 +92,22 @@ def extract_pdf(pdf_path: Path) -> str:
 
 _HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)\s*$")
 _FENCE_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
+_NUMBERED_RE = re.compile(
+    r"^(?:(?:chapter|section|appendix)\s+)?"
+    r"(?P<number>(?:\d+|[A-Z])(?:\.\d+)*)(?:\.\s*|\s+)(?=\S)",
+    re.IGNORECASE,
+)
+
+
+def _section_number(title: str) -> tuple[str, ...] | None:
+    match = _NUMBERED_RE.match(title)
+    if match is None:
+        return None
+    number = match["number"]
+    # A single letter without an explicit Appendix label is too ambiguous.
+    if number.isalpha() and not title.lower().startswith("appendix "):
+        return None
+    return tuple(number.lower().split("."))
 
 
 def _heading(line: str, *, in_fence: bool) -> tuple[int, str] | None:
@@ -131,7 +157,39 @@ def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
         if parsed is not None:
             level, title = parsed
             headings.append((i, level, title))
-    return headings
+    # PDF font sizes frequently flatten numbered sections and their field labels.
+    # Use explicit numbering to recover ancestry, without instruction-name lists.
+    numbered: dict[tuple[str, ...], tuple[int, int]] = {}
+    owner: tuple[tuple[str, ...], int, int] | None = None
+    adjusted = []
+    for line, raw_level, title in headings:
+        level = raw_level
+        number = _section_number(title)
+        if number is not None:
+            parents = [
+                key
+                for key in numbered
+                if len(key) < len(number) and number[: len(key)] == key
+            ]
+            if parents:
+                parent = max(parents, key=len)
+                level = max(level, numbered[parent][1] + 1)
+            peers = [
+                value
+                for key, value in numbered.items()
+                if key[:-1] == number[:-1] and len(key) == len(number)
+            ]
+            if peers:
+                level = peers[-1][1]
+            numbered[number] = (raw_level, level)
+            owner = (number, raw_level, level)
+        elif owner is not None:
+            if raw_level < owner[1]:
+                owner = None
+            elif len(owner[0]) > 1:
+                level = max(level, owner[2] + 1)
+        adjusted.append((line, level, title))
+    return adjusted
 
 
 def parse_sections(lines: list[str]) -> list[dict]:
@@ -201,6 +259,88 @@ def _paragraph_blocks(lines: list[str], start_line: int, end_line: int) -> list[
     return blocks
 
 
+def _table_cells(line: str) -> list[str]:
+    """Split Markdown cells without treating escaped or code-span pipes as borders."""
+    cells = []
+    pending = []
+    code = False
+    escaped = False
+    text = line.strip().removeprefix("|")
+    if text.endswith("|"):
+        before = text[:-1]
+        escapes = len(before) - len(before.rstrip("\\"))
+        if escapes % 2 == 0:
+            text = before
+    for char in text:
+        if char == "|" and not escaped and not code:
+            cells.append("".join(pending).strip())
+            pending = []
+        else:
+            pending.append(char)
+            if char == "`" and not escaped:
+                code = not code
+        escaped = char == "\\" and not escaped
+    cells.append("".join(pending).strip())
+    return cells
+
+
+def _table_blocks(lines: list[str], start: int, end: int) -> list[dict]:
+    """Keep pipe tables distinct from adjacent prose, even without blank lines."""
+    blocks = []
+    cursor = start
+    plain_start = start
+    fence = None
+    while cursor <= end:
+        marker = _FENCE_RE.match(lines[cursor - 1])
+        if marker:
+            char = marker[1][0]
+            fence = char if fence is None else (None if char == fence else fence)
+        separator = _table_cells(lines[cursor]) if cursor < end else []
+        if (
+            fence is None
+            and cursor < end
+            and "|" in lines[cursor - 1]
+            and "|" in lines[cursor]
+            and separator
+            and all(re.fullmatch(r":?-{3,}:?", cell) for cell in separator)
+            and len(_table_cells(lines[cursor - 1])) == len(separator)
+        ):
+            blocks.extend(_paragraph_blocks(lines, plain_start, cursor - 1))
+            table_end = cursor + 1
+            while (
+                table_end < end
+                and "|" in lines[table_end]
+                and len(_table_cells(lines[table_end])) == len(separator)
+            ):
+                table_end += 1
+            blocks.append(
+                {
+                    "start_line": cursor,
+                    "end_line": table_end,
+                    "text": "\n".join(lines[cursor - 1 : table_end]).strip(),
+                    "table_header": [cursor, cursor + 1],
+                }
+            )
+            cursor = table_end + 1
+            plain_start = cursor
+        else:
+            cursor += 1
+    blocks.extend(_paragraph_blocks(lines, plain_start, end))
+    return blocks
+
+
+def source_ranges(chunk: dict) -> list[list[int]]:
+    return chunk.get("source_ranges", [[chunk["start_line"], chunk["end_line"]]])
+
+
+def _with_ranges(chunk: dict, blocks: list[dict]) -> dict:
+    if any("source_ranges" in block for block in blocks):
+        chunk["source_ranges"] = [
+            span for block in blocks for span in source_ranges(block)
+        ]
+    return chunk
+
+
 def _validated_token_counts(
     counter: Callable[[list[str]], list[int]], texts: list[str]
 ) -> list[int]:
@@ -216,12 +356,15 @@ def _validated_token_counts(
 
 def _chunk_from_blocks(blocks: list[dict]) -> dict:
     text = "\n\n".join(str(block["text"]) for block in blocks).strip()
-    return {
-        "start_line": int(blocks[0]["start_line"]),
-        "end_line": int(blocks[-1]["end_line"]),
-        "word_count": len(text.split()),
-        "text": text,
-    }
+    return _with_ranges(
+        {
+            "start_line": int(blocks[0]["start_line"]),
+            "end_line": int(blocks[-1]["end_line"]),
+            "word_count": len(text.split()),
+            "text": text,
+        },
+        blocks,
+    )
 
 
 def _fit_block_group(
@@ -335,6 +478,8 @@ def _split_oversized_block(
     count_tokens_batch: Callable[[list[str]], list[int]],
 ) -> list[dict]:
     """Split a large paragraph or table at source line boundaries."""
+    if "table_header" in block:
+        return _split_table(block, lines, target_tokens, count_tokens_batch)
     line_blocks = [
         {"start_line": line_number, "end_line": line_number, "text": line}
         for line_number in range(int(block["start_line"]), int(block["end_line"]) + 1)
@@ -380,6 +525,61 @@ def _split_oversized_block(
     return chunks
 
 
+def _split_table(block, lines, target, counter) -> list[dict]:
+    header_start, header_end = block["table_header"]
+    header = "\n".join(lines[header_start - 1 : header_end])
+    rows = list(range(header_end + 1, block["end_line"] + 1))
+    if not rows:
+        return [block]
+    counts = _validated_token_counts(
+        counter, [header, "\n", *[lines[row - 1] for row in rows]]
+    )
+    header_count, newline_count, *row_counts = counts
+    groups = []
+    group = []
+    size = header_count
+    for row, count in zip(rows, row_counts, strict=True):
+        if group and size + newline_count + count > target:
+            groups.append(group)
+            group, size = [], header_count
+        group.append(row)
+        size += newline_count + count
+    groups.append(group)
+
+    def text_for(group):
+        return header + "\n" + "\n".join(lines[row - 1] for row in group)
+
+    def fit(group, count):
+        if count > target and len(group) > 1:
+            mid = len(group) // 2
+            halves = [group[:mid], group[mid:]]
+            sizes = _validated_token_counts(
+                counter, [text_for(part) for part in halves]
+            )
+            return [
+                chunk
+                for part, size in zip(halves, sizes, strict=True)
+                for chunk in fit(part, size)
+            ]
+        text = text_for(group)
+        return [
+            {
+                "start_line": header_start if group[0] == rows[0] else group[0],
+                "end_line": group[-1],
+                "text": text,
+                "word_count": len(text.split()),
+                "source_ranges": [[header_start, header_end], [group[0], group[-1]]],
+            }
+        ]
+
+    exact = _validated_token_counts(counter, [text_for(group) for group in groups])
+    return [
+        chunk
+        for group, count in zip(groups, exact, strict=True)
+        for chunk in fit(group, count)
+    ]
+
+
 def chunk_text(
     lines: list[str],
     target_tokens: int = config.CHUNK_TARGET_TOKENS,
@@ -397,7 +597,10 @@ def chunk_text(
     # converters commonly use it for every field label, table caption, and
     # instruction attribute. Keeping the heading text while allowing adjacent
     # H6 blocks to coalesce avoids tens of thousands of tiny model calls.
-    section_starts = [line for line, level, _title in _headings(lines) if level < 6]
+    headings = _headings(lines)
+    section_starts = [
+        line for line, level, title in headings if level < 6 or _section_number(title)
+    ]
     segment_starts = sorted({1, *section_starts})
     segments: list[list[dict]] = []
 
@@ -412,11 +615,18 @@ def chunk_text(
             for line_number in range(segment_start, segment_end + 1)
             if lines[line_number - 1].strip()
         ]
-        if len(nonblank) == 1 and _heading(nonblank[0], in_fence=False) is not None:
-            # An outline-only parent is already represented in every descendant's.
+        own_heading = next((h for h in headings if h[0] == segment_start), None)
+        next_heading = next((h for h in headings if h[0] > segment_start), None)
+        if (
+            len(nonblank) == 1
+            and own_heading is not None
+            and next_heading is not None
+            and next_heading[1] > own_heading[1]
+        ):
+            # An outline-only parent is already represented in every descendant's
             # breadcrumb and adds no searchable source content of its own.
             continue
-        blocks = _paragraph_blocks(lines, segment_start, segment_end)
+        blocks = _table_blocks(lines, segment_start, segment_end)
         if blocks:
             segments.append(blocks)
 
@@ -455,14 +665,7 @@ def chunk_text(
                     target_tokens=split_budget,
                     count_tokens_batch=count_tokens_batch,
                 )
-                split_blocks = [
-                    {
-                        "start_line": chunk["start_line"],
-                        "end_line": chunk["end_line"],
-                        "text": chunk["text"],
-                    }
-                    for chunk in split_chunks
-                ]
+                split_blocks = [dict(chunk) for chunk in split_chunks]
                 if attach_heading:
                     planned_groups.append(pending + [split_blocks[0]])
                     pending = []
@@ -509,16 +712,78 @@ def chunk_text(
     return chunks
 
 
-def find_section(sections: list[dict], line: int) -> int | None:
-    """Find which section a line belongs to. O(log n) via bisect."""
+def find_section(
+    sections: list[dict], line: int, end_line: int | None = None
+) -> int | None:
+    """Find a line's section, or the common ancestor covering an inclusive span.
+
+    Section end lines describe their own content, not their whole subtree.
+    A chunk spanning soft H6 boundaries therefore belongs to their common
+    parent even when the parent's own content ends before the chunk starts.
+    """
     if not sections:
         return None
-    # Sections are sorted by start_line. Find the rightmost section.
-    # whose start_line <= line, then check if line <= end_line.
-    idx = bisect.bisect_right([s["start_line"] for s in sections], line) - 1
+    if end_line is None:
+        end_line = line
+    if end_line < line:
+        raise ValueError("section span ends before it starts")
+    # Locate the first and last content sections before comparing ancestry.
+    starts = [s["start_line"] for s in sections]
+    idx = bisect.bisect_right(starts, line) - 1
     if idx < 0:
         return None
-    s = sections[idx]
-    if line <= (s["end_line"] or float("inf")):
+    last_idx = bisect.bisect_right(starts, end_line) - 1
+    if line > (sections[idx]["end_line"] or float("inf")) or end_line > (
+        sections[last_idx]["end_line"] or float("inf")
+    ):
+        return None
+    if idx == last_idx:
         return idx
+
+    # Crossing a heading closes ancestors of the same or deeper level. The
+    # closest preceding shallower heading is the common ancestor. Compare
+    # structural positions and levels, not titles: siblings may share a name.
+    crossed_level = min(int(s["level"]) for s in sections[idx + 1 : last_idx + 1])
+    for ancestor in range(idx, -1, -1):
+        if int(sections[ancestor]["level"]) < crossed_level:
+            return ancestor
     return None
+
+
+def context_scope(sections: list[dict], chunk: dict) -> int | None:
+    """Use a structural owner, not a neighboring instruction, for disambiguation."""
+    index = find_section(sections, chunk["start_line"], chunk["end_line"])
+    if index is None:
+        return None
+    level = float("inf")
+    fallback = sections[index]["start_line"]
+    found_fallback = False
+    for section in reversed(sections[: index + 1]):
+        if section["level"] < level:
+            level = section["level"]
+            number = _section_number(section["title"])
+            if number is not None and len(number) > 1:
+                return section["start_line"]
+            if level < 6 and not found_fallback:
+                fallback = section["start_line"]
+                found_fallback = True
+    return fallback
+
+
+def context_neighbors(chunks: list[dict], index: int) -> tuple[str, str]:
+    """Frozen legacy chunks retain their old inputs; new chunks carry an owner."""
+    chunk = chunks[index]
+    neighbors = []
+    for other in (index - 1, index + 1):
+        if (
+            not 0 <= other < len(chunks)
+            or "context_scope" in chunk
+            and (
+                chunk["context_scope"] is None
+                or chunks[other].get("context_scope") != chunk["context_scope"]
+            )
+        ):
+            neighbors.append("")
+        else:
+            neighbors.append(chunks[other]["text"])
+    return neighbors[0][-500:], neighbors[1][:500]

@@ -43,13 +43,31 @@ def test_extract_pdf_suppresses_parser_messages(monkeypatch, capsys, tmp_path):
         print("raw converter output")
         pymupdf.message("=== Document parser messages ===")
         pymupdf.message("Using Tesseract for OCR processing.")
-        return "# Extracted"
+        assert _kwargs["page_chunks"] is True
+        assert _kwargs["table_output"] == "html"
+        return [
+            {
+                "text": "# Extracted",
+                "metadata": {"page_number": 1},
+                "page_boxes": [
+                    {
+                        "class": "section-header",
+                        "pos": [0, 11],
+                        "bbox": [0, 0, 100, 100],
+                    }
+                ],
+            }
+        ]
 
     fake.to_markdown = to_markdown
     monkeypatch.setitem(__import__("sys").modules, "pymupdf4llm", fake)
     monkeypatch.setattr("sova.extract.importlib.import_module", lambda _name: None)
 
-    assert extract_pdf(tmp_path / "source.pdf") == "# Extracted"
+    path = tmp_path / "source.pdf"
+    with pymupdf.open() as pdf:
+        pdf.new_page()
+        pdf.save(path)
+    assert extract_pdf(path) == "# Extracted"
     assert capsys.readouterr() == ("", "")
 
 
@@ -256,6 +274,58 @@ class TestChunkText:
 
 
 class TestFindSection:
+    def test_chunk_spanning_soft_headings_uses_common_parent(self):
+        lines = [
+            "# Parent",
+            "",
+            " ".join(["intro"] * 60),
+            "",
+            "###### First field",
+            "",
+            "First field details.",
+            "",
+            "###### Second field",
+            "",
+            "Second field details.",
+        ]
+        sections = parse_sections(lines)
+        chunks = chunk_text(lines, target_tokens=48)
+        spanning = next(chunk for chunk in chunks if chunk["start_line"] == 5)
+
+        assert spanning["end_line"] == 11
+        assert find_section(sections, 5) == 1
+        assert find_section(sections, 5, 11) == 0
+        assert find_section(sections, 7, 8) == 1
+
+    @pytest.mark.parametrize(
+        ("lines", "start", "end", "expected"),
+        [
+            (["# Root", "## Child", "text"], 1, 3, 0),
+            (["# Root", "## A", "### Detail", "## B", "text"], 3, 5, 0),
+            (["# Same", "text", "# Same", "text"], 1, 4, None),
+            (["# Root", "###### Same", "text", "###### Same", "text"], 2, 5, 0),
+            (["###### A", "text", "###### B", "text"], 1, 4, None),
+            (["preface", "# Root", "text"], 1, 3, None),
+            (["# Root", "text"], 1, 3, None),
+        ],
+    )
+    def test_span_hierarchy(self, lines, start, end, expected):
+        assert find_section(parse_sections(lines), start, end) == expected
+
+    def test_inline_heading_markup_does_not_determine_section_identity(self):
+        # Synthetic PDF-style markup must not determine the chunk's ancestry.
+        lines = [
+            "##### **3.1. Parent (** **`control` ) Register**",
+            "###### **3.1.1. First Field in** **`control` Register**",
+            "###### **3.1.2. Second Field in** **`control` Register**",
+        ]
+        sections = parse_sections(lines)
+        assert find_section(sections, 2, 3) == 0
+
+    def test_reversed_span_is_rejected(self):
+        with pytest.raises(ValueError, match="ends before"):
+            find_section(parse_sections(["# Root", "text"]), 2, 1)
+
     def test_empty_sections(self):
         assert find_section([], 10) is None
 
@@ -377,3 +447,91 @@ class TestFindDocs:
                 docs = find_docs()
                 assert len(docs) == 2
                 assert docs[0]["size"] <= docs[1]["size"]
+
+
+def test_flat_numbered_instruction_fields_keep_their_owner():
+    from sova.extract import context_neighbors, context_scope
+
+    lines = [
+        "## Chapter 32. Vector instructions",
+        "#### 32.3. Instructions",
+        "##### 32.3.21. compression",
+        "##### Operation",
+        "Compression operation.",
+        "##### Included in",
+        "Vector extension.",
+        "##### 32.3.22. schedule",
+        "##### Synopsis",
+        "Message schedule.",
+    ]
+    sections = parse_sections(lines)
+    assert sections[4]["path"].endswith("32.3.21. compression > Included in")
+    chunks = chunk_text(lines, target_tokens=1000)
+    assert len(chunks) == 2
+    assert "32.3.21. compression" in chunks[0]["text"]
+    assert "32.3.22. schedule" in chunks[1]["text"]
+    chunks = [c | {"context_scope": context_scope(sections, c)} for c in chunks]
+    assert context_neighbors(chunks, 0) == ("", "")
+    assert context_neighbors(chunks, 1) == ("", "")
+
+
+def test_standalone_sibling_heading_is_not_silently_discarded():
+    chunks = chunk_text(["## Empty topic", "", "## Other topic", "Body"])
+    assert chunks[0]["text"] == "## Empty topic"
+
+
+def test_table_continuations_repeat_headers_with_exact_source_ranges():
+    from sova.extract import source_ranges
+
+    lines = ["## Registers", "", "| Register | Width |", "| --- | --- |"]
+    lines += [f"| r{i} | {i + 1} |" for i in range(12)]
+    chunks = chunk_text(lines, target_tokens=40)
+    assert len(chunks) > 2
+    seen = []
+    for chunk in chunks:
+        assert "| Register | Width |" in chunk["text"]
+        reconstructed = "\n".join(
+            "\n".join(lines[a - 1 : b]) for a, b in source_ranges(chunk)
+        )
+        assert reconstructed.split() == chunk["text"].split()
+        assert _token_counts([chunk["text"]])[0] <= 40
+        seen.extend(re.findall(r"\br\d+\b", chunk["text"]))
+    assert seen == [f"r{i}" for i in range(12)]
+
+
+def test_oversized_table_row_keeps_header_and_all_cell_text():
+    lines = [
+        "| Name | Meaning |",
+        "| --- | --- |",
+        "| long | " + "detail " * 100 + "|",
+        "| small | value |",
+    ]
+    chunks = chunk_text(lines, target_tokens=30)
+    assert len(chunks) == 2
+    assert chunks[0]["text"].count("detail") == 100
+    assert all("| Name | Meaning |" in chunk["text"] for chunk in chunks)
+
+
+def test_pipe_syntax_in_code_does_not_create_a_table():
+    lines = ["```", "| Name |", "| --- |", "| row |", "```"]
+    assert all("source_ranges" not in c for c in chunk_text(lines, 8))
+
+
+def test_empty_table_headers_and_optional_outer_pipes_remain_structural():
+    from sova.extract import _table_cells
+
+    assert _table_cells("||Name||") == ["", "Name", ""]
+    assert _table_cells(r"| A\|B | C |") == [r"A\|B", "C"]
+    for header, separator, row in [
+        ("|||", "|---|---|", "|r{0}|description number {0}|"),
+        ("Name | Meaning", "--- | ---", "r{0} | description number {0}"),
+    ]:
+        chunks = chunk_text(
+            [header, separator, *[row.format(i) for i in range(10)]], target_tokens=25
+        )
+        assert len(chunks) > 1
+        assert all("source_ranges" in chunk for chunk in chunks)
+        assert all(header in chunk["text"] for chunk in chunks)
+        assert [
+            value for c in chunks for value in re.findall(r"\br\d+\b", c["text"])
+        ] == [f"r{i}" for i in range(10)]
