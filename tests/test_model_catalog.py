@@ -16,8 +16,8 @@ def test_chat_service_uses_configured_context_artifact():
     args = chat["extra_args"]
     assert "--no-mmproj" in args
     assert args[args.index("--parallel") + 1] == "1"
-    assert args[args.index("--reasoning-effort") + 1] == "low"
-    assert args[args.index("--reasoning-budget") + 1] == "64"
+    assert args[args.index("--reasoning-effort") + 1] == "medium"
+    assert args[args.index("--reasoning-budget") + 1] == "256"
     assert "--spec-type" not in args
 
 

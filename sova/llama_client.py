@@ -115,13 +115,20 @@ QUERY_TASK = "Given a search query, retrieve relevant passages that answer the q
 
 CONTEXT_SYSTEM_PROMPT = (
     "Write context for document retrieval. Return one concise, standalone, "
-    "grammatical plain-text sentence with an explicit subject and verb. Identify "
+    "grammatical plain-text sentence with an explicit subject and verb. Usually "
+    "use 20-50 words, or fewer when sufficient; do not add details to fill the "
+    "available token budget. Identify "
     "the target passage's main subject and its most distinguishing information. "
     "Begin directly with that specific subject, never with a reference to the "
     "passage itself. Use the title, section, and neighboring passages only to "
     "disambiguate the target passage. Include only information supported by the "
-    "supplied text. Prefer specific names and terms from the target passage. Do "
-    "not mention the prompt, document structure, excerpts, chunks, passages, or "
+    "supplied text. Preserve conditions, exceptions, and uncertainty that qualify "
+    "any claim you include; do not turn a possibility into a guarantee. For "
+    "tabular or list-like input, summarize what the data describes and retain "
+    "only the most distinguishing names or categories rather than enumerating "
+    "entries. Do not infer missing meanings from damaged cells or unexplained "
+    "codes. Prefer specific names and terms from the target passage. Do not "
+    "mention the prompt, document structure, excerpts, chunks, passages, or "
     "retrieval. Do not use markdown, labels, quotations, or XML."
 )
 
@@ -152,13 +159,17 @@ CONTEXT_RESPONSE_FORMAT = {
 
 
 def _extract_context_response(raw: str) -> str:
-    """Extract a context sentence from the structured response or plain fallback."""
+    """Accept only the final structured answer, never an unparsed model response."""
     text = raw.strip()
     try:
         payload = json.loads(text)
-    except json.JSONDecodeError:
-        return text
-    if not isinstance(payload, dict) or not isinstance(payload.get("context"), str):
+    except json.JSONDecodeError as exc:
+        raise ServerError("context response was not valid JSON") from exc
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"context"}
+        or not isinstance(payload["context"], str)
+    ):
         raise ServerError("context response did not contain a string 'context' field")
     return payload["context"].strip()
 
@@ -168,6 +179,8 @@ def _validate_context_response(raw: str) -> str:
     text = raw.strip()
     if not text:
         raise ServerError("context response was empty")
+    if re.search(r"</?think\b", text, re.IGNORECASE):
+        raise ServerError("context response contained reasoning tags")
     word_count = len(text.split())
     if not 3 <= word_count <= 96:
         raise ServerError(
@@ -1085,8 +1098,10 @@ def get_embeddings_batch(
     texts: list[str],
     on_batch: Callable[[list[int], list[list[float]], dict[str, float | int]], None]
     | None = None,
+    *,
+    on_inputs: Callable[[list[int], list[str]], None] | None = None,
 ) -> list[list[float]]:
-    """Embed texts via llama-server with a fixed single-worker request plan."""
+    """Embed texts; optionally report successful effective inputs before on_batch."""
     if not texts:
         return []
     if not _ensure_server(EMBEDDING_SERVER_URL):
@@ -1110,6 +1125,7 @@ def get_embeddings_batch(
                 f"(completed={start}/{total}, batch_size={len(raw_batch)}, workers=1): "
                 f"{reason}"
             ) from e
+        effective_texts = list(batch_texts)
         started = time.monotonic()
         try:
             batch_embeddings = _embed_inputs_via_server(
@@ -1167,6 +1183,7 @@ def get_embeddings_batch(
                                     f"(expected=1, got={len(embedded)})"
                                 )
                             embedded_vector = embedded[0]
+                            effective_texts[idx] = candidate
                             break
                         except Exception as single_exc:
                             single_reason = (
@@ -1212,6 +1229,8 @@ def get_embeddings_batch(
             )
 
         results.extend(batch_embeddings)
+        if on_inputs:
+            on_inputs(list(range(start, end)), effective_texts)
         if on_batch:
             on_batch(
                 list(range(start, end)),
@@ -1226,6 +1245,36 @@ def get_embeddings_batch(
     return results
 
 
+def context_request_body(
+    doc_name: str,
+    section_title: str | None,
+    chunk_text: str,
+    prev_chunk: str = "",
+    next_chunk: str = "",
+) -> dict:
+    """Return the exact chat request the context model receives for a chunk."""
+    prompt = CONTEXT_USER_PROMPT.format(
+        doc_name=doc_name,
+        section_title=section_title or "(no section)",
+        prev_chunk=prev_chunk[-500:] if prev_chunk else "(not provided)",
+        chunk_text=chunk_text,
+        next_chunk=next_chunk[:500] if next_chunk else "(not provided)",
+    )
+    return {
+        "model": CONTEXT_MODEL,
+        "messages": [
+            {"role": "system", "content": CONTEXT_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": 512,
+        "temperature": 0.0,
+        "reasoning_effort": "medium",
+        "reasoning_budget_tokens": 256,
+        "reasoning_format": "deepseek",
+        "response_format": CONTEXT_RESPONSE_FORMAT,
+    }
+
+
 def generate_context(
     doc_name: str,
     section_title: str | None,
@@ -1235,29 +1284,17 @@ def generate_context(
 ) -> str:
     """Generate a contextual summary for a chunk using a local LLM."""
     _ensure_server(CONTEXT_SERVER_URL)
-    prompt = CONTEXT_USER_PROMPT.format(
-        doc_name=doc_name,
-        section_title=section_title or "(no section)",
-        prev_chunk=prev_chunk[-500:] if prev_chunk else "(start of document)",
-        chunk_text=chunk_text,
-        next_chunk=next_chunk[:500] if next_chunk else "(end of document)",
-    )
     resp = _post_json(
         f"{CONTEXT_SERVER_URL}/v1/chat/completions",
-        {
-            "model": CONTEXT_MODEL,
-            "messages": [
-                {"role": "system", "content": CONTEXT_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "max_tokens": 192,
-            "temperature": 0.0,
-            "reasoning_effort": "low",
-            "response_format": CONTEXT_RESPONSE_FORMAT,
-        },
+        context_request_body(
+            doc_name, section_title, chunk_text, prev_chunk, next_chunk
+        ),
         timeout=_CONTEXT_TIMEOUT_S,
     )
-    raw = resp["choices"][0]["message"]["content"] or ""
+    choice = resp["choices"][0]
+    if choice.get("finish_reason") == "length":
+        raise ServerError("context response reached the generation limit")
+    raw = choice["message"]["content"] or ""
     return _validate_context_response(_extract_context_response(raw))
 
 

@@ -802,7 +802,7 @@ def _context_pipeline_signature() -> str:
             CONTEXT_SYSTEM_PROMPT,
             CONTEXT_USER_PROMPT,
             "input:previous-tail=500,target=full,next-head=500,section=breadcrumb,same-owner.v1",
-            "response:json-schema,max_tokens=192,temperature=0,reasoning=low",
+            "response:json-schema,max_tokens=512,temperature=0,reasoning=medium,budget=256",
             "validation:sentence.v2",
         ]
     )

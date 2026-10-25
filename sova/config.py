@@ -55,7 +55,7 @@ _METAL_PROBE_CACHE_TTL_S = 30.0
 # Fixed model set in Sova; estimates are used for admission checks only.
 _MODEL_MEMORY_ESTIMATE_GIB = {
     "embed": 9.5,
-    "chat": 18.0,
+    "chat": 19.0,
 }
 
 _METAL_PROBE_CACHE: dict[str, float | None] = {
@@ -499,7 +499,7 @@ EMBEDDING_MODEL = "qwen3-embedding-4b"
 # LLM model used for context answers and analysis.
 CONTEXT_MODEL = "qwen3.8-27b"
 CONTEXT_MODEL_HF_REPO = "unsloth/Qwen3.8-27B-GGUF"
-CONTEXT_MODEL_HF_FILE = "Qwen3.8-27B-UD-Q4_K_M.gguf"
+CONTEXT_MODEL_HF_FILE = "Qwen3.8-27B-UD-Q4_K_XL.gguf"
 # Vector dimension expected from embedding model.
 EMBEDDING_DIM = 2560
 # Number of fused candidates kept before diversity selects top-k.

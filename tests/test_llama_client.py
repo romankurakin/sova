@@ -510,6 +510,56 @@ class TestGetEmbeddingsBatch:
         assert sent.startswith("[doc | section]\n\n")
         assert len(sent) <= 48
 
+    def test_reports_effective_inputs_after_normalization(self):
+        from sova.llama_client import get_embeddings_batch
+
+        seen = []
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch(
+                "sova.llama_client._prepare_embedding_text",
+                side_effect=lambda text, token_budget=None: text[:3],
+            ),
+            patch(
+                "sova.llama_client._embed_inputs_via_server",
+                return_value=[[0.1], [0.2]],
+            ),
+        ):
+            get_embeddings_batch(
+                ["abcdef", "ghijkl"],
+                on_inputs=lambda indices, texts: seen.append((indices, texts)),
+                on_batch=lambda *_: seen.append("persist"),
+            )
+        assert seen == [([0, 1], ["abc", "ghi"]), "persist"]
+
+    def test_reports_successful_recovery_inputs(self):
+        from sova.llama_client import get_embeddings_batch
+
+        seen = []
+
+        def embed(texts, timeout=None):
+            if texts == ["input:512"]:
+                return [[0.1]]
+            raise RuntimeError("Remote end closed connection without response")
+
+        with (
+            patch("sova.llama_client._ensure_server", return_value=True),
+            patch("sova.llama_client._embedding_token_budget", return_value=4096),
+            patch(
+                "sova.llama_client._prepare_embedding_text",
+                side_effect=lambda text, token_budget=None: f"{text}:{token_budget}",
+            ),
+            patch("sova.llama_client._embed_inputs_via_server", side_effect=embed),
+            patch("sova.llama_client.stop_server"),
+            patch("sova.llama_client.time.sleep"),
+            patch("sova.llama_client.run_embedding_canary"),
+        ):
+            get_embeddings_batch(
+                ["input"],
+                on_inputs=lambda indices, texts: seen.append((indices, texts)),
+            )
+        assert seen == [([0], ["input:512"])]
+
     def test_recovers_remote_close_with_single_requests(self):
         from sova.llama_client import get_embeddings_batch
 
@@ -617,7 +667,15 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"context":"A complete context sentence."}'
+                            }
+                        }
+                    ]
+                },
                 captured,
             ),
         ):
@@ -634,7 +692,15 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"context":"A complete context sentence."}'
+                            }
+                        }
+                    ]
+                },
                 captured,
             ),
         ):
@@ -650,7 +716,15 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"context":"A complete context sentence."}'
+                            }
+                        }
+                    ]
+                },
                 captured,
             ),
         ):
@@ -668,7 +742,15 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"context":"A complete context sentence."}'
+                            }
+                        }
+                    ]
+                },
                 captured,
             ),
         ):
@@ -686,14 +768,21 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"context":"A complete context sentence."}'
+                            }
+                        }
+                    ]
+                },
                 captured,
             ),
         ):
             generate_context("doc1", "Sec", "text", "", "")
             prompt = captured["body"]["messages"][1]["content"]
-            assert "(start of document)" in prompt
-            assert "(end of document)" in prompt
+            assert prompt.count("(not provided)") == 2
 
     def test_uses_context_model(self):
         from sova.llama_client import generate_context
@@ -703,17 +792,92 @@ class TestGenerateContext:
         with patch(
             "sova.llama_client.urllib.request.urlopen",
             side_effect=self._mock_with_health(
-                {"choices": [{"message": {"content": "A complete context sentence."}}]},
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"context":"A complete context sentence."}'
+                            }
+                        }
+                    ]
+                },
                 captured,
             ),
         ):
             generate_context("doc1", "Sec", "text")
             assert captured["body"]["model"] == "qwen3.8-27b"
             assert captured["body"]["temperature"] == 0.0
-            assert captured["body"]["max_tokens"] == 192
-            assert captured["body"]["reasoning_effort"] == "low"
+            assert captured["body"]["max_tokens"] == 512
+            assert captured["body"]["reasoning_effort"] == "medium"
+            assert captured["body"]["reasoning_budget_tokens"] == 256
+            assert captured["body"]["reasoning_format"] == "deepseek"
             assert captured["body"]["response_format"]["type"] == "json_schema"
             assert captured["body"]["messages"][0]["role"] == "system"
+
+    def test_only_final_context_reaches_embedding_text(self):
+        from sova.index_text import contextualized_text
+        from sova.llama_client import generate_context
+
+        with (
+            patch("sova.llama_client._ensure_server"),
+            patch(
+                "sova.llama_client._post_json",
+                return_value={
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "reasoning_content": "PRIVATE_REASONING_SENTINEL",
+                                "content": '{"context":"Timer interrupts wake the scheduler."}',
+                            },
+                        }
+                    ],
+                },
+            ),
+        ):
+            context = generate_context("manual", "Timers", "Source body.")
+        text = contextualized_text("manual", "Timers", "Source body.", context)
+        assert "Timer interrupts wake the scheduler." in text
+        assert "Source body." in text
+        assert "PRIVATE_REASONING_SENTINEL" not in text
+
+    @pytest.mark.parametrize(
+        "content,finish_reason",
+        [
+            (
+                '<think>Unparsed reasoning here.</think>{"context":"Final context sentence."}',
+                "stop",
+            ),
+            ('{"context":"<think>Reasoning disguised as context.</think>"}', "stop"),
+            ('{"context":"An otherwise valid context sentence."}', "length"),
+            (
+                '{"context":"Final context sentence.","reasoning":"Extra reasoning field."}',
+                "stop",
+            ),
+            ("Unstructured model response with no reliable answer boundary.", "stop"),
+        ],
+    )
+    def test_rejects_unparsed_reasoning_and_truncated_answers(
+        self, content, finish_reason
+    ):
+        from sova.llama_client import ServerError, generate_context
+
+        with (
+            patch("sova.llama_client._ensure_server"),
+            patch(
+                "sova.llama_client._post_json",
+                return_value={
+                    "choices": [
+                        {
+                            "finish_reason": finish_reason,
+                            "message": {"content": content},
+                        }
+                    ]
+                },
+            ),
+            pytest.raises(ServerError),
+        ):
+            generate_context("manual", "Timers", "Source body.")
 
     def test_context_validation_keeps_only_structural_safeguards(self):
         from sova.llama_client import ServerError, _validate_context_response

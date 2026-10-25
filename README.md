@@ -64,7 +64,7 @@ flowchart LR
 
 Sova converts PDFs to Markdown and splits documents into chunks using the embedding model's tokenizer, targeting 768 tokens per chunk. Headings through level five start new chunks, and each chunk keeps its full heading path. Code fences and code-like `#` comments are not treated as headings. Source lines stay intact, so a long table row can exceed the target.
 
-At index time, `qwen3.8-27b` generates a one-sentence context for each chunk within its document and heading path [1]. Both search indexes use the document name, heading path, generated context, and source text. The stored source text stays unchanged.
+At index time, `qwen3.8-27b` (Unsloth `UD-Q4_K_XL`) generates a one-sentence context for each chunk within its document and heading path [1]. Both search indexes use the document name, heading path, generated context, and source text. The stored source text stays unchanged.
 
 `qwen3-embedding-4b` produces 2560-dimensional embeddings for vector search. The full-text search (FTS) index uses BM25 and Porter stemming to match exact terms and related word forms.
 
