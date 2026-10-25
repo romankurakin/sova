@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "description": "Production search with default settings: vector and full-text retrieval, RRF fusion, exact-match bonuses, an index-page penalty and diversity selection.",
+  "method": "hybrid",
+  "output_k": 10,
+  "depth": null,
+  "ranking": {},
+  "embedder": null,
+  "cache_modes": ["warm", "cached", "cold"],
+  "passes": 3
+}

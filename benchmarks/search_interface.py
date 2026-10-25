@@ -1,169 +1,142 @@
-"""Search interface for benchmarks.
+"""Adapters use the Sova retrieval code and return passage IDs in rank order."""
 
-UPDATE THIS FILE when refactoring sova.
-"""
+from contextlib import contextmanager
+from pathlib import Path
+from unittest.mock import patch
 
-from dataclasses import dataclass
-
-
-@dataclass
-class SearchResult:
-    chunk_id: int
-    doc: str
-    text: str
-    score: float
-    section_id: int | None = None
+from benchmarks.corpus import CorpusError
+from benchmarks.embedders import PrivateEmbedder
+from benchmarks.experiments import Experiment
+from benchmarks.indexing import _load_passages, load_index, prepare_index
+from benchmarks.models import ProductionModels
+from benchmarks.passages import _hash
+from benchmarks.records import SearchRun
+from benchmarks.storage import read
+from sova import config, db, llama_client, search
 
 
 class SovaBackend:
-    """Adapter for sova. Update when refactoring."""
+    def __init__(self, index: Path, snapshot: Path, *, models=None):
+        self.index_path = index
+        self.manifest = load_index(index)
+        self.snapshot, items = _load_passages(snapshot)
+        if self.snapshot["snapshot_sha256"] != self.manifest["inputs"]["snapshot"]:
+            raise CorpusError("Index and passage snapshot differ")
+        self.items = {item["passage_id"]: item for item in items}
+        self.conn = db.connect_readonly(index.parent / self.manifest["database"])
+        self.rows = dict(
+            self.conn.execute("SELECT chunk_id, passage_id FROM benchmark_passages")
+        )
+        self.models = models or ProductionModels()
+        self.started = False
 
-    def __init__(self):
-        from sova import config
-
-        if not config.get_db_path().exists():
-            raise FileNotFoundError("No database. Run sova indexing first.")
-
-        from sova.db import connect_readonly
-
-        self.conn = connect_readonly()
+    def start(self):
+        if not self.started:
+            actual = self.models.start("embedding")
+            if actual != self.manifest["inputs"]["models"]["embedding"]:
+                self.models.close()
+                raise CorpusError(
+                    "Query embedding model differs from the indexed vectors; prepare a matching variant"
+                )
+            self.started = True
 
     def close(self):
         self.conn.close()
+        if self.started:
+            self.models.close()
+            self.started = False
 
-    def _embed_query(self, text: str) -> list[float]:
-        from sova.llama_client import get_query_embedding
+    def query_embedding(self, query):
+        self.start()
+        self.models.verify()
+        return self.models.query_embedding(query)
 
-        return get_query_embedding(text)
-
-    def search(
-        self,
-        query: str,
-        limit: int = 10,
-        embedding: list[float] | None = None,
-    ) -> list[SearchResult]:
-        from sova.search import hybrid_search
-
-        if embedding is None:
-            embedding = self._embed_query(query)
-        hits, _, _ = hybrid_search(self.conn, embedding, query, limit)
-
-        return [
-            SearchResult(
-                chunk_id=h["chunk_id"],
-                doc=h["doc"],
-                text=h["text"],
-                score=h.get("final_score", h.get("embed_score", 0)),
-                section_id=h.get("section_id"),
+    def retrieve(self, query, *, method="hybrid", limit=10, depth=None, embedding=None):
+        if method == "bm25":
+            ids = [row[0] for row in search.search_fts(self.conn, query, limit)]
+        else:
+            embedding = (
+                embedding if embedding is not None else self.query_embedding(query)
             )
-            for h in hits
-        ]
+            vectors = search.get_vector_candidates(
+                self.conn, embedding, limit, candidates=depth
+            )
+            if method == "dense":
+                ids = [row[0] for row in vectors[:limit]]
+            elif method == "hybrid":
+                original_fts = search.search_fts
+                if depth is None:
+                    hits, _, _ = search.fuse_and_rank(self.conn, vectors, query, limit)
+                else:
+                    # Only the FTS depth changes here. The native CLI does not use
+                    # this path.
+                    with patch.object(
+                        search,
+                        "search_fts",
+                        lambda conn, query, limit: original_fts(conn, query, depth),
+                    ):
+                        hits, _, _ = search.fuse_and_rank(
+                            self.conn, vectors, query, limit
+                        )
+                ids = [hit["chunk_id"] for hit in hits]
+            else:
+                raise CorpusError(f"Unsupported search method: {method}")
+        return [self.rows[cid] for cid in ids]
 
-    def search_fts_only(self, query: str, limit: int = 20) -> list[SearchResult]:
-        """BM25-only search via FTS5."""
-        from sova.search import search_fts
+    def run(self, query, ids):
+        return SearchRun(
+            query_id=query.id,
+            query_sha256=_hash(query.judge_input()),
+            hits=tuple(ids),
+        )
 
-        fts_results = search_fts(self.conn, query, limit)
-        return self._hydrate_chunks(fts_results)
-
-    def search_vector_only(self, query: str, limit: int = 20) -> list[SearchResult]:
-        """Vector-only search."""
-        from sova.search import get_vector_candidates
-
-        embedding = self._embed_query(query)
-        vector_results = get_vector_candidates(self.conn, embedding, limit)
-        return self._hydrate_chunks(vector_results[:limit])
-
-    def _hydrate_chunks(
-        self, chunk_id_score_pairs: list[tuple[int, float]]
-    ) -> list[SearchResult]:
-        """Fetch text + doc for a list of (chunk_id, score) pairs."""
-        if not chunk_id_score_pairs:
-            return []
-
-        ids = [cid for cid, _ in chunk_id_score_pairs]
-        score_map = {cid: score for cid, score in chunk_id_score_pairs}
-        placeholders = ",".join("?" * len(ids))
-
-        rows = self.conn.execute(
-            f"SELECT c.id, d.name, c.text, c.section_id"
-            f" FROM chunks c JOIN documents d ON c.doc_id = d.id"
-            f" WHERE c.id IN ({placeholders})",
-            tuple(ids),
-        ).fetchall()
-
-        row_map = {r[0]: r for r in rows}
-        results = []
-        for cid in ids:
-            row = row_map.get(cid)
-            if row:
-                results.append(
-                    SearchResult(
-                        chunk_id=row[0],
-                        doc=row[1],
-                        text=row[2],
-                        score=score_map.get(cid, 0.0),
-                        section_id=row[3],
-                    )
-                )
-        return results
-
-    def get_chunk_text(self, chunk_id: int) -> tuple[str, str] | None:
-        """Fetch (doc, text) for a single chunk. Returns None if not found."""
-        row = self.conn.execute(
-            "SELECT d.name, c.text FROM chunks c"
-            " JOIN documents d ON c.doc_id = d.id"
-            " WHERE c.id = ?",
-            (chunk_id,),
-        ).fetchone()
-        return (row[0], row[1]) if row else None
+    def from_cli(self, query, results):
+        by_location = {
+            (item["document"], item["start_line"], item["end_line"]): pid
+            for pid, item in self.items.items()
+        }
+        ids = []
+        for rank, result in enumerate(results, 1):
+            key = (result["document"], result["start_line"], result["end_line"])
+            if result["rank"] != rank or key not in by_location:
+                raise CorpusError("Invalid CLI result rank or source location")
+            if result["text"] != self.items[by_location[key]]["text"]:
+                raise CorpusError("CLI changed the displayed passage text")
+            ids.append(by_location[key])
+        return self.run(query, ids)
 
 
-_backend: SovaBackend | None = None
+@contextmanager
+def open_backend(root: Path, experiment: Experiment, *, notify=print):
+    """Open the prepared index, or an index for the experiment embedder."""
+    state = read(root / "preparation.json")
+    index, snapshot = root / state["index"], root / state["passages"]
+    models = None
+    try:
+        if experiment.embedder is not None:
+            models = PrivateEmbedder(
+                experiment.embedder,
+                root,
+                context=load_index(index)["inputs"]["models"]["context"],
+                notify=notify,
+            )
+            index = prepare_index(snapshot, models=models, notify=notify)
+        backend = SovaBackend(index, snapshot, models=models)
+        try:
+            yield backend
+        finally:
+            backend.close()
+    finally:
+        if models is not None:
+            models.close()
 
 
-def get_backend() -> SovaBackend:
-    global _backend
-    if _backend is None:
-        _backend = SovaBackend()
-    return _backend
-
-
-def close_backend():
-    global _backend
-    if _backend is not None:
-        _backend.close()
-        _backend = None
-
-
-def measure_latency(queries: list[str]) -> dict:
-    """Returns embed_times, search_times, total_times (ms)."""
-    import time
-
-    backend = get_backend()
-    embed_times, search_times, total_times, result_chars = [], [], [], []
-
-    for q in queries:
-        t0 = time.perf_counter()
-        emb = backend._embed_query(q)
-        t1 = time.perf_counter()
-        results = backend.search(q, limit=10, embedding=emb)
-        t2 = time.perf_counter()
-
-        embed_times.append((t1 - t0) * 1000)
-        search_times.append((t2 - t1) * 1000)
-        total_times.append((t2 - t0) * 1000)
-        result_chars.append(sum(len(result.text) for result in results))
+def code_identity() -> dict:
+    from benchmarks import worker
+    from benchmarks.reading import _digest
+    from sova import cli, ui
 
     return {
-        "embed_times": embed_times,
-        "search_times": search_times,
-        "total_times": total_times,
-        "result_chars": result_chars,
+        module.__name__: _digest(Path(module.__file__).read_bytes())
+        for module in (search, llama_client, db, config, cli, ui, worker)
     }
-
-
-def clear_cache():
-    from sova.cache import get_cache
-
-    get_cache().clear()

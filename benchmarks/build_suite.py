@@ -1,143 +1,377 @@
-"""Build and validate a frozen search benchmark suite from blinded qrel shards."""
+"""Make the candidate pool, the grade jobs, the pilot audit and reference revisions."""
 
-from __future__ import annotations
-
-import argparse
-import hashlib
 import json
-import sqlite3
-from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
+from benchmarks.corpus import CorpusError
+from benchmarks.judging_schema import INSTRUCTION, SCHEMAS, SYSTEM
+from benchmarks.passages import _hash
+from benchmarks.queries import Query, load_evaluation_queries
+from benchmarks.search_interface import SovaBackend
+from benchmarks.storage import locked, read, write
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--queries", type=Path, required=True)
-    parser.add_argument("--judgments", type=Path, action="append", required=True)
-    parser.add_argument("--database", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
-
-    if args.output.exists():
-        raise FileExistsError(
-            f"refusing to overwrite frozen suite: {args.output}; choose a new output"
-        )
-
-    specs = json.loads(args.queries.read_text(encoding="utf-8"))["queries"]
-    spec_by_id = {item["id"]: item for item in specs}
-    if len(spec_by_id) != len(specs):
-        raise ValueError("duplicate query IDs")
-
-    judged_by_id: dict[str, dict] = {}
-    for shard_path in args.judgments:
-        shard = json.loads(shard_path.read_text(encoding="utf-8"))
-        for item in shard["queries"]:
-            query_id = item["id"]
-            if query_id in judged_by_id:
-                raise ValueError(f"duplicate judged query: {query_id}")
-            judged_by_id[query_id] = item
-    if judged_by_id.keys() != spec_by_id.keys():
-        missing = sorted(spec_by_id.keys() - judged_by_id.keys())
-        extra = sorted(judged_by_id.keys() - spec_by_id.keys())
-        raise ValueError(f"query mismatch; missing={missing}, extra={extra}")
-
-    all_chunk_ids: set[int] = set()
-    score_counts: Counter[int] = Counter()
-    for spec in specs:
-        item = judged_by_id[spec["id"]]
-        for field in ("query", "category", "language"):
-            if item.get(field) != spec[field]:
-                raise ValueError(f"{spec['id']} has mismatched {field}")
-        seen: set[int] = set()
-        for judgment in item["judgments"]:
-            chunk_id = int(judgment["chunk_id"])
-            score = int(judgment["score"])
-            if chunk_id in seen:
-                raise ValueError(f"{spec['id']} repeats chunk {chunk_id}")
-            if score not in {0, 1, 2, 3}:
-                raise ValueError(f"{spec['id']} has invalid score {score}")
-            seen.add(chunk_id)
-            all_chunk_ids.add(chunk_id)
-            score_counts[score] += 1
-        if spec["category"] != "negative" and not any(
-            judgment["score"] >= 2 for judgment in item["judgments"]
-        ):
-            raise ValueError(f"{spec['id']} has no relevant judgments")
-
-    uri = f"file:{args.database.resolve()}?mode=ro"
-    with sqlite3.connect(uri, uri=True) as connection:
-        rows: dict[int, str] = {}
-        ids = sorted(all_chunk_ids)
-        for start in range(0, len(ids), 500):
-            batch = ids[start : start + 500]
-            placeholders = ",".join("?" for _ in batch)
-            rows.update(
-                connection.execute(
-                    f"SELECT c.id, d.name FROM chunks c"
-                    f" JOIN documents d ON d.id = c.doc_id"
-                    f" WHERE c.id IN ({placeholders})",
-                    batch,
-                ).fetchall()
-            )
-        if rows.keys() != all_chunk_ids:
-            raise ValueError("suite references missing chunks")
-        for item in judged_by_id.values():
-            for judgment in item["judgments"]:
-                if rows[judgment["chunk_id"]] != judgment["doc"]:
-                    raise ValueError(
-                        f"chunk {judgment['chunk_id']} has mismatched document"
-                    )
-        documents = connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
-        chunks = connection.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-        contexts = connection.execute("SELECT COUNT(*) FROM chunk_contexts").fetchone()[
-            0
-        ]
-
-    queries = [judged_by_id[spec["id"]] for spec in specs]
-    payload = {
-        "suite": {
-            "id": "search",
-            "schema_version": 2,
-            "created": "2026-08-20",
-            "description": "Frozen regression benchmark for local document search.",
-            "corpus": {
-                "project": "operating-system-documents",
-                "database_sha256": _sha256(args.database),
-                "documents": documents,
-                "chunks": chunks,
-                "contextualized_chunks": contexts,
-            },
-            "query_count": len(queries),
-            "language_counts": dict(Counter(item["language"] for item in queries)),
-            "category_counts": dict(Counter(item["category"] for item in queries)),
-            "judgment_count": sum(len(item["judgments"]) for item in queries),
-            "score_counts": {str(score): score_counts[score] for score in range(4)},
-            "relevance_threshold": 2,
-            "unjudged_policy": "error",
-            "judging": "Blinded pooled judgments; candidate-system provenance is not stored.",
-            "acceptance": {
-                "minimum_mean_ndcg_delta_at_10": 0.03,
-                "ndcg_bootstrap_ci_lower_must_exceed": 0.0,
-                "maximum_latency_p50_ms": 500,
-                "maximum_latency_p95_ms": 750,
-            },
-            "comparison_rule": "Suite SHA-256, initial database SHA-256, k, and query IDs must match.",
+BATCH_SIZE = 4
+CONTROL_GRADES = {"positive": 3, "negative": 0}
+# The pilot contains the first eight pairs of each pilot query.
+PILOT_PAIRS = 8
+CONTROL = {
+    "query": {
+        "id": "control",
+        "text": "In synthetic ISA A, what does register X enable?",
+        "intent": "Effect of X in ISA A.",
+    },
+    "passages": [
+        {
+            "passage_id": "positive",
+            "text": "In synthetic ISA A, register X enables timer T.",
+            "source_id": "synthetic",
+            "section_path": "",
         },
-        "queries": queries,
+        {
+            "passage_id": "negative",
+            "text": "In synthetic ISA B, register X selects a color.",
+            "source_id": "synthetic",
+            "section_path": "",
+        },
+    ],
+}
+
+
+@lru_cache(maxsize=8)
+def _config_at(stamp):
+    return json.loads(Path(__file__).with_name("judges.json").read_bytes())
+
+
+def judge_config():
+    st = Path(__file__).with_name("judges.json").stat()
+    return _config_at((st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns))
+
+
+def judged_by():
+    """Return the model and effort of each judge. Timeouts and retries are not here."""
+    config = judge_config()
+    return {provider: config[provider] for provider in ("codex", "claude")}
+
+
+@lru_cache(maxsize=8)
+def _schema(kind):
+    return SCHEMAS[kind].model_json_schema()
+
+
+_VERIFIED_JOBS: dict[Path, tuple] = {}
+
+
+def pilot_ids(queries):
+    # The selection does not use results. It has six English queries and three
+    # queries for each other language.
+    return {
+        q.id
+        for lang, n in [("en", 6), ("ru", 3), ("zh", 3)]
+        for q in sorted(
+            (q for q in queries if q.language == lang), key=lambda q: _hash(q.id)
+        )[:n]
     }
-    args.output.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+
+
+def _request(kind, payload, pilot):
+    # The job key contains all that the judge sees and the judge configuration.
+    # It does not contain the adapter code.
+    return {
+        "schema_version": 3,
+        "kind": kind,
+        "payload": payload,
+        "pilot": pilot,
+        "judge_config": judged_by(),
+        "schema": _schema(kind),
+        "system_sha256": _hash(SYSTEM),
+        "instruction_sha256": _hash(INSTRUCTION),
+    }
+
+
+def add_job(root, kind, payload, *, pilot=False):
+    request = _request(kind, payload, pilot)
+    job_id = _hash(request)
+    path = root / "jobs" / f"{job_id}.json"
+    if path.exists():
+        st = path.stat()
+        stamp = (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+        if _VERIFIED_JOBS.get(path) == stamp:
+            return job_id
+    write(path, request, immutable=True)
+    st = path.stat()
+    _VERIFIED_JOBS[path] = (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+    return job_id
+
+
+def answer(root, job_id, provider):
+    path = root / "judgments" / provider / f"{job_id}.json"
+    return read(path) if path.exists() else None
+
+
+def prepare_pool(root, *, backend=None, queries=None, notify=print):
+    state = read(root / "preparation.json")
+    queries = queries if queries is not None else load_evaluation_queries()
+    own = backend is None
+    if own:
+        backend = SovaBackend(root / state["index"], root / state["passages"])
+    snapshot = backend.snapshot["snapshot_sha256"]
+    imported: dict[str, set[str]] = {}
+    imported_hashes = []
+    query_hashes = {q.id: _hash(q.judge_input()) for q in queries}
+    for run_path in sorted((root / "runs").glob("*.json")):
+        run = read(run_path)
+        # Grades refer to passage IDs. Thus only runs on this snapshot add to its pool.
+        if run["identity"]["passage_snapshot"] != snapshot:
+            continue
+        imported_hashes.append(run["sha256"])
+        for qid, value in run["queries"].items():
+            if query_hashes.get(qid) == value["query_sha256"]:
+                imported.setdefault(qid, set()).update(value["hits"][:10])
+    # A pool does not become smaller. Passages from earlier pools keep their grades
+    # when the rankings change.
+    carried: dict[str, set[str]] = {}
+    for path in sorted((root / "pools").glob("*/manifest.json")):
+        earlier = read(path)
+        for qid in earlier["queries"]:
+            record = read(path.parent / "queries" / f"{qid}.json")
+            carried.setdefault(qid, set()).update(
+                p["passage_id"]
+                for p in record["passages"]
+                if p["passage_id"] in backend.items
+            )
+    prior = None
+    if (root / "pool.json").exists():
+        prior_manifest, prior_records = pool_records(root)
+        if prior_manifest["inputs"]["index"] == backend.manifest["sha256"]:
+            prior = {record["query"]["id"]: record for record in prior_records}
+    inputs = {
+        "passages": snapshot,
+        "index": backend.manifest["sha256"],
+        "queries": [q.model_dump() for q in queries],
+        "pool_protocol": "cumulative-union-10-passages-v3",
+        "imported_runs": imported_hashes,
+    }
+    directory = root / "pools" / _hash(inputs)
+    try:
+        with locked(root, "pool"):
+            selected_pilot = pilot_ids(queries)
+            ids = []
+            for query in queries:
+                target = directory / "queries" / f"{query.id}.json"
+                if target.exists():
+                    read(target)
+                    ids.append(query.id)
+                    continue
+                cached = prior.get(query.id) if prior else None
+                if cached and cached["query"] == query.model_dump():
+                    rankings = cached["rankings"]
+                else:
+                    rankings = {}
+                    emb = backend.query_embedding(query.text)
+                    for method in ("bm25", "dense", "hybrid"):
+                        rankings[method] = backend.retrieve(
+                            query.text, method=method, limit=10, embedding=emb
+                        )
+                pool = {pid for hits in rankings.values() for pid in hits}
+                pool |= imported.get(query.id, set()) | carried.get(query.id, set())
+                record = {
+                    "query": query.model_dump(),
+                    "passages": [
+                        {
+                            k: backend.items[pid][k]
+                            for k in ("passage_id", "text", "source_id", "section_path")
+                        }
+                        for pid in sorted(pool)
+                    ],
+                    "rankings": rankings,
+                    "pilot": query.id in selected_pilot,
+                }
+                write(target, record, immutable=True)
+                ids.append(query.id)
+                notify(f"Pool: {len(ids)}/{len(queries)} queries")
+            manifest = write(
+                directory / "manifest.json",
+                {"inputs": inputs, "queries": ids},
+                immutable=True,
+            )
+            write(
+                root / "pool.json",
+                {
+                    "path": str((directory / "manifest.json").relative_to(root)),
+                    "sha256_pool": manifest["sha256"],
+                },
+            )
+    finally:
+        if own:
+            backend.close()
+    refresh_jobs(root)
+    return directory / "manifest.json"
+
+
+def pool_records(root):
+    pointer = read(root / "pool.json")
+    path = root / pointer["path"]
+    manifest = read(path)
+    if manifest["sha256"] != pointer["sha256_pool"]:
+        raise CorpusError("Pool pointer checksum mismatch")
+    return manifest, [
+        read(path.parent / "queries" / f"{qid}.json") for qid in manifest["queries"]
+    ]
+
+
+def refresh_jobs(root):
+    if not (root / "pool.json").exists():
+        return []
+    _manifest, records = pool_records(root)
+    queue_path = root / "queue.json"
+    previous = read(queue_path).get("by_query", {}) if queue_path.exists() else {}
+    by_query = {}
+    for record in records:
+        query = {k: record["query"][k] for k in ("id", "text", "intent")}
+        passages = {p["passage_id"]: p for p in record["passages"]}
+        jobs, covered = [], set()
+        # Batches do not change when the pool becomes larger, so their judgments
+        # stay valid. Only new passages go into new batches.
+        for jid in previous.get(query["id"], []):
+            path = root / "jobs" / f"{jid}.json"
+            if not path.exists():
+                continue
+            job = read(path)
+            payload = job["payload"]
+            if (
+                job["kind"] == "grade"
+                and payload.get("query") == query
+                and all(passages.get(p["passage_id"]) == p for p in payload["passages"])
+                and _hash(_request("grade", payload, job["pilot"])) == jid
+            ):
+                jobs.append(jid)
+                covered.update(p["passage_id"] for p in payload["passages"])
+        first = not jobs
+        remaining = [p for pid, p in sorted(passages.items()) if pid not in covered]
+        for i in range(0, len(remaining), BATCH_SIZE):
+            payload = {"query": query, "passages": remaining[i : i + BATCH_SIZE]}
+            pilot = record["pilot"] and first and i < PILOT_PAIRS
+            jobs.append(add_job(root, "grade", payload, pilot=pilot))
+        by_query[query["id"]] = jobs
+    control = add_job(root, "control", CONTROL, pilot=True)
+    jobs = [jid for record in records for jid in by_query[record["query"]["id"]]]
+    jobs.append(control)
+    write(queue_path, {"jobs": jobs, "by_query": by_query})
+    return jobs
+
+
+def _visible(text):
+    # PDF icon glyphs are private-use characters. A judge cannot copy them.
+    return "".join(c for c in text if not 0xE000 <= ord(c) <= 0xF8FF)
+
+
+def validate_answer(job, data):
+    result = SCHEMAS[job["kind"]].model_validate(data).model_dump()
+    passages = {p["passage_id"]: p for p in job["payload"]["passages"]}
+    ids = [g["passage_id"] for g in result["grades"]]
+    if sorted(ids) != sorted(passages):
+        raise CorpusError("Grade answer must include every passage exactly once")
+    for grade in result["grades"]:
+        if grade["grade"] and (
+            not grade["quote"].strip()
+            or _visible(grade["quote"])
+            not in _visible(passages[grade["passage_id"]]["text"])
+        ):
+            raise CorpusError("Nonzero grade needs an exact source quote")
+    return result
+
+
+def pilot_audit(root, jobs):
+    """Return the control results and the judge agreement on the pilot pairs."""
+    pending, errors, differences, agreements = [], [], [], []
+    for job in jobs:
+        if not job["pilot"]:
+            continue
+        grades = {}
+        for provider in ("codex", "claude"):
+            response = answer(root, job["sha256"], provider)
+            if response is not None:
+                grades[provider] = {
+                    g["passage_id"]: g["grade"] for g in response["answer"]["grades"]
+                }
+        if job["kind"] == "control":
+            errors.extend(
+                f"{provider}: synthetic control failed"
+                for provider, value in grades.items()
+                if value != CONTROL_GRADES
+            )
+        if len(grades) < 2:
+            pending.append(job["sha256"])
+            continue
+        if job["kind"] == "grade":
+            left, right = grades["codex"], grades["claude"]
+            for pid in left:
+                differences.append(abs(left[pid] - right[pid]))
+                agreements.append((left[pid] >= 2) == (right[pid] >= 2))
+    return {
+        "status": "failed_controls" if errors else "pending" if pending else "passed",
+        "pending_jobs": len(pending),
+        "errors": errors,
+        "pairs": len(differences),
+        "mean_judge_grade_difference": sum(differences) / len(differences)
+        if differences
+        else None,
+        "useful_grade_agreement": sum(agreements) / len(agreements)
+        if agreements
+        else None,
+    }
+
+
+def freeze(root):
+    manifest, records = pool_records(root)
+    jobs = [read(root / "jobs" / f"{jid}.json") for jid in refresh_jobs(root)]
+    by_query: dict[str, list[dict]] = {}
+    for job in jobs:
+        by_query.setdefault(job["payload"]["query"]["id"], []).append(job)
+    queries, qrels, isa, gaps = {}, {}, {}, set()
+    for record in records:
+        qid = record["query"]["id"]
+        # A grade is valid only for the text and intent that the judges saw.
+        queries[qid] = _hash(
+            Query.model_validate_json(json.dumps(record["query"])).judge_input()
+        )
+        qrels[qid], isa[qid] = {}, {}
+        for job in by_query.get(qid, []):
+            responses = [
+                answer(root, job["sha256"], provider)
+                for provider in ("codex", "claude")
+            ]
+            if any(response is None for response in responses):
+                gaps.add(qid)
+                continue
+            left, right = [response["answer"] for response in responses]
+            rg = {g["passage_id"]: g for g in right["grades"]}
+            for grade in left["grades"]:
+                other = rg[grade["passage_id"]]
+                tags = set(grade["architecture_tags"])
+                isa[qid][grade["passage_id"]] = (
+                    sorted(tags) if tags == set(other["architecture_tags"]) else None
+                )
+                qrels[qid][grade["passage_id"]] = (grade["grade"] + other["grade"]) / 2
+    pilot = pilot_audit(root, jobs)
+    value = {
+        "queries": queries,
+        "passage_snapshot": manifest["inputs"]["passages"],
+        "qrels": qrels,
+        "passage_isa": isa,
+        # Queries that still wait for a grade from one of the judges.
+        "gaps": sorted(gaps),
+        "pilot": pilot,
+        "status": "ready"
+        if not gaps and pilot["status"] == "passed"
+        else "reference_incomplete",
+    }
+    # Each revision stays as history. suite.json refers to the current revision.
+    revision = _hash(value)
+    path = root / "suites" / revision / "manifest.json"
+    write(path, value, immutable=True)
+    write(
+        root / "suite.json", {"path": str(path.relative_to(root)), "revision": revision}
     )
-
-
-if __name__ == "__main__":
-    main()
+    return path

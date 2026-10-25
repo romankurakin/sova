@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "corpus_id": "os-architectures-v1",
+  "captured_on": "2026-09-22",
+  "status": "verified_source_snapshot_for_plan",
+  "notes": [
+    "Five logical sources are five complete PDFs.",
+    "Verified source bytes only; extraction, chunking, query expert review and judgments are not frozen.",
+    "Hailperin PDF is downloaded from an immutable commit in the author repository; source license CC BY-SA 3.0, preserve attribution and figure notices.",
+    "xv6 book has an MIT-style permission notice. Other sources retain their own terms; this is not one license for the entire corpus."
+  ],
+  "sources": [
+    {
+      "id": "riscv-unprivileged",
+      "version": "20250508",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "license_evidence": {
+        "section": "Preamble",
+        "pdf_page": 21,
+        "artifact": "matching file SHA-256 in this lock"
+      }
+    },
+    {
+      "id": "riscv-privileged",
+      "version": "20250508",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "license_evidence": {
+        "section": "Preamble",
+        "pdf_page": 8,
+        "artifact": "matching file SHA-256 in this lock"
+      }
+    },
+    {
+      "id": "loongarch-vol1",
+      "version": "1.10",
+      "git_commit": "298e9977e7d6368cbd1a095434512072601cccc7",
+      "license": "CC-BY-NC-ND-4.0",
+      "license_url": "https://creativecommons.org/licenses/by-nc-nd/4.0/",
+      "license_evidence": {
+        "section": "About this manual / License",
+        "pdf_page": 13,
+        "artifact": "matching file SHA-256 in this lock"
+      },
+      "license_note": "The selected English PDF also retains a separate restrictive copyright statement. Preserve all notices. Public availability is not a blanket permission for commercial use or redistribution of adapted text/indexes."
+    },
+    {
+      "id": "xv6-riscv",
+      "version": "rev5",
+      "date": "2025-09-02",
+      "license": "MIT-style book license",
+      "license_url": "https://github.com/mit-pdos/xv6-riscv-book/blob/xv6-riscv/LICENSE"
+    },
+    {
+      "id": "hailperin-osm",
+      "title": "Operating Systems and Middleware: Supporting Controlled Interaction",
+      "version": "Revised Edition 1.3.1",
+      "date": "2019-06-04",
+      "git_commit": "3567f8f83eafec7c2238271bbd18bea5e0c4f22f",
+      "repository": "https://github.com/Max-Hailperin/Operating-Systems-and-Middleware--Supporting-Controlled-Interaction",
+      "license": "CC-BY-SA-3.0",
+      "license_note": "Retain book and cover attribution; Figure 8.1 permission applies while part of the book, not standalone redistribution."
+    }
+  ],
+  "files": [
+    {
+      "source_id": "loongarch-vol1",
+      "filename": "loongarch-vol1-1.10.pdf",
+      "url": "https://raw.githubusercontent.com/loongson/LoongArch-Documentation/298e9977e7d6368cbd1a095434512072601cccc7/LoongArch-Vol1-EN.pdf",
+      "sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+      "bytes": 9713575,
+      "pages": 212,
+      "index_filename": "loongarch-vol1-1.10.pdf"
+    },
+    {
+      "source_id": "riscv-privileged",
+      "filename": "riscv-privileged-20250508.pdf",
+      "url": "https://github.com/riscv/riscv-isa-manual/releases/download/20250508/riscv-privileged-20250508.pdf",
+      "sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+      "bytes": 1372206,
+      "pages": 221,
+      "index_filename": "riscv-privileged-20250508.pdf"
+    },
+    {
+      "source_id": "riscv-unprivileged",
+      "filename": "riscv-unprivileged-20250508.pdf",
+      "url": "https://github.com/riscv/riscv-isa-manual/releases/download/20250508/riscv-unprivileged-20250508.pdf",
+      "sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+      "bytes": 4643378,
+      "pages": 727,
+      "index_filename": "riscv-unprivileged-20250508.pdf"
+    },
+    {
+      "source_id": "xv6-riscv",
+      "filename": "xv6-riscv-rev5-2025.pdf",
+      "url": "https://pdos.csail.mit.edu/6.1810/2025/xv6/book-riscv-rev5.pdf",
+      "sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+      "bytes": 758480,
+      "pages": 116,
+      "index_filename": "xv6-riscv-rev5-2025.pdf"
+    },
+    {
+      "source_id": "hailperin-osm",
+      "filename": "hailperin-osm-rev1.3.1.pdf",
+      "index_filename": "hailperin-osm-rev1.3.1.pdf",
+      "url": "https://raw.githubusercontent.com/Max-Hailperin/Operating-Systems-and-Middleware--Supporting-Controlled-Interaction/3567f8f83eafec7c2238271bbd18bea5e0c4f22f/web-site/osm-rev1.3.1.pdf",
+      "sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+      "bytes": 7932994,
+      "pages": 559
+    }
+  ],
+  "summary": {
+    "logical_sources": 5,
+    "pdf_files": 5,
+    "total_pages": 1835,
+    "total_bytes": 24420633,
+    "textbook_pages": 675
+  },
+  "metadata_reviewed_on": "2026-09-23"
+}

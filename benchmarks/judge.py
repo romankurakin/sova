@@ -1,706 +1,533 @@
-"""LLM-as-Judge for creating ground truth relevance judgments."""
+"""Call the judge CLIs with subscriptions only, each call in a new isolated session.
 
-import ast
+A run continues from the last saved job.
+"""
+
 import json
 import os
-import re
+import shutil
+import signal
+import subprocess
+import tempfile
 import time
-import uuid
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from pathlib import Path
 
-from pydantic import BaseModel, ValidationError
-
-from sova.config import CONTEXT_MODEL
-
-from .search_interface import get_backend
-
-
-class JudgeError(Exception):
-    """Raised when the judge model fails permanently (e.g. model not found)."""
-
-
-JUDGE_MODEL = os.environ.get("SOVA_BENCH_JUDGE_MODEL", CONTEXT_MODEL)
-
-# Retry settings.
-_MAX_RETRIES = 3
-_RETRY_BASE_DELAY = 1.0
+from benchmarks.build_suite import (
+    CONTROL_GRADES,
+    answer,
+    judge_config,
+    judged_by,
+    refresh_jobs,
+    validate_answer,
+)
+from benchmarks.corpus import CorpusError
+from benchmarks.judging_schema import INSTRUCTION, SYSTEM
+from benchmarks.passages import _hash
+from benchmarks.storage import locked, read, write
 
 
-JUDGE_PROMPT = """You are an information retrieval judge. Rate how well this document chunk satisfies the search query. Imagine a developer searched this mixed technical corpus — would this chunk help them complete the task in the query?
-
-Query: {query}
-
-Document chunk:
----
-{chunk}
----
-
-Scoring rules:
-- Judge ONLY what the chunk explicitly states. Never infer or assume content beyond the text.
-- A chunk can be relevant through exact terminology OR through describing the same concept, mechanism, or procedure the query asks about.
-- However, a similar concept from an unrelated domain is NOT relevant (e.g., "Python exception handling" is not relevant to "ARM exception handling").
-- A chunk that provides context needed to understand the query topic (e.g., prerequisite concepts, surrounding architecture) is at least score 1.
-
-Score definitions:
-3 = Directly and thoroughly addresses the query. A developer would bookmark this.
-2 = Provides useful detail — definitions, mechanisms, formats, or procedures related to the query topic.
-1 = Partially relevant — mentions the topic briefly, covers a prerequisite, or addresses a related aspect without detail.
-0 = Not relevant — no meaningful connection to what the developer is looking for.
-
-Return JSON with:
-- score: integer 0-3
-- confidence: float 0.0-1.0 (lower when the chunk is borderline between two scores)
-- subtopics: list of 1-3 specific technical concepts this chunk covers (e.g., "page table walk", "ELR_EL1 fields", "trap vector setup")
-- reason: one sentence explaining your score; mention which query concepts are or are not present in the chunk"""
+class JudgeFailure(CorpusError):
+    def __init__(self, kind, message):
+        super().__init__(message)
+        self.kind = kind
+        self.raw: dict | None = None
 
 
-class JudgmentResponse(BaseModel):
-    score: int
-    confidence: float = 1.0
-    subtopics: list[str] = []
-    reason: str
+def classify_error(text):
+    low = text.casefold().replace("\u2019", "'")
+    # Claude tries again after a short throttle. It says that this is not the limit.
+    if "not your usage limit" in low:
+        return "unknown_error"
+    # Codex: "You've reached your usage limit", "out of credits", "credit limit".
+    # Claude: "You've hit your session/weekly/Opus/Sonnet limit · resets ...".
+    if any(
+        s in low
+        for s in (
+            "usage limit",
+            "you've hit your",
+            "out of credits",
+            "credit limit",
+            "rate limit",
+            "quota exceeded",
+        )
+    ):
+        return "paused_quota"
+    if any(
+        s in low
+        for s in ("unauthorized", "authentication", "not logged in", "login required")
+    ):
+        return "authentication_error"
+    if any(s in low for s in ("context length", "input too long", "maximum context")):
+        return "input_length_error"
+    # Not "unresolved_error": that status means that a job failed all its retries.
+    return "unknown_error"
 
 
-@dataclass
-class QuerySpec:
-    id: str
-    query: str
-    category: str
-    subtopics: list[str] = field(default_factory=list)
-
-
-@dataclass
-class Judgment:
-    chunk_id: int
-    doc: str
-    score: int
-    reason: str
-    confidence: float = 1.0
-    subtopics: list[str] = field(default_factory=list)
-    text_preview: str = ""
-
-
-@dataclass
-class QueryJudgments:
-    query: QuerySpec
-    judgments: list[Judgment]
-    timestamp: str = ""
-
-
-QUERY_SET: list[QuerySpec] = [
-    # Exact lookup (6) — identifier-heavy retrieval that should reward BM25.
-    QuerySpec("q01", "mcause CSR", "exact_lookup", ["mcause", "trap_cause"]),
-    QuerySpec("q02", "mtvec CSR", "exact_lookup", ["mtvec", "trap_vector"]),
-    QuerySpec("q03", "satp CSR", "exact_lookup", ["satp", "address_translation"]),
-    QuerySpec(
-        "q04",
-        "PLIC claim complete register",
-        "exact_lookup",
-        ["plic_claim", "interrupt_complete"],
-    ),
-    QuerySpec(
-        "q05",
-        "SBI system reset extension",
-        "exact_lookup",
-        ["sbi_system_reset", "runtime_services"],
-    ),
-    QuerySpec(
-        "q06",
-        "AAPCS64 callee-saved registers",
-        "exact_lookup",
-        ["aapcs64", "callee_saved", "calling_convention"],
-    ),
-    # Conceptual (6) — semantic retrieval over mechanisms and procedures.
-    QuerySpec(
-        "q07",
-        "how trap delegation moves exceptions from machine mode to supervisor mode",
-        "conceptual",
-        ["trap_delegation", "machine_mode", "supervisor_mode"],
-    ),
-    QuerySpec(
-        "q08",
-        "how sv39 virtual address translation works",
-        "conceptual",
-        ["sv39", "page_walk", "address_translation"],
-    ),
-    QuerySpec(
-        "q09",
-        "how plic prioritization and thresholding decide delivered interrupts",
-        "conceptual",
-        ["plic_priority", "threshold", "interrupt_delivery"],
-    ),
-    QuerySpec(
-        "q10",
-        "how sbi mediates supervisor requests to machine-level firmware",
-        "conceptual",
-        ["sbi_calls", "firmware_interface", "privilege_boundary"],
-    ),
-    QuerySpec(
-        "q11",
-        "how calling conventions preserve registers across function calls",
-        "conceptual",
-        ["register_preservation", "prologue_epilogue", "abi_rules"],
-    ),
-    QuerySpec(
-        "q12",
-        "how kernel and user privilege separation is enforced",
-        "conceptual",
-        ["privilege_isolation", "user_kernel_boundary", "protection"],
-    ),
-    # Cross-doc (8) — broad tasks expected to draw from multiple documents.
-    QuerySpec(
-        "q13",
-        "function argument passing and return value conventions in low-level systems code",
-        "cross_doc",
-        ["arg_passing", "return_values", "abi_conventions"],
-    ),
-    QuerySpec(
-        "q14",
-        "interrupt handling path from external signal to handler return",
-        "cross_doc",
-        ["interrupt_flow", "handler_entry", "handler_return"],
-    ),
-    QuerySpec(
-        "q15",
-        "syscall path from user code through trap handling to kernel service",
-        "cross_doc",
-        ["syscall_entry", "trap_handling", "kernel_service"],
-    ),
-    QuerySpec(
-        "q16",
-        "register context that must be saved during context switch and exception handling",
-        "cross_doc",
-        ["context_save_restore", "exception_context", "register_state"],
-    ),
-    QuerySpec(
-        "q17",
-        "boot flow from firmware initialization to first user process",
-        "cross_doc",
-        ["boot_flow", "kernel_init", "first_user_process"],
-    ),
-    QuerySpec(
-        "q18",
-        "memory protection bits and page table permissions for user and kernel pages",
-        "cross_doc",
-        ["memory_protection", "page_permissions", "user_kernel_access"],
-    ),
-    QuerySpec(
-        "q19",
-        "trap vector setup and control transfer on exception entry",
-        "cross_doc",
-        ["trap_vector", "exception_entry", "control_transfer"],
-    ),
-    QuerySpec(
-        "q20",
-        "timer and software interrupts used by kernels and supervisors",
-        "cross_doc",
-        ["timer_interrupts", "software_interrupts", "scheduler_tick"],
-    ),
-    # Natural/vague (6) — realistic troubleshooting phrasing.
-    QuerySpec(
-        "q21",
-        "my trap handler returns to the wrong instruction address",
-        "natural",
-        ["trap_return", "saved_pc", "control_flow_bug"],
-    ),
-    QuerySpec(
-        "q22",
-        "external interrupts are pending but never reach my supervisor handler",
-        "natural",
-        ["interrupt_routing", "pending_interrupts", "supervisor_handler"],
-    ),
-    QuerySpec(
-        "q23",
-        "after enabling virtual memory my kernel immediately page-faults",
-        "natural",
-        ["vm_enable", "page_fault", "translation_setup"],
-    ),
-    QuerySpec(
-        "q24",
-        "porting from arm64 to riscv broke function call register usage",
-        "natural",
-        ["porting", "calling_convention", "register_mismatch"],
-    ),
-    QuerySpec(
-        "q25",
-        "context switch loses register values between processes",
-        "natural",
-        ["context_switch_bug", "register_corruption", "save_restore"],
-    ),
-    QuerySpec(
-        "q26",
-        "firmware call returns not supported for an sbi feature",
-        "natural",
-        ["sbi_error_codes", "firmware_call", "feature_support"],
-    ),
-    # Negative (4) — hard negatives (near-domain + far-domain).
-    QuerySpec("q27", "x86 APIC ICR delivery mode", "negative", []),
-    QuerySpec("q28", "Linux cgroup v2 cpu.max throttling", "negative", []),
-    QuerySpec("q29", "PostgreSQL query planner cost model tuning", "negative", []),
-    QuerySpec(
-        "q30", "TensorFlow distributed training checkpoint sharding", "negative", []
-    ),
-]
-
-
-def _is_permanent_error(exc: Exception) -> bool:
-    """Check if an error is permanent (no point retrying)."""
-    msg = str(exc).lower()
-    permanent_markers = (
-        "not found",
-        "status code: 404",
-        "status code: 401",
-        "status code: 403",
-        "invalid api key",
-        "api key not valid",
-        "permission denied",
-        "quota exceeded",
-        "insufficient_quota",
+def subscription_environment():
+    # Keep the variables that the subscription login needs. Claude Code uses USER to
+    # find its keychain login. API keys and provider settings are not passed, so this
+    # command cannot use API credit.
+    names = (
+        "PATH",
+        "HOME",
+        "USER",
+        "TMPDIR",
+        "LANG",
+        "LC_ALL",
+        "CODEX_HOME",
+        "CLAUDE_CONFIG_DIR",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "SSL_CERT_FILE",
     )
-    return any(marker in msg for marker in permanent_markers)
+    return {key: os.environ[key] for key in names if key in os.environ}
 
 
-def _post_json(url: str, payload: dict, timeout: float = 60.0) -> dict:
-    """POST JSON and parse JSON response."""
-    import urllib.error
-    import urllib.request
-
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"}
+def process(command, *, prompt=None, cwd=None, env=None, timeout=900):
+    proc = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+        env=env,
+        start_new_session=True,
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body = ""
+        stdout, stderr = proc.communicate(prompt, timeout=timeout)
+    except KeyboardInterrupt, subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGINT)
         try:
-            body = e.read().decode("utf-8", errors="replace").strip()
-        except OSError:
-            body = ""
-
-        detail = body
-        if body:
-            try:
-                parsed = json.loads(body)
-                if isinstance(parsed, dict):
-                    detail = str(parsed.get("error") or parsed)
-            except json.JSONDecodeError:
-                detail = body
-
-        message = f"HTTP Error {e.code}: {e.reason}"
-        if detail:
-            message = f"{message} - {detail}"
-        raise RuntimeError(message) from e
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"request failed: {e.reason}") from e
+            proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate()
+        raise
+    return proc.returncode, stdout, stderr
 
 
-_JUDGE_RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "judgment",
-        "strict": True,
-        "schema": JudgmentResponse.model_json_schema(),
-    },
-}
-
-
-def _iter_payload_candidates(text: str) -> list[str]:
-    """Collect likely JSON payload candidates from model output."""
-    stripped = text.strip()
-    if not stripped:
-        return []
-
-    candidates: list[str] = []
-    seen: set[str] = set()
-
-    def _add(candidate: str) -> None:
-        candidate = candidate.strip()
-        if not candidate or candidate in seen:
-            return
-        seen.add(candidate)
-        candidates.append(candidate)
-
-    # Fenced candidates first (models often wrap JSON in markdown).
-    for m in re.finditer(r"```(?:json)?\s*(.*?)```", stripped, re.DOTALL):
-        _add(m.group(1))
-
-    # Any decodable JSON object/array in free text.
-    decoder = json.JSONDecoder()
-    for i, ch in enumerate(stripped):
-        if ch not in "{[":
-            continue
-        try:
-            _, end = decoder.raw_decode(stripped[i:])
-            _add(stripped[i : i + end])
-        except json.JSONDecodeError:
-            continue
-
-    # Whole response as a last resort.
-    _add(stripped)
-    return candidates
-
-
-def _cleanup_json_like_text(payload: str) -> str:
-    """Normalize common model output issues before parsing."""
-    cleaned = payload.strip()
-    if cleaned.lower().startswith("json"):
-        parts = cleaned.splitlines()
-        if len(parts) > 1:
-            cleaned = "\n".join(parts[1:])
-        else:
-            cleaned = cleaned[4:]
-    cleaned = cleaned.strip().strip("`")
-    cleaned = cleaned.replace("\u201c", '"').replace("\u201d", '"')
-    cleaned = cleaned.replace("\u2018", "'").replace("\u2019", "'")
-    cleaned = re.sub(r"(?m)^\s*//.*$", "", cleaned)
-    cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)
-    cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
-    return cleaned.strip()
-
-
-def _python_literal_variants(payload: str) -> list[str]:
-    variants = [payload]
-    # Allow json-like literals with true/false/null for ast literal_eval fallback.
-    normalized = re.sub(r"\btrue\b", "True", payload, flags=re.IGNORECASE)
-    normalized = re.sub(r"\bfalse\b", "False", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"\bnull\b", "None", normalized, flags=re.IGNORECASE)
-    if normalized != payload:
-        variants.append(normalized)
-    return variants
-
-
-def _recover_with_regex(text: str) -> JudgmentResponse | None:
-    """Best-effort recovery for non-JSON outputs that still contain fields."""
-    score_match = re.search(r"(?i)[\"']?score[\"']?\s*[:=]\s*(-?\d+)", text)
-    if not score_match:
-        return None
-
-    conf_match = re.search(
-        r"(?i)[\"']?confidence[\"']?\s*[:=]\s*(-?\d+(?:\.\d+)?)", text
-    )
-    confidence = float(conf_match.group(1)) if conf_match else 0.5
-
-    reason_match = re.search(r"(?is)[\"']?reason[\"']?\s*[:=]\s*([\"'])(.*?)\1", text)
-    if reason_match:
-        reason = reason_match.group(2).strip()
-    else:
-        reason_line = re.search(r"(?im)^\s*[\"']?reason[\"']?\s*[:=]\s*(.+)$", text)
-        reason = (
-            reason_line.group(1).strip() if reason_line else "parsed from model output"
-        )
-
-    subs: list[str] = []
-    subs_match = re.search(r"(?is)[\"']?subtopics?[\"']?\s*[:=]\s*\[(.*?)\]", text)
-    if subs_match:
-        inner = subs_match.group(1)
-        quoted = re.findall(r'(?s)"([^"]+)"|\'([^\']+)\'', inner)
-        for a, b in quoted:
-            token = (a or b).strip()
-            if token:
-                subs.append(token)
-        if not subs:
-            for token in inner.split(","):
-                value = token.strip().strip("'\"")
-                if value:
-                    subs.append(value)
-
-    return JudgmentResponse(
-        score=int(score_match.group(1)),
-        confidence=confidence,
-        subtopics=subs[:5],
-        reason=reason,
-    )
-
-
-def _parse_judgment_response(text: str) -> JudgmentResponse:
-    """Parse model output into JudgmentResponse with tolerant fallback formats."""
-    candidates = _iter_payload_candidates(text)
-    last_error: Exception | None = None
-
-    for payload in candidates:
-        cleaned = _cleanup_json_like_text(payload)
-        for candidate in (payload, cleaned):
-            if not candidate:
-                continue
-            try:
-                return JudgmentResponse.model_validate_json(candidate)
-            except ValidationError as json_error:
-                last_error = json_error
-
-            # Some models emit Python dict literals instead of strict JSON.
-            for literal_candidate in _python_literal_variants(candidate):
-                try:
-                    parsed = ast.literal_eval(literal_candidate)
-                except SyntaxError, ValueError:
-                    continue
-                if isinstance(parsed, dict):
-                    try:
-                        return JudgmentResponse.model_validate(parsed)
-                    except ValidationError as validate_error:
-                        last_error = validate_error
-
-    recovered = _recover_with_regex(text)
-    if recovered is not None:
-        return recovered
-
-    if last_error is not None:
-        raise last_error
-    raise ValueError("empty or unparseable judge response")
-
-
-def _parse_bool(raw: str | None) -> bool | None:
-    if raw is None:
-        return None
-    value = raw.strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
-    return None
-
-
-def should_use_debiasing() -> bool:
-    """Return whether debiasing should be enabled for judge calls."""
-    forced = _parse_bool(os.environ.get("SOVA_BENCH_USE_DEBIASING"))
-    return True if forced is None else forced
-
-
-def _call_judge_llama(prompt: str) -> JudgmentResponse:
-    """Call a local llama-server chat model and parse JSON response."""
-    from sova.config import CONTEXT_SERVER_URL
-
-    resp = _post_json(
-        f"{CONTEXT_SERVER_URL}/v1/chat/completions",
-        {
-            "model": JUDGE_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0,
-            "response_format": _JUDGE_RESPONSE_FORMAT,
-        },
-    )
-    content = (resp["choices"][0]["message"]["content"] or "").strip()
-    if not content:
-        raise ValueError("empty response from model")
-    return _parse_judgment_response(content)
-
-
-def _call_judge(prompt: str) -> JudgmentResponse:
-    """Call the local llama-server judge model."""
-    return _call_judge_llama(prompt)
-
-
-def judge_chunk(
-    query: str, chunk_text: str, max_retries: int = 2
-) -> tuple[int, str, float, list[str]]:
-    """Judge relevance of a single chunk. Returns (score, reason, confidence, subtopics).
-
-    Raises JudgeError on permanent failures or after exhausting retries.
-    """
-    prompt = JUDGE_PROMPT.format(query=query, chunk=chunk_text[:1500])
-    last_error: Exception | None = None
-
-    for attempt in range(max_retries + 1):
-        try:
-            result = _call_judge(prompt)
-            return (
-                max(0, min(3, result.score)),
-                result.reason.strip(),
-                max(0.0, min(1.0, result.confidence)),
-                result.subtopics[:5] if result.subtopics else [],
+class JudgeCLI:
+    def __init__(self, provider):
+        if provider not in ("codex", "claude"):
+            raise CorpusError("Judge must be codex or claude")
+        self.provider = provider
+        self.executable = shutil.which(provider)
+        if not self.executable:
+            raise JudgeFailure(
+                "setup_error", f"Install and sign in to {provider} before judging"
             )
-        except Exception as e:
-            last_error = e
-            if _is_permanent_error(e):
-                raise JudgeError(str(e)) from e
-            if attempt < max_retries:
-                time.sleep(_RETRY_BASE_DELAY * (2**attempt))
-
-    raise JudgeError(f"failed after {max_retries + 1} attempts: {last_error}")
-
-
-def judge_chunk_with_debiasing(
-    query: str, chunk_text: str
-) -> tuple[int, str, float, list[str], float]:
-    """Judge with position bias mitigation. Returns (score, reason, confidence, subtopics, variance)."""
-    score1, reason1, conf1, subs1 = judge_chunk(query, chunk_text)
-
-    # Re-judge borderline cases.
-    if conf1 >= 0.7 and score1 not in {1, 2}:
-        return score1, reason1, conf1, subs1, 0.0
-
-    # Re-judge with attention shift.
-    padding = f"Reference: {uuid.uuid4()}\n\n"
-    padded_prompt = padding + JUDGE_PROMPT.format(query=query, chunk=chunk_text[:1400])
-
-    try:
-        result = _call_judge(padded_prompt)
-        score2 = max(0, min(3, result.score))
-        subs2 = result.subtopics[:5] if result.subtopics else []
-    except KeyError, RuntimeError, TypeError, ValueError:
-        return score1, reason1, conf1, subs1, 0.0
-
-    avg_score = round((score1 + score2) / 2)
-    variance = abs(score1 - score2)
-    all_subs = list(set(subs1 + subs2))[:5]
-
-    return (
-        avg_score,
-        reason1,
-        (conf1 + max(0.0, min(1.0, result.confidence))) / 2,
-        all_subs,
-        variance,
-    )
-
-
-def collect_candidates(query: str, k: int = 50) -> list[dict]:
-    """Run search to collect candidate chunks for judgment."""
-    backend = get_backend()
-    results = backend.search(query, limit=k)
-    return [
-        {
-            "chunk_id": r.chunk_id,
-            "doc": r.doc,
-            "text": r.text,
-            "section_id": r.section_id,
+        self.env = subscription_environment()
+        code, out, err = process(
+            [self.executable, "--version"], env=self.env, timeout=15
+        )
+        if code:
+            raise JudgeFailure("setup_error", err)
+        self.version = out.strip()
+        self.protocol = judged_by()
+        self.config = self.protocol[provider]
+        config = self.config
+        self.identity = {
+            "provider": provider,
+            "cli": self.version,
+            **config,
+            "system_sha256": _hash(SYSTEM),
+            "adapter_sha256": _hash(Path(__file__).read_text()),
         }
-        for r in results
-    ]
+        status_args = (
+            ["login", "status"] if provider == "codex" else ["auth", "status", "--json"]
+        )
+        code, out, err = process(
+            [self.executable, *status_args], env=self.env, timeout=30
+        )
+        if provider == "codex":
+            valid = code == 0 and "chatgpt" in (out + err).casefold()
+        else:
+            try:
+                auth = json.loads(out)
+                valid = (
+                    code == 0
+                    and auth.get("loggedIn") is True
+                    and auth.get("authMethod") in ("claude.ai", "oauth")
+                )
+            except ValueError:
+                valid = False
+        if not valid:
+            raise JudgeFailure(
+                "authentication_error",
+                f"{provider} subscription login required; API fallback is disabled",
+            )
 
+    def command(self, directory, schema):
+        config = self.config
+        if self.provider == "codex":
+            schema_file = directory / "schema.json"
+            schema_file.write_text(json.dumps(schema))
+            system_file = directory / "system.txt"
+            system_file.write_text(SYSTEM)
+            args = [
+                self.executable,
+                "exec",
+                "--ignore-user-config",
+                "--ignore-rules",
+                "--ephemeral",
+                "--skip-git-repo-check",
+                "--sandbox",
+                "read-only",
+                "--model",
+                config["model"],
+                "--json",
+                "--output-schema",
+                str(schema_file),
+                "--output-last-message",
+                str(directory / "answer.json"),
+            ]
+            overrides = {
+                "model_reasoning_effort": config["effort"],
+                "forced_login_method": "chatgpt",
+                "approval_policy": "never",
+                "web_search": "disabled",
+                "project_doc_max_bytes": 0,
+                "model_instructions_file": str(system_file),
+                "mcp_servers": {},
+                "features.shell_tool": False,
+                "features.unified_exec": False,
+                "features.apps": False,
+                "features.plugins": False,
+                "features.hooks": False,
+                "features.multi_agent": False,
+                "features.in_app_browser": False,
+                "features.skill_search": False,
+                "features.skip_host_skill_discovery": True,
+            }
+            for key, value in overrides.items():
+                # JSON strings and booleans are also valid TOML.
+                # Empty tables use TOML braces.
+                args += ["-c", f"{key}={json.dumps(value)}"]
+            return args + ["-"]
+        return [
+            self.executable,
+            "-p",
+            "--safe-mode",
+            "--restricted",
+            "--tools",
+            "",
+            "--disable-slash-commands",
+            "--setting-sources",
+            "",
+            "--settings",
+            '{"disableAllHooks":true}',
+            "--strict-mcp-config",
+            "--mcp-config",
+            '{"mcpServers":{}}',
+            "--permission-mode",
+            "dontAsk",
+            "--no-session-persistence",
+            "--system-prompt",
+            SYSTEM,
+            "--model",
+            config["model"],
+            "--effort",
+            config["effort"],
+            "--output-format",
+            "json",
+            "--json-schema",
+            json.dumps(schema),
+        ]
 
-def collect_pool(query: str, k_per_strategy: int = 20) -> list[dict]:
-    """Multi-source pooling: union of hybrid, FTS-only, and vector-only results.
-
-    Returns deduplicated candidates (~30-50 per query). This is the TREC
-    pooling approach — ground truth is independent of any single retrieval strategy.
-    """
-    backend = get_backend()
-
-    seen: dict[int, dict] = {}
-
-    def _add_results(results):
-        for r in results:
-            if r.chunk_id not in seen:
-                seen[r.chunk_id] = {
-                    "chunk_id": r.chunk_id,
-                    "doc": r.doc,
-                    "text": r.text,
-                    "section_id": r.section_id,
+    def __call__(self, job):
+        if job["judge_config"] != self.protocol:
+            raise JudgeFailure(
+                "protocol_mismatch",
+                "Judge configuration changed during this invocation",
+            )
+        prompt = (
+            INSTRUCTION
+            + "\nUNTRUSTED INPUT JSON:\n"
+            + json.dumps(job["payload"], ensure_ascii=False)
+        )
+        with tempfile.TemporaryDirectory(prefix="sova-judge-") as name:
+            directory = Path(name)
+            command = self.command(directory, job["schema"])
+            code, stdout, stderr = process(
+                command,
+                prompt=prompt,
+                cwd=directory,
+                env=self.env,
+                timeout=judge_config()["timeout_seconds"],
+            )
+            raw = {"stdout": stdout, "stderr": stderr, "exit_code": code}
+            if code:
+                failure = JudgeFailure(
+                    classify_error(stdout + stderr), (stderr or stdout)[-2000:]
+                )
+                failure.raw = raw
+                raise failure
+            try:
+                data, usage, resolved = self.parse(directory, stdout)
+            except JudgeFailure as exc:
+                exc.raw = raw
+                raise
+            except (ValueError, KeyError, TypeError, OSError) as exc:
+                # Return the raw response, so that the run saves it before the retry.
+                return {
+                    "answer": None,
+                    "raw": raw,
+                    "parse_error": str(exc),
+                    "identity": self.identity,
+                    "usage": None,
                 }
+            return {
+                "answer": data,
+                "raw": raw,
+                "usage": usage,
+                "resolved_models": resolved,
+                "identity": self.identity,
+            }
 
-    # Strategy 1: hybrid (existing search).
-    _add_results(backend.search(query, limit=k_per_strategy))
+    def parse(self, directory, stdout):
+        if self.provider == "codex":
+            events = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+            if any(e.get("type") in {"error", "turn.failed"} for e in events):
+                raise JudgeFailure(classify_error(stdout), stdout[-2000:])
+            forbidden = {
+                "command_execution",
+                "mcp_tool_call",
+                "web_search",
+                "file_change",
+            }
+            if any(e.get("item", {}).get("type") in forbidden for e in events):
+                raise JudgeFailure("isolation_error", "Judge attempted to use a tool")
+            data = json.loads((directory / "answer.json").read_bytes())
+            usage = next(
+                (e.get("usage") for e in reversed(events) if e.get("usage")), None
+            )
+            return data, usage, None
+        envelope = json.loads(stdout)
+        if envelope.get("is_error"):
+            raise JudgeFailure(
+                classify_error(stdout), str(envelope.get("result", "Judge error"))
+            )
+        data = envelope.get("structured_output")
+        if data is None:
+            data = json.loads(envelope["result"])
+        resolved = sorted(envelope.get("modelUsage", {})) or None
+        if resolved and any(
+            not model.startswith(self.config["model"]) for model in resolved
+        ):
+            raise JudgeFailure(
+                "model_mismatch", "Claude used a model other than the declared one"
+            )
+        return data, envelope.get("usage"), resolved
 
-    # Strategy 2: BM25-only.
-    _add_results(backend.search_fts_only(query, limit=k_per_strategy))
 
-    # Strategy 3: vector-only.
-    _add_results(backend.search_vector_only(query, limit=k_per_strategy))
-
-    return list(seen.values())
-
-
-def judge_query(
-    spec: QuerySpec,
-    k: int = 50,
-    verbose: bool = True,
-    use_debiasing: bool = False,
-    on_chunk_done: Callable[[], None] | None = None,
-    on_chunk_judged: Callable[[Judgment], None] | None = None,
-    existing_judgments: dict[int, int] | None = None,
-    k_per_strategy: int | None = None,
-) -> QueryJudgments:
-    """Collect and judge all candidates for a query.
-
-    If k_per_strategy is set, uses multi-source pooling (3 strategies).
-    Otherwise falls back to single-source collection with limit=k.
-
-    existing_judgments maps chunk_id -> score for chunks already judged.
-    These are preserved and not re-judged.
-
-    on_chunk_judged is called after each successful judgment, enabling
-    per-chunk checkpointing. Exceptions propagate to the caller.
-    """
-    if k_per_strategy is not None:
-        candidates = collect_pool(spec.query, k_per_strategy=k_per_strategy)
+def verify_runtime(root, provider, response):
+    # Each judgment records the CLI version. Only a different model with the same
+    # configuration can mix grades, so this check compares the models only.
+    identity = {"resolved_models": response.get("resolved_models")}
+    path = root / "judge-runtimes" / _hash(judged_by()) / f"{provider}.json"
+    if path.exists():
+        saved = read(path)
+        if any(saved.get(k) != v for k, v in identity.items()):
+            raise JudgeFailure(
+                "model_mismatch",
+                "Judge model changed. Keep the original model, or declare a new judges.json protocol revision; stored judgments are preserved.",
+            )
     else:
-        candidates = collect_candidates(spec.query, k=k)
+        write(path, identity, immutable=True)
 
-    judgments = []
 
-    for hit in candidates:
-        chunk_id = hit["chunk_id"]
-
-        # Skip already-judged chunks (incremental).
-        if existing_judgments and chunk_id in existing_judgments:
-            continue
-
-        try:
-            if use_debiasing:
-                score, reason, confidence, subtopics, _ = judge_chunk_with_debiasing(
-                    spec.query, hit["text"]
+def run_judge(root, provider, *, max_pairs=None, caller=None, notify=print):
+    root = Path(root)
+    if provider not in ("codex", "claude"):
+        raise CorpusError("Judge must be codex or claude")
+    if not (root / "pool.json").exists():
+        raise CorpusError("Run bench prepare to create the candidate pool first")
+    completed, consumed = 0, 0
+    # Each judge writes only its own files, so the two judges can run in parallel.
+    with locked(root, f"judge-{provider}"):
+        caller = caller or JudgeCLI(provider)
+        jobs = [read(root / "jobs" / f"{jid}.json") for jid in refresh_jobs(root)]
+        done = {path.stem for path in (root / "judgments" / provider).glob("*.json")}
+        other = "claude" if provider == "codex" else "codex"
+        other_done = {path.stem for path in (root / "judgments" / other).glob("*.json")}
+        # A job that failed all retries stays a gap. It does not stop the queue.
+        skipped = {
+            path.stem
+            for path in (root / "judge-state" / provider).glob("*.json")
+            if read(path).get("status") == "unresolved_error"
+        }
+        control = next(job for job in jobs if job["kind"] == "control")
+        while True:
+            # The two providers do not wait for each other. Only the control of this
+            # provider can stop it.
+            response = answer(root, control["sha256"], provider)
+            if control["sha256"] in skipped or (
+                response
+                and {g["passage_id"]: g["grade"] for g in response["answer"]["grades"]}
+                != CONTROL_GRADES
+            ):
+                return {"completed": completed, "status": "failed_controls"}
+            if max_pairs is not None and consumed >= max_pairs:
+                return {"completed": completed, "status": "paused_budget"}
+            pending = [job for job in jobs if job["sha256"] not in done | skipped]
+            pending.sort(
+                key=lambda job: (
+                    job["kind"] != "control",
+                    not job["pilot"],
+                    job["sha256"] not in other_done,
+                    job["sha256"],
                 )
-            else:
-                score, reason, confidence, subtopics = judge_chunk(
-                    spec.query, hit["text"]
+            )
+            if not pending:
+                gaps = f"; {len(skipped)} jobs skipped after retries" if skipped else ""
+                notify(f"{provider}: {completed} jobs completed; queue done{gaps}.")
+                return {"completed": completed, "status": "completed"}
+            job = pending[0]
+            jid = job["sha256"]
+            state_path = root / "judge-state" / provider / f"{jid}.json"
+            state = (
+                read(state_path)
+                if state_path.exists()
+                else {"attempts": 0, "failures": 0, "partial_grades": []}
+            )
+            saved = {g["passage_id"]: g for g in state.get("partial_grades", [])}
+            remaining = [
+                p for p in job["payload"]["passages"] if p["passage_id"] not in saved
+            ]
+            if max_pairs is not None:
+                remaining = remaining[: max_pairs - consumed]
+            request = job | {"payload": job["payload"] | {"passages": remaining}}
+            state = write(
+                state_path,
+                state
+                | {
+                    "attempts": state["attempts"] + 1,
+                    "status": "in_progress",
+                    "provider": provider,
+                    "job": jid,
+                },
+            )
+            attempt_path = (
+                root
+                / "judge-attempts"
+                / provider
+                / jid
+                / f"{state['attempts']:04}.json"
+            )
+            t0 = time.monotonic()
+            try:
+                response = caller(request)
+                write(
+                    attempt_path,
+                    {
+                        "job": jid,
+                        "request": request,
+                        "response": response,
+                        "elapsed_seconds": time.monotonic() - t0,
+                    },
+                    immutable=True,
                 )
-        except JudgeError as e:
-            raise JudgeError(
-                f"query {spec.id} chunk {chunk_id} ({hit['doc']}): {e}"
-            ) from e
-
-        j = Judgment(
-            chunk_id=chunk_id,
-            doc=hit["doc"],
-            score=score,
-            reason=reason,
-            confidence=confidence,
-            subtopics=subtopics,
-            text_preview=hit["text"][:100].replace("\n", " "),
-        )
-        judgments.append(j)
-        if on_chunk_judged:
-            on_chunk_judged(j)
-        if on_chunk_done:
-            on_chunk_done()
-
-    return QueryJudgments(
-        query=spec, judgments=judgments, timestamp=time.strftime("%Y-%m-%dT%H:%M:%S")
-    )
-
-
-def judge_single_chunk(
-    query: str,
-    chunk_id: int,
-    text: str,
-    doc: str,
-    use_debiasing: bool = True,
-) -> Judgment:
-    """Judge a single chunk. Used by auto-fill during cmd_run."""
-    if use_debiasing:
-        score, reason, confidence, subtopics, _ = judge_chunk_with_debiasing(
-            query, text
-        )
-    else:
-        score, reason, confidence, subtopics = judge_chunk(query, text)
-
-    return Judgment(
-        chunk_id=chunk_id,
-        doc=doc,
-        score=score,
-        reason=reason,
-        confidence=confidence,
-        subtopics=subtopics,
-        text_preview=text[:100].replace("\n", " "),
-    )
-
-
-def collect_query_subtopics(judgments: list[Judgment]) -> list[str]:
-    """Aggregate subtopics from relevant chunks."""
-    subs = set()
-    for j in judgments:
-        if j.score >= 2 and j.subtopics:
-            subs.update(j.subtopics)
-    return sorted(subs)
+                if response.get("parse_error"):
+                    raise CorpusError(response["parse_error"])
+                verify_runtime(root, provider, response)
+                if not isinstance(response.get("answer"), dict):
+                    raise CorpusError("Judge answer must be an object")
+                valid = []
+                errors = []
+                requested = {p["passage_id"]: p for p in request["payload"]["passages"]}
+                counts = {}
+                raw_grades = response["answer"].get("grades", [])
+                for grade in raw_grades:
+                    if isinstance(grade, dict):
+                        pid = grade.get("passage_id")
+                        counts[pid] = counts.get(pid, 0) + 1
+                for grade in raw_grades:
+                    try:
+                        pid = grade["passage_id"]
+                        if pid not in requested or counts[pid] != 1:
+                            raise CorpusError("Invalid or duplicate grade ID")
+                        one = request | {
+                            "payload": request["payload"]
+                            | {"passages": [requested[pid]]}
+                        }
+                        valid.extend(
+                            validate_answer(one, {"grades": [grade]})["grades"]
+                        )
+                    except (ValueError, KeyError, TypeError, CorpusError) as exc:
+                        errors.append(str(exc))
+                saved.update((g["passage_id"], g) for g in valid)
+                consumed += len(valid)
+                state = write(
+                    state_path,
+                    state
+                    | {"partial_grades": list(saved.values()), "status": "pending"},
+                )
+                if len(valid) != len(requested):
+                    raise CorpusError("; ".join(errors) or "Incomplete grade batch")
+                if len(saved) < len(job["payload"]["passages"]):
+                    continue
+                validated = {
+                    "grades": [
+                        saved[p["passage_id"]] for p in job["payload"]["passages"]
+                    ]
+                }
+                write(
+                    root / "judgments" / provider / f"{jid}.json",
+                    {
+                        "job": jid,
+                        "provider": provider,
+                        "answer": validated,
+                        "identity": response.get("identity"),
+                        "resolved_models": response.get("resolved_models"),
+                        "attempts": state["attempts"],
+                        "last_attempt": str(attempt_path.relative_to(root)),
+                    },
+                    immutable=True,
+                )
+                write(state_path, state | {"status": "completed"})
+                done.add(jid)
+                completed += 1
+                notify(f"{provider}: completed {completed} jobs ({job['kind']})")
+            except KeyboardInterrupt:
+                write(state_path, state | {"status": "interrupted"})
+                raise
+            except JudgeFailure as exc:
+                if not attempt_path.exists():
+                    write(
+                        attempt_path,
+                        {
+                            "job": jid,
+                            "error": str(exc),
+                            "kind": exc.kind,
+                            "raw": exc.raw,
+                        },
+                        immutable=True,
+                    )
+                write(state_path, state | {"status": exc.kind, "reset_at": None})
+                raise
+            except (
+                ValueError,
+                KeyError,
+                TypeError,
+                CorpusError,
+                subprocess.TimeoutExpired,
+            ) as exc:
+                # A bad answer or a timeout gets a limited number of retries.
+                # Then the job stays a gap.
+                timeout = isinstance(exc, subprocess.TimeoutExpired)
+                error = "timeout" if timeout else str(exc)
+                if not attempt_path.exists():
+                    write(attempt_path, {"job": jid, "error": error}, immutable=True)
+                failures = state.get("failures", 0) + 1
+                status = (
+                    "unresolved_error"
+                    if failures > judge_config()["retry_limit"]
+                    else "retryable_error"
+                )
+                write(
+                    state_path,
+                    state | {"failures": failures, "status": status, "error": error},
+                )
+                if status == "unresolved_error":
+                    skipped.add(jid)
+                    notify(f"{provider}: skipped job {jid[:12]} after {failures} tries")

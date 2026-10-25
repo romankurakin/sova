@@ -1,0 +1,4400 @@
+{
+  "schema_version": 7,
+  "corpus_id": "os-architectures-v1",
+  "source_lock_sha256": "98b4c2dfe0a749c9f54c2eabf8c606b4771c665882a1f708c2207c2fc7c59b37",
+  "editor_revision": 7,
+  "updated": "2026-10-03",
+  "notes": [
+    "The repository is the canonical source of query texts, metadata and source references.",
+    "Source references identify pinned PDF pages for editorial verification; they are not exclusive relevance targets or qrels. Corpus excerpts are not bundled.",
+    "Search receives text only. Pair judges receive id/text/neutral intent plus the candidate passage and provenance; source_refs and editorial metadata are excluded.",
+    "Evaluate all English core queries, with no difficulty quota or dev/holdout split. Budget limits bound judge work per invocation, not the query set.",
+    "All questions have received editorial source checking. Independent provider review remains pending; this is not human validation or a sample of observed search traffic.",
+    "architecture_scope both measures result-set coverage; useful single-ISA passages are not penalized for lacking the other architecture.",
+    "Revision 7 adds q199 (FS Initial) and q200 (supervisor access to stimecmp) within the pinned RISC-V Privileged source. Existing queries and translation anchors are unchanged.",
+    "Default runs include all English queries and all Russian/Chinese probes, with separate language reports. Schema 7 removes metadata that no code reads; query texts and intents are unchanged."
+  ],
+  "queries": [
+    {
+      "id": "q001",
+      "text": "writing to a zero register",
+      "language": "en",
+      "intent": "Understand the effect of an instruction writing to the constant-zero register.",
+      "category": "conceptual",
+      "comparison_group": "zero_register",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 43,
+          "section": "2.1. Programmers' Model for Base Integer ISA"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 20,
+          "section": "2.1.2.1. General-purpose Registers"
+        }
+      ]
+    },
+    {
+      "id": "q002",
+      "text": "What happens when a RISC-V instruction writes to x0?",
+      "language": "en",
+      "intent": "Understand the effect of an instruction writing to the constant-zero register.",
+      "category": "exact_lookup",
+      "comparison_group": "zero_register",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 43,
+          "section": "2.1. Programmers' Model for Base Integer ISA"
+        }
+      ]
+    },
+    {
+      "id": "q003",
+      "text": "What happens when a LoongArch instruction writes to r0?",
+      "language": "en",
+      "intent": "Understand the effect of an instruction writing to the constant-zero register.",
+      "category": "exact_lookup",
+      "comparison_group": "zero_register",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 20,
+          "section": "2.1.2.1. General-purpose Registers"
+        }
+      ]
+    },
+    {
+      "id": "q004",
+      "text": "signed versus unsigned byte loads",
+      "language": "en",
+      "intent": "Compare how signed and unsigned byte loads extend the value to the register width.",
+      "category": "comparison",
+      "comparison_group": "load_extension",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 54,
+          "section": "2.6. Load and Store Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 50,
+          "section": "2.2.5.1. LD.{B[U]/H[U]/W[U]/D}, ST.{B/H/W/D}"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 51,
+          "section": "2.2.5.1. LD.{B[U]/H[U]/W[U]/D}, ST.{B/H/W/D}"
+        }
+      ]
+    },
+    {
+      "id": "q005",
+      "text": "In RISC-V, how do LB and LBU differ when the loaded byte has its top bit set?",
+      "language": "en",
+      "intent": "Compare how signed and unsigned byte loads extend the value to the register width.",
+      "category": "comparison",
+      "comparison_group": "load_extension",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 54,
+          "section": "2.6. Load and Store Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q006",
+      "text": "In LoongArch, how do LD.B and LD.BU differ when the loaded byte has its top bit set?",
+      "language": "en",
+      "intent": "Compare how signed and unsigned byte loads extend the value to the register width.",
+      "category": "comparison",
+      "comparison_group": "load_extension",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 50,
+          "section": "2.2.5.1. LD.{B[U]/H[U]/W[U]/D}, ST.{B/H/W/D}"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 51,
+          "section": "2.2.5.1. LD.{B[U]/H[U]/W[U]/D}, ST.{B/H/W/D}"
+        }
+      ]
+    },
+    {
+      "id": "q007",
+      "text": "branch conditions and target address calculation",
+      "language": "en",
+      "intent": "Understand a conditional branch and its destination-address calculation.",
+      "category": "conceptual",
+      "comparison_group": "conditional_branch",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 52,
+          "section": "2.5.2. Conditional Branches"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 47,
+          "section": "2.2.4.1. BEQ, BNE, BLT[U], BGE[U]"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 46,
+          "section": "2.2.4.1. BEQ, BNE, BLT[U], BGE[U]"
+        }
+      ]
+    },
+    {
+      "id": "q008",
+      "text": "How is the destination address calculated for a taken RISC-V BEQ?",
+      "language": "en",
+      "intent": "Determine the destination-address calculation for a taken RISC-V BEQ.",
+      "category": "exact_lookup",
+      "comparison_group": "conditional_branch",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 52,
+          "section": "2.5.2. Conditional Branches"
+        }
+      ]
+    },
+    {
+      "id": "q009",
+      "text": "How is the destination address calculated for a taken LoongArch BEQ?",
+      "language": "en",
+      "intent": "Determine the destination-address calculation for a taken LoongArch BEQ.",
+      "category": "exact_lookup",
+      "comparison_group": "conditional_branch",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 47,
+          "section": "2.2.4.1. BEQ, BNE, BLT[U], BGE[U]"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 46,
+          "section": "2.2.4.1. BEQ, BNE, BLT[U], BGE[U]"
+        }
+      ]
+    },
+    {
+      "id": "q010",
+      "text": "signed and unsigned integer comparison instructions",
+      "language": "en",
+      "intent": "Compare signed and unsigned integer comparison instructions.",
+      "category": "comparison",
+      "comparison_group": "signed_compare",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 49,
+          "section": "2.4.2. Integer Register-Register Operations"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 28,
+          "section": "2.2.1.5. SLT[U]"
+        }
+      ]
+    },
+    {
+      "id": "q011",
+      "text": "How do SLT and SLTU differ in RISC-V?",
+      "language": "en",
+      "intent": "Compare signed and unsigned integer comparison instructions.",
+      "category": "comparison",
+      "comparison_group": "signed_compare",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 49,
+          "section": "2.4.2. Integer Register-Register Operations"
+        }
+      ]
+    },
+    {
+      "id": "q012",
+      "text": "How do SLT and SLTU differ in LoongArch?",
+      "language": "en",
+      "intent": "Compare signed and unsigned integer comparison instructions.",
+      "category": "comparison",
+      "comparison_group": "signed_compare",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 28,
+          "section": "2.2.1.5. SLT[U]"
+        }
+      ]
+    },
+    {
+      "id": "q013",
+      "text": "high half of an integer multiplication result",
+      "language": "en",
+      "intent": "Determine the operand interpretation and result of high-half integer multiplication.",
+      "category": "conceptual",
+      "comparison_group": "multiply_high",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 89,
+          "section": "12.1. Multiplication Operations"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 33,
+          "section": "2.2.1.11. MUL.{W/D}, MULH, {W[U]/D[U]}"
+        }
+      ]
+    },
+    {
+      "id": "q014",
+      "text": "How do RISC-V MULH, MULHU and MULHSU interpret their operands?",
+      "language": "en",
+      "intent": "Determine the operand interpretation and result of high-half integer multiplication.",
+      "category": "exact_lookup",
+      "comparison_group": "multiply_high",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 89,
+          "section": "12.1. Multiplication Operations"
+        }
+      ]
+    },
+    {
+      "id": "q015",
+      "text": "How do LoongArch MULH.D and MULH.DU interpret their operands?",
+      "language": "en",
+      "intent": "Determine the operand interpretation and result of high-half integer multiplication.",
+      "category": "exact_lookup",
+      "comparison_group": "multiply_high",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 33,
+          "section": "2.2.1.11. MUL.{W/D}, MULH, {W[U]/D[U]}"
+        }
+      ]
+    },
+    {
+      "id": "q016",
+      "text": "integer division by zero: result or exception?",
+      "language": "en",
+      "intent": "Determine the result and exception behavior of integer division by zero.",
+      "category": "conceptual",
+      "comparison_group": "division_edge",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 90,
+          "section": "12.2. Division Operations"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 35,
+          "section": "2.2.1.13. DIV.{W[U]/D[U]}, MOD.{W[U]/D[U]}"
+        }
+      ]
+    },
+    {
+      "id": "q017",
+      "text": "What are the RISC-V DIV and REM results for division by zero?",
+      "language": "en",
+      "intent": "Determine the result and exception behavior of integer division by zero.",
+      "category": "exact_lookup",
+      "comparison_group": "division_edge",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 90,
+          "section": "12.2. Division Operations"
+        }
+      ]
+    },
+    {
+      "id": "q018",
+      "text": "What does LoongArch specify for integer division with a zero divisor?",
+      "language": "en",
+      "intent": "Determine the result and exception behavior of integer division by zero.",
+      "category": "exact_lookup",
+      "comparison_group": "division_edge",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 35,
+          "section": "2.2.1.13. DIV.{W[U]/D[U]}, MOD.{W[U]/D[U]}"
+        }
+      ]
+    },
+    {
+      "id": "q019",
+      "text": "conditional store keeps failing in an atomic update loop",
+      "language": "en",
+      "intent": "Diagnose repeated conditional-store failure in an atomic-update loop.",
+      "category": "problem_description",
+      "comparison_group": "conditional_store",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 93,
+          "section": "13.2. Zalrsc Extension for Load-Reserved/Store-Conditional Instructions"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 94,
+          "section": "13.2. Zalrsc Extension for Load-Reserved/Store-Conditional Instructions"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 96,
+          "section": "13.3. Eventual Success of Store-Conditional Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 65,
+          "section": "2.2.7.4. LL.{W/D}, SC.{W/D}"
+        }
+      ]
+    },
+    {
+      "id": "q020",
+      "text": "Why can a RISC-V SC.W fail after LR.W, and what does its result indicate?",
+      "language": "en",
+      "intent": "Understand conditional-store failures and the meaning of their return status in an atomic-update loop.",
+      "category": "exact_lookup",
+      "comparison_group": "conditional_store",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 93,
+          "section": "13.2. Zalrsc Extension for Load-Reserved/Store-Conditional Instructions"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 94,
+          "section": "13.2. Zalrsc Extension for Load-Reserved/Store-Conditional Instructions"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 96,
+          "section": "13.3. Eventual Success of Store-Conditional Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q021",
+      "text": "Why can a LoongArch SC.W fail after LL.W, and what does its result indicate?",
+      "language": "en",
+      "intent": "Understand conditional-store failures and the meaning of their return status in an atomic-update loop.",
+      "category": "exact_lookup",
+      "comparison_group": "conditional_store",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 65,
+          "section": "2.2.7.4. LL.{W/D}, SC.{W/D}"
+        }
+      ]
+    },
+    {
+      "id": "q022",
+      "text": "atomic counter increment returning previous value",
+      "language": "en",
+      "intent": "Find an atomic memory increment that also returns the previous value.",
+      "category": "exact_lookup",
+      "comparison_group": "atomic_add",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 97,
+          "section": "13.4. Zaamo Extension for Atomic Memory Operations"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 98,
+          "section": "13.4. Zaamo Extension for Atomic Memory Operations"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 62,
+          "section": "2.2.7.1. Atomic memory access instructions"
+        }
+      ]
+    },
+    {
+      "id": "q023",
+      "text": "Which RISC-V instruction atomically adds to memory and returns the old value?",
+      "language": "en",
+      "intent": "Find an atomic memory increment that also returns the previous value.",
+      "category": "exact_lookup",
+      "comparison_group": "atomic_add",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 97,
+          "section": "13.4. Zaamo Extension for Atomic Memory Operations"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 98,
+          "section": "13.4. Zaamo Extension for Atomic Memory Operations"
+        }
+      ]
+    },
+    {
+      "id": "q024",
+      "text": "Which LoongArch instruction atomically adds to memory and returns the old value?",
+      "language": "en",
+      "intent": "Find an atomic memory increment that also returns the previous value.",
+      "category": "exact_lookup",
+      "comparison_group": "atomic_add",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 62,
+          "section": "2.2.7.1. Atomic memory access instructions"
+        }
+      ]
+    },
+    {
+      "id": "q025",
+      "text": "memory ordering barriers",
+      "language": "en",
+      "intent": "Determine memory-ordering guarantees of a barrier and its control fields.",
+      "category": "conceptual",
+      "comparison_group": "memory_barrier",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 56,
+          "section": "2.7. Memory Ordering Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 66,
+          "section": "2.2.8.1. DBAR"
+        }
+      ]
+    },
+    {
+      "id": "q026",
+      "text": "In RISC-V, what do the predecessor and successor fields of FENCE select?",
+      "language": "en",
+      "intent": "Interpret the predecessor and successor fields in a RISC-V FENCE instruction.",
+      "category": "exact_lookup",
+      "comparison_group": "memory_barrier",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 56,
+          "section": "2.7. Memory Ordering Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q027",
+      "text": "What memory ordering does LoongArch DBAR 0 guarantee?",
+      "language": "en",
+      "intent": "Determine memory-ordering guarantees of a barrier and its control fields.",
+      "category": "exact_lookup",
+      "comparison_group": "memory_barrier",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 66,
+          "section": "2.2.8.1. DBAR"
+        }
+      ]
+    },
+    {
+      "id": "q028",
+      "text": "instruction cache synchronization after modifying code",
+      "language": "en",
+      "intent": "Find the synchronization needed before fetching modified instructions.",
+      "category": "procedure",
+      "comparison_group": "instruction_sync",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 68,
+          "section": "Chapter 5. Zifencei Extension for Instruction-Fetch Fence, Version 2.0"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 67,
+          "section": "2.2.8.2. IBAR"
+        }
+      ]
+    },
+    {
+      "id": "q029",
+      "text": "When does RISC-V require FENCE.I after writing executable code?",
+      "language": "en",
+      "intent": "Find the synchronization needed before fetching modified instructions.",
+      "category": "exact_lookup",
+      "comparison_group": "instruction_sync",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 68,
+          "section": "Chapter 5. Zifencei Extension for Instruction-Fetch Fence, Version 2.0"
+        }
+      ]
+    },
+    {
+      "id": "q030",
+      "text": "What is the role of IBAR in LoongArch instruction-fetch synchronization?",
+      "language": "en",
+      "intent": "Find the synchronization needed before fetching modified instructions.",
+      "category": "exact_lookup",
+      "comparison_group": "instruction_sync",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 67,
+          "section": "2.2.8.2. IBAR"
+        }
+      ]
+    },
+    {
+      "id": "q031",
+      "text": "Which instruction transfers control to a handler for an operating-system service request?",
+      "language": "en",
+      "intent": "Find the instruction mechanism for requesting operating-system services.",
+      "category": "exact_lookup",
+      "comparison_group": "system_call",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 57,
+          "section": "2.8. Environment Call and Breakpoints"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 64,
+          "section": "3.3.1. Environment Call and Breakpoint"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 68,
+          "section": "2.2.10.1. syscall"
+        }
+      ]
+    },
+    {
+      "id": "q032",
+      "text": "What exception does RISC-V ECALL cause, and how does it depend on the current privilege mode?",
+      "language": "en",
+      "intent": "Determine how the originating privilege mode affects the exception raised by ECALL.",
+      "category": "exact_lookup",
+      "comparison_group": "system_call",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 57,
+          "section": "2.8. Environment Call and Breakpoints"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 64,
+          "section": "3.3.1. Environment Call and Breakpoint"
+        }
+      ]
+    },
+    {
+      "id": "q033",
+      "text": "How does the LoongArch SYSCALL instruction invoke exception handling?",
+      "language": "en",
+      "intent": "Understand the exception raised by the LoongArch SYSCALL instruction.",
+      "category": "exact_lookup",
+      "comparison_group": "system_call",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 68,
+          "section": "2.2.10.1. syscall"
+        }
+      ]
+    },
+    {
+      "id": "q034",
+      "text": "software breakpoint instruction",
+      "language": "en",
+      "intent": "Understand instruction support for software breakpoints.",
+      "category": "exact_lookup",
+      "comparison_group": "breakpoint",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 64,
+          "section": "3.3.1. Environment Call and Breakpoint"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 68,
+          "section": "2.2.10.2. break"
+        }
+      ]
+    },
+    {
+      "id": "q035",
+      "text": "What does EBREAK do in RISC-V?",
+      "language": "en",
+      "intent": "Understand instruction support for software breakpoints.",
+      "category": "exact_lookup",
+      "comparison_group": "breakpoint",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 64,
+          "section": "3.3.1. Environment Call and Breakpoint"
+        }
+      ]
+    },
+    {
+      "id": "q036",
+      "text": "What does BREAK do in LoongArch?",
+      "language": "en",
+      "intent": "Understand instruction support for software breakpoints.",
+      "category": "exact_lookup",
+      "comparison_group": "breakpoint",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 68,
+          "section": "2.2.10.2. break"
+        }
+      ]
+    },
+    {
+      "id": "q037",
+      "text": "floating-point rounding mode: global setting and instruction-specific control",
+      "language": "en",
+      "intent": "Determine the relationship between global and instruction-specific floating-point rounding selection.",
+      "category": "conceptual",
+      "comparison_group": "fp_rounding",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 141,
+          "section": "20.2. Floating-Point Control and Status Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 79,
+          "section": "3.1.3.3. Floating-point Control and Status Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 95,
+          "section": "3.2.3.3. FTINT{RM/RP/RZ/RNE}.{W/L}.{S/D}"
+        }
+      ]
+    },
+    {
+      "id": "q038",
+      "text": "How do the rm field and frm register select rounding mode in RISC-V?",
+      "language": "en",
+      "intent": "Determine the relationship between global and instruction-specific floating-point rounding selection.",
+      "category": "comparison",
+      "comparison_group": "fp_rounding",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 141,
+          "section": "20.2. Floating-Point Control and Status Register"
+        }
+      ]
+    },
+    {
+      "id": "q039",
+      "text": "How is floating-point rounding mode selected through LoongArch FCSR and conversion instructions?",
+      "language": "en",
+      "intent": "Determine the relationship between global and instruction-specific floating-point rounding selection.",
+      "category": "comparison",
+      "comparison_group": "fp_rounding",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 79,
+          "section": "3.1.3.3. Floating-point Control and Status Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 95,
+          "section": "3.2.3.3. FTINT{RM/RP/RZ/RNE}.{W/L}.{S/D}"
+        }
+      ]
+    },
+    {
+      "id": "q040",
+      "text": "How do floating-point comparisons behave when an operand is NaN?",
+      "language": "en",
+      "intent": "Understand comparison outcomes and exception behavior when an operand is NaN.",
+      "category": "conceptual",
+      "comparison_group": "fp_nan",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 146,
+          "section": "20.8. Single-Precision Floating-Point Compare Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 92,
+          "section": "3.2.2.1. FCMP.cond.{S/D}"
+        }
+      ]
+    },
+    {
+      "id": "q041",
+      "text": "How do RISC-V FEQ, FLT and FLE handle NaN operands and exception flags?",
+      "language": "en",
+      "intent": "Understand comparison outcomes and exception behavior when an operand is NaN.",
+      "category": "comparison",
+      "comparison_group": "fp_nan",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 146,
+          "section": "20.8. Single-Precision Floating-Point Compare Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q042",
+      "text": "How do LoongArch FCMP conditions distinguish ordered and unordered comparisons?",
+      "language": "en",
+      "intent": "Understand comparison outcomes and exception behavior when an operand is NaN.",
+      "category": "comparison",
+      "comparison_group": "fp_nan",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 92,
+          "section": "3.2.2.1. FCMP.cond.{S/D}"
+        }
+      ]
+    },
+    {
+      "id": "q043",
+      "text": "Where do floating-point-to-integer conversions put the integer result in RISC-V and LoongArch?",
+      "language": "en",
+      "intent": "Compare the destination register files of RISC-V and LoongArch floating-point-to-integer conversion instructions.",
+      "category": "comparison",
+      "comparison_group": "fp_conversion",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 145,
+          "section": "20.7. Single-Precision Floating-Point Conversion and Move Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 94,
+          "section": "3.2.3.2. FFINT{S/D}.{W/L}, FTINT.{W/L}.{S/D}"
+        }
+      ]
+    },
+    {
+      "id": "q044",
+      "text": "What result and flags does RISC-V FCVT.W.S produce for an out-of-range value?",
+      "language": "en",
+      "intent": "Determine FCVT.W.S results and flags for inputs outside the destination integer range.",
+      "category": "exact_lookup",
+      "comparison_group": "fp_conversion",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 145,
+          "section": "20.7. Single-Precision Floating-Point Conversion and Move Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q045",
+      "text": "How can I extract a bit field from a LoongArch register without a shift-and-mask sequence?",
+      "language": "en",
+      "intent": "Find a LoongArch instruction for extracting a contiguous bit range from a general register.",
+      "category": "exact_lookup",
+      "comparison_group": "bitfield_extract",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 45,
+          "section": "2.2.3.9. BSTRPICK.{W/D}"
+        }
+      ]
+    },
+    {
+      "id": "q046",
+      "text": "move raw bits between integer and floating-point registers",
+      "language": "en",
+      "intent": "Find instructions that move floating-point bit representations between integer and floating-point registers.",
+      "category": "exact_lookup",
+      "comparison_group": "fp_bit_move",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 146,
+          "section": "20.7. Single-Precision Floating-Point Conversion and Move Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 100,
+          "section": "3.2.4.4. MOVFR2GR.{S/D}, MOVFRH2GR.S"
+        }
+      ]
+    },
+    {
+      "id": "q047",
+      "text": "How does RISC-V FMV.X.W differ from FCVT.W.S?",
+      "language": "en",
+      "intent": "Distinguish representation transfer from numeric conversion for RISC-V FMV.X.W and FCVT.W.S.",
+      "category": "comparison",
+      "comparison_group": "fp_bit_move",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 146,
+          "section": "20.7. Single-Precision Floating-Point Conversion and Move Instructions"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 145,
+          "section": "20.7. Single-Precision Floating-Point Conversion and Move Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q048",
+      "text": "How does LoongArch MOVFR2GR.S differ from FTINT.W.S?",
+      "language": "en",
+      "intent": "Distinguish representation transfer from numeric conversion for LoongArch MOVFR2GR.S and FTINT.W.S.",
+      "category": "comparison",
+      "comparison_group": "fp_bit_move",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 100,
+          "section": "3.2.4.4. MOVFR2GR.{S/D}, MOVFRH2GR.S"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 94,
+          "section": "3.2.3.2. FFINT{S/D}.{W/L}, FTINT.{W/L}.{S/D}"
+        }
+      ]
+    },
+    {
+      "id": "q049",
+      "text": "change selected control register bits without overwriting other fields",
+      "language": "en",
+      "intent": "Find how to update selected CSR fields while preserving other fields.",
+      "category": "conceptual",
+      "comparison_group": "csr_update",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 69,
+          "section": "6.1. CSR Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 108,
+          "section": "4.2.1. CSR Access Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q050",
+      "text": "How do CSRRS and CSRRC update a RISC-V CSR?",
+      "language": "en",
+      "intent": "Find how to update selected CSR fields while preserving other fields.",
+      "category": "exact_lookup",
+      "comparison_group": "csr_update",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 69,
+          "section": "6.1. CSR Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q051",
+      "text": "How does CSRXCHG update selected bits of a LoongArch CSR?",
+      "language": "en",
+      "intent": "Find how to update selected CSR fields while preserving other fields.",
+      "category": "exact_lookup",
+      "comparison_group": "csr_update",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 108,
+          "section": "4.2.1. CSR Access Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q052",
+      "text": "What should software do with reserved or unsupported fields in control registers?",
+      "language": "en",
+      "intent": "Determine safe software treatment of reserved or unsupported control-register fields.",
+      "category": "conceptual",
+      "comparison_group": "reserved_fields",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 28,
+          "section": "2.3.1. Reserved Writes Preserve Values, Reads Ignore Values (WPRI)"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 28,
+          "section": "2.3.2. Write/Read Only Legal Values (WLRL)"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 28,
+          "section": "2.3.3. Write Any Values, Reads Legal Values (WARL)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 135,
+          "section": "7.2.1. Attributes of Reading and Writing"
+        }
+      ]
+    },
+    {
+      "id": "q053",
+      "text": "What do WPRI, WLRL and WARL mean for RISC-V CSR fields?",
+      "language": "en",
+      "intent": "Distinguish the software obligations and read/write guarantees of WPRI, WLRL, and WARL CSR fields.",
+      "category": "comparison",
+      "comparison_group": "reserved_fields",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 28,
+          "section": "2.3.1. Reserved Writes Preserve Values, Reads Ignore Values (WPRI)"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 28,
+          "section": "2.3.2. Write/Read Only Legal Values (WLRL)"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 28,
+          "section": "2.3.3. Write Any Values, Reads Legal Values (WARL)"
+        }
+      ]
+    },
+    {
+      "id": "q054",
+      "text": "Is it safe for portable LoongArch software to write an unimplemented CSR?",
+      "language": "en",
+      "intent": "Determine whether writing an unimplemented LoongArch CSR is safe for software compatibility.",
+      "category": "conceptual",
+      "comparison_group": "reserved_fields",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 136,
+          "section": "7.2.3. Access Effects of Undefined and Unimplemented Control and Status Registers"
+        }
+      ]
+    },
+    {
+      "id": "q055",
+      "text": "user mode versus privileged execution levels",
+      "language": "en",
+      "intent": "Find how user execution differs from privileged execution and what the privilege levels are for.",
+      "category": "comparison",
+      "comparison_group": "privilege_levels",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 17,
+          "section": "1.2. Privilege Levels"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 18,
+          "section": "1.2. Privilege Levels"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 108,
+          "section": "4.1. Privilege Levels"
+        }
+      ]
+    },
+    {
+      "id": "q056",
+      "text": "What are the roles of M, S and U modes in RISC-V?",
+      "language": "en",
+      "intent": "Find the purpose and intended software roles of the RISC-V M, S, and U privilege modes.",
+      "category": "exact_lookup",
+      "comparison_group": "privilege_levels",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 18,
+          "section": "1.2. Privilege Levels"
+        }
+      ]
+    },
+    {
+      "id": "q057",
+      "text": "What are the roles of PLV0 through PLV3 in LoongArch?",
+      "language": "en",
+      "intent": "Find the access distinctions and intended use of LoongArch PLV0 through PLV3.",
+      "category": "exact_lookup",
+      "comparison_group": "privilege_levels",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 108,
+          "section": "4.1. Privilege Levels"
+        }
+      ]
+    },
+    {
+      "id": "q058",
+      "text": "privileged instruction executed from user mode",
+      "language": "en",
+      "intent": "Find the execution rules and exception behavior for a user-mode attempt to use a privileged instruction.",
+      "category": "conceptual",
+      "comparison_group": "illegal_privileged",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 17,
+          "section": "1.2. Privilege Levels"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 19,
+          "section": "2.1. CSR Address Mapping Conventions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 21,
+          "section": "2.1.4. Exceptions and interrupts"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 21,
+          "section": "2.1.3.1. Privileged Resources Accessible by Applications"
+        }
+      ]
+    },
+    {
+      "id": "q059",
+      "text": "What happens when RISC-V user code accesses a CSR without the required privilege?",
+      "language": "en",
+      "intent": "Find the architectural outcome of a RISC-V user-mode CSR access that lacks the required privilege.",
+      "category": "exact_lookup",
+      "comparison_group": "illegal_privileged",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 19,
+          "section": "2.1. CSR Address Mapping Conventions"
+        }
+      ]
+    },
+    {
+      "id": "q060",
+      "text": "What exception occurs when LoongArch user code executes an instruction that is not permitted at its privilege level?",
+      "language": "en",
+      "intent": "Find the exception behavior when LoongArch user code executes an instruction disallowed at its current privilege level.",
+      "category": "exact_lookup",
+      "comparison_group": "illegal_privileged",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 21,
+          "section": "2.1.4. Exceptions and interrupts"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 21,
+          "section": "2.1.3.1. Privileged Resources Accessible by Applications"
+        }
+      ]
+    },
+    {
+      "id": "q061",
+      "text": "interrupt pending but handler not running",
+      "language": "en",
+      "intent": "Find architectural conditions that can prevent a pending interrupt from entering its handler.",
+      "category": "problem_description",
+      "comparison_group": "interrupt_enable",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 37,
+          "section": "3.1.6.1. Privilege and Global Interrupt-Enable Stack in mstatus register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 49,
+          "section": "3.1.9. Machine Interrupt (mip and mie) Registers"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 128,
+          "section": "6.1.4. Process of Processor Responding to Interrupts"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 142,
+          "section": "7.4.5. Exception Configuration (ECFG)"
+        }
+      ]
+    },
+    {
+      "id": "q062",
+      "text": "How do RISC-V pending bits, enable bits and global interrupt-enable state interact?",
+      "language": "en",
+      "intent": "Find how RISC-V pending state, per-source enables, global enables, and current privilege determine interrupt delivery.",
+      "category": "exact_lookup",
+      "comparison_group": "interrupt_enable",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 37,
+          "section": "3.1.6.1. Privilege and Global Interrupt-Enable Stack in mstatus register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 49,
+          "section": "3.1.9. Machine Interrupt (mip and mie) Registers"
+        }
+      ]
+    },
+    {
+      "id": "q063",
+      "text": "How do LoongArch CRMD.IE, ECFG and ESTAT control delivery of line-based interrupts?",
+      "language": "en",
+      "intent": "Find how the named LoongArch registers combine to allow or block a pending line-based interrupt.",
+      "category": "exact_lookup",
+      "comparison_group": "interrupt_enable",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 128,
+          "section": "6.1.4. Process of Processor Responding to Interrupts"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 142,
+          "section": "7.4.5. Exception Configuration (ECFG)"
+        }
+      ]
+    },
+    {
+      "id": "q064",
+      "text": "How is the entry address of an exception or interrupt handler selected?",
+      "language": "en",
+      "intent": "Find how processor configuration and trap type determine the address at which an exception or interrupt handler starts.",
+      "category": "conceptual",
+      "comparison_group": "handler_entry",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 127,
+          "section": "12.1.2. Supervisor Trap Vector Base Address (stvec) Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 129,
+          "section": "6.3.1. Exception Entry"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 142,
+          "section": "7.4.5. Exception Configuration (ECFG)"
+        }
+      ]
+    },
+    {
+      "id": "q065",
+      "text": "How does RISC-V stvec choose direct or vectored trap entry?",
+      "language": "en",
+      "intent": "Find how RISC-V stvec.MODE changes the target address for synchronous traps and interrupts.",
+      "category": "exact_lookup",
+      "comparison_group": "handler_entry",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 127,
+          "section": "12.1.2. Supervisor Trap Vector Base Address (stvec) Register"
+        }
+      ]
+    },
+    {
+      "id": "q066",
+      "text": "How do LoongArch EENTRY and vector spacing select entry addresses for general exceptions and line-based interrupts?",
+      "language": "en",
+      "intent": "Find how LoongArch EENTRY and vector spacing determine entry addresses for general exceptions and line-based interrupts.",
+      "category": "exact_lookup",
+      "comparison_group": "handler_entry",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 129,
+          "section": "6.3.1. Exception Entry"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 142,
+          "section": "7.4.5. Exception Configuration (ECFG)"
+        }
+      ]
+    },
+    {
+      "id": "q067",
+      "text": "saved program counter after an exception",
+      "language": "en",
+      "intent": "Find which instruction address is saved when an exception occurs and how that saved address is used.",
+      "category": "conceptual",
+      "comparison_group": "saved_pc",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 130,
+          "section": "12.1.7. Supervisor Exception Program Counter (sepc) Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 144,
+          "section": "7.4.7. Exception Return Address (ERA)"
+        }
+      ]
+    },
+    {
+      "id": "q068",
+      "text": "What value is saved in RISC-V sepc when a supervisor trap is taken?",
+      "language": "en",
+      "intent": "Find the address recorded in RISC-V sepc when a trap enters supervisor mode.",
+      "category": "exact_lookup",
+      "comparison_group": "saved_pc",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 130,
+          "section": "12.1.7. Supervisor Exception Program Counter (sepc) Register"
+        }
+      ]
+    },
+    {
+      "id": "q069",
+      "text": "What does LoongArch ERA record for a general exception?",
+      "language": "en",
+      "intent": "Find which instruction address LoongArch records in ERA for a general exception.",
+      "category": "exact_lookup",
+      "comparison_group": "saved_pc",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 144,
+          "section": "7.4.7. Exception Return Address (ERA)"
+        }
+      ]
+    },
+    {
+      "id": "q070",
+      "text": "faulting virtual address register",
+      "language": "en",
+      "intent": "Find which architectural state can identify the virtual address responsible for a memory-related fault.",
+      "category": "conceptual",
+      "comparison_group": "fault_address",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 131,
+          "section": "12.1.9. Supervisor Trap Value (stval) Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 145,
+          "section": "7.4.8. Bad Virtual Address (BADV)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 155,
+          "section": "7.5.12. TLB Refill Exception Bad Virtual Address (TLBRBADV)"
+        }
+      ]
+    },
+    {
+      "id": "q071",
+      "text": "When does RISC-V stval contain the faulting virtual address?",
+      "language": "en",
+      "intent": "Find the conditions under which RISC-V stval provides a faulting virtual address and when that information may be absent.",
+      "category": "exact_lookup",
+      "comparison_group": "fault_address",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 131,
+          "section": "12.1.9. Supervisor Trap Value (stval) Register"
+        }
+      ]
+    },
+    {
+      "id": "q072",
+      "text": "What address does LoongArch BADV record, and how does TLBRBADV differ?",
+      "language": "en",
+      "intent": "Find what LoongArch BADV and TLBRBADV record and which fault contexts use each register.",
+      "category": "comparison",
+      "comparison_group": "fault_address",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 145,
+          "section": "7.4.8. Bad Virtual Address (BADV)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 155,
+          "section": "7.5.12. TLB Refill Exception Bad Virtual Address (TLBRBADV)"
+        }
+      ]
+    },
+    {
+      "id": "q073",
+      "text": "restore privilege and interrupt state after an exception",
+      "language": "en",
+      "intent": "Find how an exception return restores execution privilege and interrupt-enable state.",
+      "category": "conceptual",
+      "comparison_group": "exception_return",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 37,
+          "section": "3.1.6.1. Privilege and Global Interrupt-Enable Stack in mstatus register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 65,
+          "section": "3.3.2. Trap-Return Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 130,
+          "section": "6.3.3. General Hardware Exception Handling of General Exceptions"
+        }
+      ]
+    },
+    {
+      "id": "q074",
+      "text": "What state does RISC-V SRET restore when returning from a supervisor trap?",
+      "language": "en",
+      "intent": "Find the architectural state changes made by RISC-V SRET when returning from a supervisor trap.",
+      "category": "exact_lookup",
+      "comparison_group": "exception_return",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 37,
+          "section": "3.1.6.1. Privilege and Global Interrupt-Enable Stack in mstatus register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 65,
+          "section": "3.3.2. Trap-Return Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q075",
+      "text": "What state does LoongArch ERTN restore after an exception?",
+      "language": "en",
+      "intent": "Find the architectural state restored by LoongArch ERTN for the exception being handled.",
+      "category": "exact_lookup",
+      "comparison_group": "exception_return",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 114,
+          "section": "4.2.6.1. ERTN"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 130,
+          "section": "6.3.3. General Hardware Exception Handling of General Exceptions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 156,
+          "section": "7.5.13. TLB Refill Exception Return Address (TLBRERA)"
+        }
+      ]
+    },
+    {
+      "id": "q076",
+      "text": "address space identifiers and cached translations",
+      "language": "en",
+      "intent": "Find how address-space identifiers distinguish translations and affect reuse or invalidation of cached mappings.",
+      "category": "conceptual",
+      "comparison_group": "asid",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 134,
+          "section": "12.1.11. Supervisor Address Translation and Protection (satp) Register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 137,
+          "section": "12.2.1. Supervisor Memory-Management Fence Instruction"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 118,
+          "section": "5.4.2. TLB Entry"
+        }
+      ]
+    },
+    {
+      "id": "q077",
+      "text": "How is the ASID field used in RISC-V satp and SFENCE.VMA?",
+      "language": "en",
+      "intent": "Find how the RISC-V satp ASID identifies an address space and how SFENCE.VMA uses an ASID when selecting translations to synchronize.",
+      "category": "exact_lookup",
+      "comparison_group": "asid",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 134,
+          "section": "12.1.11. Supervisor Address Translation and Protection (satp) Register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 137,
+          "section": "12.2.1. Supervisor Memory-Management Fence Instruction"
+        }
+      ]
+    },
+    {
+      "id": "q078",
+      "text": "How is the LoongArch ASID register used in address translation and TLB matching?",
+      "language": "en",
+      "intent": "Find how LoongArch uses the ASID register when looking up virtual-address translations.",
+      "category": "exact_lookup",
+      "comparison_group": "asid",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 118,
+          "section": "5.4.2. TLB Entry"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 152,
+          "section": "7.5.4. Address Space Identifier (ASID)"
+        }
+      ]
+    },
+    {
+      "id": "q079",
+      "text": "page table read write execute and user permissions",
+      "language": "en",
+      "intent": "Find how page-mapping permissions restrict reads, writes, instruction fetches, and access from less-privileged software.",
+      "category": "conceptual",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 141,
+          "section": "12.3.1. Addressing and Memory Protection"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 119,
+          "section": "5.4.2. TLB Entry"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 120,
+          "section": "5.4.3.1. TLB-related Exceptions"
+        }
+      ]
+    },
+    {
+      "id": "q080",
+      "text": "How do the R, W, X and U bits control access to RISC-V pages?",
+      "language": "en",
+      "intent": "Find the meaning and interaction of RISC-V page-entry R, W, X, and U permissions.",
+      "category": "exact_lookup",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 141,
+          "section": "12.3.1. Addressing and Memory Protection"
+        }
+      ]
+    },
+    {
+      "id": "q081",
+      "text": "How do LoongArch LA64 page-entry privilege fields and NR/NX bits restrict access?",
+      "language": "en",
+      "intent": "Find how LoongArch LA64 page entries restrict access by privilege level and by load or instruction-fetch operation.",
+      "category": "exact_lookup",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 119,
+          "section": "5.4.2. TLB Entry"
+        }
+      ]
+    },
+    {
+      "id": "q082",
+      "text": "large page mappings and page-size selection",
+      "language": "en",
+      "intent": "Find how architectures represent larger page mappings and select their page size.",
+      "category": "conceptual",
+      "comparison_group": "large_pages",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 147,
+          "section": "12.4.1. Addressing and Memory Protection"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 119,
+          "section": "5.4.2. TLB Entry"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 118,
+          "section": "5.4.2. TLB Entry"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 125,
+          "section": "5.4.5. Multi-level Page Table Structure Supported by page walking"
+        }
+      ]
+    },
+    {
+      "id": "q083",
+      "text": "What makes a RISC-V Sv39 leaf a superpage, and what alignment is required?",
+      "language": "en",
+      "intent": "Find how a higher-level Sv39 leaf maps a larger page and which address-alignment conditions apply.",
+      "category": "exact_lookup",
+      "comparison_group": "large_pages",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 147,
+          "section": "12.4.1. Addressing and Memory Protection"
+        }
+      ]
+    },
+    {
+      "id": "q084",
+      "text": "How are page sizes represented in LoongArch TLB entries and page-table walking?",
+      "language": "en",
+      "intent": "Find how LoongArch encodes page sizes in TLB state and recognizes huge-page mappings while walking page tables.",
+      "category": "exact_lookup",
+      "comparison_group": "large_pages",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 119,
+          "section": "5.4.2. TLB Entry"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 118,
+          "section": "5.4.2. TLB Entry"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 125,
+          "section": "5.4.5. Multi-level Page Table Structure Supported by page walking"
+        }
+      ]
+    },
+    {
+      "id": "q085",
+      "text": "invalidate stale translations after changing a page table",
+      "language": "en",
+      "intent": "Find how software makes cached address translations consistent after modifying a page table.",
+      "category": "procedure",
+      "comparison_group": "translation_sync",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 137,
+          "section": "12.2.1. Supervisor Memory-Management Fence Instruction"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 112,
+          "section": "4.2.4.7. INVTLB"
+        }
+      ]
+    },
+    {
+      "id": "q086",
+      "text": "What does RISC-V SFENCE.VMA synchronize after a page-table update?",
+      "language": "en",
+      "intent": "Find the ordering and invalidation guarantees of RISC-V SFENCE.VMA after page-table modifications.",
+      "category": "exact_lookup",
+      "comparison_group": "translation_sync",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 137,
+          "section": "12.2.1. Supervisor Memory-Management Fence Instruction"
+        }
+      ]
+    },
+    {
+      "id": "q087",
+      "text": "How does LoongArch INVTLB invalidate translations after mapping changes?",
+      "language": "en",
+      "intent": "Find how to select the translations invalidated by LoongArch INVTLB after changing mappings.",
+      "category": "procedure",
+      "comparison_group": "translation_sync",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 112,
+          "section": "4.2.4.7. INVTLB"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 113,
+          "section": "4.2.4.7. INVTLB"
+        }
+      ]
+    },
+    {
+      "id": "q088",
+      "text": "configure and acknowledge a timer interrupt",
+      "language": "en",
+      "intent": "Find how to arrange a timer interrupt and acknowledge or clear it after delivery.",
+      "category": "procedure",
+      "comparison_group": "timer_interrupt",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 63,
+          "section": "3.2.1. Machine Timer (mtime and mtimecmp) Registers"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 161,
+          "section": "7.6.2. Timer Configuration (TCFG)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 161,
+          "section": "7.6.5. Timer Interrupt Clearing (TICLR)"
+        }
+      ]
+    },
+    {
+      "id": "q089",
+      "text": "How do RISC-V mtime and mtimecmp determine the machine timer interrupt?",
+      "language": "en",
+      "intent": "Find how RISC-V mtime and mtimecmp make a machine-timer interrupt pending and clear that pending condition.",
+      "category": "exact_lookup",
+      "comparison_group": "timer_interrupt",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 63,
+          "section": "3.2.1. Machine Timer (mtime and mtimecmp) Registers"
+        }
+      ]
+    },
+    {
+      "id": "q090",
+      "text": "How do LoongArch TCFG, TVAL and TICLR control timer interrupts?",
+      "language": "en",
+      "intent": "Find the respective roles of LoongArch TCFG, TVAL, and TICLR when using a timer interrupt.",
+      "category": "exact_lookup",
+      "comparison_group": "timer_interrupt",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 161,
+          "section": "7.6.2. Timer Configuration (TCFG)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 161,
+          "section": "7.6.3. Timer Value (TVAL)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 161,
+          "section": "7.6.5. Timer Interrupt Clearing (TICLR)"
+        }
+      ]
+    },
+    {
+      "id": "q091",
+      "text": "How do RISC-V and LoongArch specify byte order for memory accesses?",
+      "language": "en",
+      "intent": "Compare the memory byte-order rules of RISC-V and LoongArch.",
+      "category": "comparison",
+      "comparison_group": "endianness",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 54,
+          "section": "2.6. Load and Store Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 22,
+          "section": "2.1.6. Endian"
+        }
+      ]
+    },
+    {
+      "id": "q092",
+      "text": "What can happen when a load or store address is not naturally aligned?",
+      "language": "en",
+      "intent": "Determine possible outcomes when a load or store address is not naturally aligned.",
+      "category": "conceptual",
+      "comparison_group": "unaligned",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 55,
+          "section": "2.6. Load and Store Instructions"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 23,
+          "section": "2.1.8. Unaligned Memory Access"
+        }
+      ]
+    },
+    {
+      "id": "q093",
+      "text": "discover processor identity and supported instruction sets",
+      "language": "en",
+      "intent": "Find architectural facilities for discovering processor identity and supported instructions.",
+      "category": "conceptual",
+      "comparison_group": "cpu_identity",
+      "architecture_scope": "both",
+      "query_style": "short_search_request",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 35,
+          "section": "3.1.3. Machine Architecture ID (marchid) Register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 31,
+          "section": "3.1.1. Machine ISA (misa) Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 70,
+          "section": "2.2.10.5. cpucfg"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 69,
+          "section": "2.2.10.5. cpucfg"
+        }
+      ]
+    },
+    {
+      "id": "q094",
+      "text": "If several exceptions are possible for one operation, how is the reported exception selected?",
+      "language": "en",
+      "intent": "Find which exception is reported when one operation meets conditions for more than one exception.",
+      "category": "conceptual",
+      "comparison_group": "exception_priority",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 57,
+          "section": "3.1.15. Machine Cause (mcause) Register; Table 15"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 129,
+          "section": "6.3.2. Exception Priority"
+        }
+      ]
+    },
+    {
+      "id": "q095",
+      "text": "How are floating-point exception flags recorded and cleared?",
+      "language": "en",
+      "intent": "Understand how software reads and clears accumulated floating-point exception status.",
+      "category": "conceptual",
+      "comparison_group": "fp_flags",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 141,
+          "section": "20.2. Floating-Point Control and Status Register"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 140,
+          "section": "20.2. Floating-Point Control and Status Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 80,
+          "section": "3.1.3.3. Floating-point Control and Status Register"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 100,
+          "section": "3.2.4.5. MOVGR2FCSR, MOVFCSR2GR"
+        }
+      ]
+    },
+    {
+      "id": "q096",
+      "text": "How are cacheable memory and device-style accesses distinguished by the architecture?",
+      "language": "en",
+      "intent": "Find the architectural memory attributes that distinguish cacheable memory accesses from accesses intended for devices.",
+      "category": "conceptual",
+      "comparison_group": "memory_types",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 69,
+          "section": "3.6.1. Main Memory versus I/O Regions"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 72,
+          "section": "3.6.6. Coherence and Cacheability PMAs"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 152,
+          "section": "14. \"Svpbmt\" Extension for Page-Based Memory Types, Version 1.0"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 22,
+          "section": "2.1.7. Memory Access Types"
+        }
+      ]
+    },
+    {
+      "id": "q097",
+      "text": "How can software select and count processor performance events?",
+      "language": "en",
+      "intent": "Find how software configures and reads hardware performance-event counters.",
+      "category": "procedure",
+      "comparison_group": "counters",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 51,
+          "section": "3.1.10. Hardware Performance Monitor"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 165,
+          "section": "7.8.1. Performance Monitor Configuration n (PMCFG)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 166,
+          "section": "7.8.2. Performance Monitor Overall Counter n (PMCNT)"
+        }
+      ]
+    },
+    {
+      "id": "q098",
+      "text": "What does the processor's wait-for-interrupt or idle instruction guarantee about resuming execution?",
+      "language": "en",
+      "intent": "Find what software may assume about suspension and resumption around a wait-for-interrupt or idle instruction.",
+      "category": "conceptual",
+      "comparison_group": "idle_wait",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 65,
+          "section": "3.3.3. Wait for Interrupt"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 66,
+          "section": "3.3.3. Wait for Interrupt"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 115,
+          "section": "4.2.6.3. IDLE"
+        }
+      ]
+    },
+    {
+      "id": "q099",
+      "text": "How is a virtual address translated into a physical address through multiple page-table levels?",
+      "language": "en",
+      "intent": "Find how the processor or software walks successive page-table levels to translate a virtual address.",
+      "category": "conceptual",
+      "comparison_group": "address_translation",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 146,
+          "section": "12.4.1. Addressing and Memory Protection"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 144,
+          "section": "12.3.2. Virtual Address Translation Process"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 124,
+          "section": "5.4.5. Multi-level Page Table Structure Supported by page walking"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 125,
+          "section": "5.4.5. Multi-level Page Table Structure Supported by page walking"
+        }
+      ]
+    },
+    {
+      "id": "q100",
+      "text": "Is a missing TLB entry necessarily the same as an invalid virtual-memory mapping?",
+      "language": "en",
+      "intent": "Find the distinction between a missing cached translation and a virtual address that has no valid mapping.",
+      "category": "comparison",
+      "comparison_group": "tlb_miss",
+      "architecture_scope": "both",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 145,
+          "section": "12.3.2. Virtual Address Translation Process"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 144,
+          "section": "12.3.2. Virtual Address Translation Process"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 120,
+          "section": "5.4.3.1. TLB-related Exceptions"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 250,
+          "section": "6.3. Mechanisms for Virtual Memory"
+        }
+      ]
+    },
+    {
+      "id": "q101",
+      "text": "RISC-V satp write with an unsupported MODE value",
+      "language": "en",
+      "intent": "Find what happens to the RISC-V satp register when software writes an address-translation MODE that the implementation does not support.",
+      "category": "exact_lookup",
+      "comparison_group": "satp_unsupported_mode",
+      "architecture_scope": "riscv",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 135,
+          "section": "12.1.11. Supervisor Address Translation and Protection (satp) Register"
+        }
+      ]
+    },
+    {
+      "id": "q102",
+      "text": "RISC-V stvec BASE alignment requirements in direct and vectored modes",
+      "language": "en",
+      "intent": "Find the alignment requirements for a RISC-V stvec base address in direct and vectored modes.",
+      "category": "exact_lookup",
+      "comparison_group": "stvec_alignment",
+      "architecture_scope": "riscv",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 127,
+          "section": "12.1.2. Supervisor Trap Vector Base Address (stvec) Register"
+        }
+      ]
+    },
+    {
+      "id": "q103",
+      "text": "How can RISC-V software determine which exceptions medeleg can delegate to S-mode?",
+      "language": "en",
+      "intent": "Find how RISC-V software discovers which synchronous exceptions the implementation allows medeleg to delegate to supervisor mode.",
+      "category": "procedure",
+      "comparison_group": "delegation",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 47,
+          "section": "3.1.8. Machine Trap Delegation (medeleg and mideleg) Registers"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 48,
+          "section": "3.1.8. Machine Trap Delegation (medeleg and mideleg) Registers"
+        }
+      ]
+    },
+    {
+      "id": "q104",
+      "text": "How does RISC-V SUM affect supervisor access to user pages?",
+      "language": "en",
+      "intent": "Find how the RISC-V SUM setting affects supervisor accesses to user-accessible pages.",
+      "category": "exact_lookup",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 125,
+          "section": "12.1.1.2. Memory Privilege in sstatus Register"
+        }
+      ]
+    },
+    {
+      "id": "q105",
+      "text": "How does RISC-V MXR affect reads from execute-only pages?",
+      "language": "en",
+      "intent": "Find how the RISC-V MXR setting affects loads from pages that permit execution but not ordinary reads.",
+      "category": "exact_lookup",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 124,
+          "section": "12.1.1.2. Memory Privilege in sstatus Register"
+        }
+      ]
+    },
+    {
+      "id": "q106",
+      "text": "RISC-V: I changed satp but still see an old mapping. What synchronization is required?",
+      "language": "en",
+      "intent": "Find what synchronization is needed when changing RISC-V satp leaves translations from the previous mapping visible.",
+      "category": "problem_description",
+      "comparison_group": "translation_sync",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 136,
+          "section": "12.1.11. Supervisor Address Translation and Protection (satp) Register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 137,
+          "section": "12.2.1. Supervisor Memory-Management Fence Instruction"
+        }
+      ]
+    },
+    {
+      "id": "q107",
+      "text": "Does a local FENCE.I synchronize instruction fetching on every RISC-V hart?",
+      "language": "en",
+      "intent": "Determine whether a local instruction-fetch fence synchronizes other RISC-V harts.",
+      "category": "exact_lookup",
+      "comparison_group": "instruction_sync",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 68,
+          "section": "Chapter 5. Zifencei Extension for Instruction-Fetch Fence, Version 2.0"
+        }
+      ]
+    },
+    {
+      "id": "q108",
+      "text": "What do aq and rl mean on a RISC-V atomic memory operation?",
+      "language": "en",
+      "intent": "Understand the memory-ordering effects of aq and rl on RISC-V atomic operations.",
+      "category": "exact_lookup",
+      "comparison_group": "atomic_add",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 92,
+          "section": "13.1. Specifying Ordering of Atomic Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q109",
+      "text": "For RISC-V CSRRS, how does using x0 differ from using another register that contains zero?",
+      "language": "en",
+      "intent": "Determine how naming x0 versus using another zero-valued source register affects CSRRS writes.",
+      "category": "comparison",
+      "comparison_group": "csr_update",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 69,
+          "section": "6.1. CSR Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q110",
+      "text": "How do RISC-V PMP entries decide whether a physical memory access is permitted?",
+      "language": "en",
+      "intent": "Find how RISC-V PMP matching, entry priority, access size, and permission bits determine whether a physical-memory access is allowed.",
+      "category": "conceptual",
+      "comparison_group": "physical_protection",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 77,
+          "section": "3.7.1.3. Priority and Matching Logic"
+        }
+      ]
+    },
+    {
+      "id": "q111",
+      "text": "LoongArch EENTRY versus TLBRENTRY",
+      "language": "en",
+      "intent": "Find the difference between LoongArch EENTRY and TLBRENTRY, including which exception types and address interpretations each uses.",
+      "category": "comparison",
+      "comparison_group": "handler_entry",
+      "architecture_scope": "loongarch",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 145,
+          "section": "7.4.10. Exception Entry Base Address (EENTRY)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 155,
+          "section": "7.5.11. TLB Refill Exception Entry Base Address (TLBRENTRY)"
+        }
+      ]
+    },
+    {
+      "id": "q112",
+      "text": "LoongArch PRMD PPLV PIE saved exception state",
+      "language": "en",
+      "intent": "Find what LoongArch PRMD.PPLV and PRMD.PIE save at exception entry and how the saved state is restored.",
+      "category": "exact_lookup",
+      "comparison_group": "exception_return",
+      "architecture_scope": "loongarch",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 130,
+          "section": "6.3.3. General Hardware Exception Handling of General Exceptions"
+        }
+      ]
+    },
+    {
+      "id": "q113",
+      "text": "When does LoongArch use PGDL rather than PGDH?",
+      "language": "en",
+      "intent": "Find when LoongArch selects the lower-half rather than higher-half page-directory base.",
+      "category": "comparison",
+      "comparison_group": "address_translation",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 153,
+          "section": "7.5.7. Page Global Directory Base Address (PGD)"
+        }
+      ]
+    },
+    {
+      "id": "q114",
+      "text": "LoongArch CRMD DA PG address translation modes",
+      "language": "en",
+      "intent": "Find which LoongArch address-translation modes are selected by the CRMD.DA and CRMD.PG settings.",
+      "category": "comparison",
+      "comparison_group": "address_translation",
+      "architecture_scope": "loongarch",
+      "query_style": "short_search_request",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 116,
+          "section": "5.2. Virtual Address Space and Address Translation Mode"
+        }
+      ]
+    },
+    {
+      "id": "q115",
+      "text": "LoongArch timer interrupt remains pending: how do I clear it?",
+      "language": "en",
+      "intent": "Find how to clear a pending LoongArch timer interrupt.",
+      "category": "problem_description",
+      "comparison_group": "timer_interrupt",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 161,
+          "section": "7.6.5. Timer Interrupt Clearing (TICLR)"
+        }
+      ]
+    },
+    {
+      "id": "q116",
+      "text": "Why does LoongArch have TLBELO0 and TLBELO1 for a TLB entry?",
+      "language": "en",
+      "intent": "Find why one LoongArch TLB entry uses the two TLBELO registers and how the two registers correspond to the mapping.",
+      "category": "comparison",
+      "comparison_group": "tlb_entry_pair",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 150,
+          "section": "7.5.3. TLB Entry Low-order Bits (TLBELO0, TLBELO1)"
+        }
+      ]
+    },
+    {
+      "id": "q117",
+      "text": "How do I return from a function using LoongArch JIRL?",
+      "language": "en",
+      "intent": "Find the LoongArch JIRL operand combination used to return from a function.",
+      "category": "procedure",
+      "comparison_group": "function_return",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 49,
+          "section": "2.2.4.5. JIRL"
+        }
+      ]
+    },
+    {
+      "id": "q118",
+      "text": "What does the DB suffix change for LoongArch atomic memory instructions?",
+      "language": "en",
+      "intent": "Understand the additional ordering behavior of a LoongArch atomic instruction with the DB suffix.",
+      "category": "comparison",
+      "comparison_group": "memory_barrier",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 62,
+          "section": "2.2.7.1. Atomic memory access instructions"
+        }
+      ]
+    },
+    {
+      "id": "q119",
+      "text": "What is the purpose of LoongArch TLBRERA.IsTLBR?",
+      "language": "en",
+      "intent": "Find the purpose of LoongArch TLBRERA.IsTLBR and how it affects exception-state handling.",
+      "category": "exact_lookup",
+      "comparison_group": "tlb_miss",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 156,
+          "section": "7.5.13. TLB Refill Exception Return Address (TLBRERA)"
+        }
+      ]
+    },
+    {
+      "id": "q120",
+      "text": "How does LoongArch LA64 RPLV change the privilege check for a TLB entry?",
+      "language": "en",
+      "intent": "Find how RPLV changes which privilege levels may access a LoongArch LA64 TLB mapping.",
+      "category": "comparison",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 119,
+          "section": "5.4.2. TLB Entry"
+        }
+      ]
+    },
+    {
+      "id": "q121",
+      "text": "Why does fork return different values in the parent and the child?",
+      "language": "en",
+      "intent": "Understand the purpose and meaning of the two return values from fork.",
+      "category": "conceptual",
+      "comparison_group": "process_creation",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 296,
+          "section": "7.2 POSIX Process Management API"
+        }
+      ]
+    },
+    {
+      "id": "q122",
+      "text": "Why does a shell call exec after fork instead of replacing itself directly?",
+      "language": "en",
+      "intent": "Understand why a shell creates a child before executing a command.",
+      "category": "conceptual",
+      "comparison_group": "process_creation",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 12,
+          "section": "1.1 Processes and memory"
+        }
+      ]
+    },
+    {
+      "id": "q123",
+      "text": "What resources or state remain when a child exits before its parent calls wait?",
+      "language": "en",
+      "intent": "Find what remains of an exited child until the parent collects its termination status.",
+      "category": "conceptual",
+      "comparison_group": "process_wait",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 85,
+          "section": "9.4 Code: Wait, exit, and kill"
+        }
+      ]
+    },
+    {
+      "id": "q124",
+      "text": "After fork, can a seek through one process's file descriptor affect the other process?",
+      "language": "en",
+      "intent": "Determine whether parent and child file-position changes can affect one another after fork.",
+      "category": "conceptual",
+      "comparison_group": "file_descriptors",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 15,
+          "section": "1.2 I/O and File descriptors"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 369,
+          "section": "8.3.4 Sequential Reading and Writing"
+        }
+      ]
+    },
+    {
+      "id": "q125",
+      "text": "pipe read never reaches EOF after a child exits",
+      "language": "en",
+      "intent": "Diagnose a pipe reader that does not observe end-of-file after a child terminates.",
+      "category": "problem_description",
+      "comparison_group": "pipe_eof",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 16,
+          "section": "1.3 Pipes"
+        }
+      ]
+    },
+    {
+      "id": "q126",
+      "text": "Why can frequent context switches improve response time while reducing throughput?",
+      "language": "en",
+      "intent": "Understand the scheduling tradeoff between aggregate work completed and interactive responsiveness.",
+      "category": "comparison",
+      "comparison_group": "scheduling_metrics",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 74,
+          "section": "3.3.2 Response Time"
+        }
+      ]
+    },
+    {
+      "id": "q127",
+      "text": "Why does a decay-usage scheduler favor a thread that wakes after waiting over one that has recently used the CPU?",
+      "language": "en",
+      "intent": "Understand why recent CPU usage changes the priority of a thread that wakes after waiting.",
+      "category": "conceptual",
+      "comparison_group": "decay_usage",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 88,
+          "section": "3.5.2 Decay Usage Scheduling"
+        }
+      ]
+    },
+    {
+      "id": "q128",
+      "text": "How does lottery scheduling turn weighted random choices into CPU shares?",
+      "language": "en",
+      "intent": "Understand how random dispatch can implement requested CPU allocations and over what timescale.",
+      "category": "conceptual",
+      "comparison_group": "lottery",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 91,
+          "section": "3.6 Proportional-Share Scheduling"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 92,
+          "section": "3.6 Proportional-Share Scheduling"
+        }
+      ]
+    },
+    {
+      "id": "q129",
+      "text": "Why can moving a thread between CPUs hurt cache performance?",
+      "language": "en",
+      "intent": "Understand the performance cost of moving a thread between processors.",
+      "category": "conceptual",
+      "comparison_group": "multicore_scheduling",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 72,
+          "section": "3.3.1 Throughput"
+        }
+      ]
+    },
+    {
+      "id": "q130",
+      "text": "In xv6, what does swtch save, and how does that differ from the user trap frame?",
+      "language": "en",
+      "intent": "Compare the saved execution state of an xv6 kernel context switch with a trap from user space.",
+      "category": "comparison",
+      "comparison_group": "context_switch_state",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 77,
+          "section": "8.3 Code: Context switching"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 46,
+          "section": "4.2 Traps from user space"
+        }
+      ]
+    },
+    {
+      "id": "q131",
+      "text": "internal versus external fragmentation",
+      "language": "en",
+      "intent": "Distinguish internal and external fragmentation.",
+      "category": "comparison",
+      "comparison_group": "fragmentation",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 371,
+          "section": "8.4.1 Fragmentation"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 372,
+          "section": "8.4.1 Fragmentation"
+        }
+      ]
+    },
+    {
+      "id": "q132",
+      "text": "Why can a sparse virtual address space occupy much less physical memory than its address range suggests?",
+      "language": "en",
+      "intent": "Understand the relation between the span of a sparse virtual address space and its physical-memory use.",
+      "category": "conceptual",
+      "comparison_group": "sparse_address_space",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 242,
+          "section": "6.2.4 Sparse Address Spaces"
+        }
+      ]
+    },
+    {
+      "id": "q133",
+      "text": "How does a multi-level page table save space for a sparse address space?",
+      "language": "en",
+      "intent": "Understand the space advantage of a multilevel page table when large virtual ranges are unused.",
+      "category": "conceptual",
+      "comparison_group": "page_table_size",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 32,
+          "section": "3.1 Paging hardware"
+        }
+      ]
+    },
+    {
+      "id": "q134",
+      "text": "array access gets much slower when consecutive accesses are one page apart",
+      "language": "en",
+      "intent": "Investigate possible reasons for slow array access when successive accesses are one memory page apart.",
+      "category": "problem_description",
+      "comparison_group": "tlb_locality",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 250,
+          "section": "6.3.1 Software/Hardware Interface"
+        }
+      ]
+    },
+    {
+      "id": "q135",
+      "text": "Why can FIFO page replacement perform worse after more page frames are added?",
+      "language": "en",
+      "intent": "Understand how increasing page-frame capacity can worsen FIFO page replacement.",
+      "category": "conceptual",
+      "comparison_group": "replacement",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 279,
+          "section": "6.4.3 Replacement Policy"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 280,
+          "section": "6.4.3 Replacement Policy"
+        }
+      ]
+    },
+    {
+      "id": "q136",
+      "text": "constant paging but little useful work gets done",
+      "language": "en",
+      "intent": "Investigate why a system does little useful work while continually paging.",
+      "category": "problem_description",
+      "comparison_group": "working_set",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 278,
+          "section": "6.4.3 Replacement Policy"
+        }
+      ]
+    },
+    {
+      "id": "q137",
+      "text": "How can copy-on-write fork share pages without letting parent and child overwrite each other's memory?",
+      "language": "en",
+      "intent": "Understand how parent and child can share physical memory while preserving fork isolation.",
+      "category": "conceptual",
+      "comparison_group": "copy_on_write",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 53,
+          "section": "5.3 Real world: Copy-On-Write (COW) fork"
+        }
+      ]
+    },
+    {
+      "id": "q138",
+      "text": "Why can xv6 sbrk with SBRK_LAZY succeed before physical memory is allocated, and what happens on first access?",
+      "language": "en",
+      "intent": "Understand when xv6 reserves address space without allocating physical pages and what first access does.",
+      "category": "conceptual",
+      "comparison_group": "lazy_allocation",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 51,
+          "section": "5.1 Lazy allocation"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 52,
+          "section": "5.2 Code"
+        }
+      ]
+    },
+    {
+      "id": "q139",
+      "text": "How can I distinguish a page permission fault from a missing mapping?",
+      "language": "en",
+      "intent": "Determine how to investigate whether a page fault is caused by a missing mapping or insufficient access permissions.",
+      "category": "comparison",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 51,
+          "section": "5 Page faults"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 33,
+          "section": "3.1 Paging hardware"
+        }
+      ]
+    },
+    {
+      "id": "q140",
+      "text": "Why does a TLB miss not necessarily require reading a page from disk?",
+      "language": "en",
+      "intent": "Distinguish the work required to resolve a TLB miss from paging data in from disk.",
+      "category": "conceptual",
+      "comparison_group": "tlb_miss",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 250,
+          "section": "6.3.1 Software/Hardware Interface"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 32,
+          "section": "3.1 Paging hardware"
+        }
+      ]
+    },
+    {
+      "id": "q141",
+      "text": "spin lock versus sleeping lock under contention",
+      "language": "en",
+      "intent": "Compare spinning and sleeping while waiting to acquire a contended lock.",
+      "category": "comparison",
+      "comparison_group": "lock_contention",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 72,
+          "section": "7.7 Sleep locks"
+        }
+      ]
+    },
+    {
+      "id": "q142",
+      "text": "Why should a condition-variable wait usually be inside a while loop?",
+      "language": "en",
+      "intent": "Find why condition-variable waits are usually placed inside a while loop.",
+      "category": "conceptual",
+      "comparison_group": "condition_variables",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 140,
+          "section": "4.5 Condition Variables"
+        }
+      ]
+    },
+    {
+      "id": "q143",
+      "text": "condition changed and wakeup ran, but the waiting thread sleeps forever",
+      "language": "en",
+      "intent": "Diagnose a thread that sleeps indefinitely despite a condition change and an earlier wakeup.",
+      "category": "problem_description",
+      "comparison_group": "sleep_wakeup_race",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 82,
+          "section": "9.1 Overview"
+        }
+      ]
+    },
+    {
+      "id": "q144",
+      "text": "How can a semaphore initialized to zero coordinate completion between two threads?",
+      "language": "en",
+      "intent": "Find how to use a zero-initialized semaphore to order completion and continuation in two threads.",
+      "category": "procedure",
+      "comparison_group": "semaphore",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 143,
+          "section": "4.6 Semaphores"
+        }
+      ]
+    },
+    {
+      "id": "q145",
+      "text": "Which conditions are necessary for deadlock, and how can lock ordering break one of them?",
+      "language": "en",
+      "intent": "Find the necessary conditions for deadlock and how lock ordering relates to them.",
+      "category": "procedure",
+      "comparison_group": "deadlock",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 147,
+          "section": "4.7.1 The Deadlock Problem"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 149,
+          "section": "4.7.2 Deadlock Prevention Through Resource Ordering"
+        }
+      ]
+    },
+    {
+      "id": "q146",
+      "text": "low priority thread blocks a high priority thread through a lock",
+      "language": "en",
+      "intent": "Find why a low-priority thread can delay a high-priority thread through a lock.",
+      "category": "problem_description",
+      "comparison_group": "priority_inversion",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 156,
+          "section": "4.8.1 Priority Inversion"
+        }
+      ]
+    },
+    {
+      "id": "q147",
+      "text": "two threads increment a shared counter, but the final total is too small",
+      "language": "en",
+      "intent": "Investigate why concurrent increments by two threads can leave a shared counter below the expected total.",
+      "category": "problem_description",
+      "comparison_group": "atomic_add",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 116,
+          "section": "4.2 Races and the Need for Mutual Exclusion"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 65,
+          "section": "7.1 Races"
+        }
+      ]
+    },
+    {
+      "id": "q148",
+      "text": "Why can an atomic-exchange spinlock generate heavy cache-coherence traffic under contention?",
+      "language": "en",
+      "intent": "Understand the cache-coherence cost of repeatedly contending for an atomic-exchange spinlock.",
+      "category": "conceptual",
+      "comparison_group": "lock_contention",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 127,
+          "section": "4.3.3 Underlying Mechanisms for Mutexes"
+        }
+      ]
+    },
+    {
+      "id": "q149",
+      "text": "Why does disabling interrupts on one CPU not protect shared data from other CPUs?",
+      "language": "en",
+      "intent": "Understand the limits of disabling local interrupts as synchronization on a multiprocessor.",
+      "category": "conceptual",
+      "comparison_group": "interrupt_locks",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 71,
+          "section": "7.5 Locks and interrupts"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 65,
+          "section": "7.1 Races"
+        }
+      ]
+    },
+    {
+      "id": "q150",
+      "text": "Can a lock built with atomic instructions still need memory barriers?",
+      "language": "en",
+      "intent": "Determine whether atomic lock acquisition alone is enough to order accesses within a critical section.",
+      "category": "conceptual",
+      "comparison_group": "lock_memory_order",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 67,
+          "section": "7.2 Code: Locks"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 71,
+          "section": "7.6 Instruction and memory ordering"
+        }
+      ]
+    },
+    {
+      "id": "q151",
+      "text": "Why is the xv6 trampoline mapped at the same virtual address in user and kernel page tables?",
+      "language": "en",
+      "intent": "Understand why xv6 uses the same trampoline virtual address across page-table changes.",
+      "category": "conceptual",
+      "comparison_group": "trampoline",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 46,
+          "section": "4.2 Traps from user space"
+        }
+      ]
+    },
+    {
+      "id": "q152",
+      "text": "xv6 sscratch user trap entry",
+      "language": "en",
+      "intent": "Find the role of sscratch at the start of xv6 user-trap handling.",
+      "category": "exact_lookup",
+      "comparison_group": "trampoline",
+      "architecture_scope": "riscv",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 46,
+          "section": "4.2 Traps from user space"
+        }
+      ]
+    },
+    {
+      "id": "q153",
+      "text": "How does xv6 safely copy a system-call argument string out of user memory?",
+      "language": "en",
+      "intent": "Find how xv6 safely retrieves a string supplied as a user-space system-call argument.",
+      "category": "exact_lookup",
+      "comparison_group": "user_memory_access",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 48,
+          "section": "4.4 Code: System call arguments"
+        }
+      ]
+    },
+    {
+      "id": "q154",
+      "text": "How do xv6's walk loop and the RISC-V Sv39 virtual-address fields correspond?",
+      "language": "en",
+      "intent": "Relate the levels and address bits used by xv6 walk to the Sv39 translation format.",
+      "category": "comparison",
+      "comparison_group": "page_walk_code",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 36,
+          "section": "3.3 Code: creating an address space"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 32,
+          "section": "3.1 Paging hardware"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 146,
+          "section": "12.4.1 Addressing and Memory Protection"
+        }
+      ]
+    },
+    {
+      "id": "q155",
+      "text": "How does an unmapped guard page help detect a kernel stack overflow in xv6?",
+      "language": "en",
+      "intent": "Understand how xv6 uses a guard page to detect kernel-stack overflow.",
+      "category": "conceptual",
+      "comparison_group": "guard_page",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 35,
+          "section": "3.2 Kernel address space"
+        }
+      ]
+    },
+    {
+      "id": "q156",
+      "text": "Why does accept return a new socket instead of turning the listening socket into the connection?",
+      "language": "en",
+      "intent": "Understand the relationship between a listening TCP socket and the socket returned by accept.",
+      "category": "conceptual",
+      "comparison_group": "socket_accept",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 434,
+          "section": "9.3.1 Socket APIs"
+        }
+      ]
+    },
+    {
+      "id": "q157",
+      "text": "Why does xv6 transfer a process lock across swtch between a process and the scheduler?",
+      "language": "en",
+      "intent": "Understand why the xv6 process lock is handed across a context switch to the scheduler.",
+      "category": "conceptual",
+      "comparison_group": "context_switch_state",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 78,
+          "section": "8.4 Code: Scheduling"
+        }
+      ]
+    },
+    {
+      "id": "q158",
+      "text": "How does xv6 sleep avoid losing a wakeup while releasing a caller's lock?",
+      "language": "en",
+      "intent": "Find how xv6 sleep releases the condition lock without introducing a lost wakeup.",
+      "category": "conceptual",
+      "comparison_group": "sleep_wakeup_race",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 83,
+          "section": "9.2 Code: Sleep and wakeup"
+        }
+      ]
+    },
+    {
+      "id": "q159",
+      "text": "In xv6 user trap entry, what does changing satp do, and why is SFENCE.VMA also used?",
+      "language": "en",
+      "intent": "Understand the page-table switch and translation synchronization in xv6 user-trap entry.",
+      "category": "conceptual",
+      "comparison_group": "trampoline",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 46,
+          "section": "4.2 Traps from user space"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 37,
+          "section": "3.3 Code: creating an address space"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 136,
+          "section": "12.1.11 Supervisor Address Translation and Protection (satp) Register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 137,
+          "section": "12.2.1 Supervisor Memory-Management Fence Instruction"
+        }
+      ]
+    },
+    {
+      "id": "q160",
+      "text": "Why does xv6 disable interrupts while holding spinlocks?",
+      "language": "en",
+      "intent": "Understand why xv6 disables interrupts while holding a spinlock.",
+      "category": "conceptual",
+      "comparison_group": "interrupt_locks",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 70,
+          "section": "7.5 Locks and interrupts"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 71,
+          "section": "7.5 Locks and interrupts"
+        }
+      ]
+    },
+    {
+      "id": "q161",
+      "text": "How do an inode, a directory entry and a file descriptor refer to different layers of a file?",
+      "language": "en",
+      "intent": "Compare the roles of an inode, a directory entry and a file descriptor.",
+      "category": "comparison",
+      "comparison_group": "filesystem_names",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 99,
+          "section": "10.11 Code: directory layer"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 18,
+          "section": "1.4 File system"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 101,
+          "section": "10.13 File descriptor layer"
+        }
+      ]
+    },
+    {
+      "id": "q162",
+      "text": "file still readable after unlink",
+      "language": "en",
+      "intent": "Investigate why a file can still be read after unlink.",
+      "category": "problem_description",
+      "comparison_group": "unlink_open",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 18,
+          "section": "1.4 File system"
+        }
+      ]
+    },
+    {
+      "id": "q163",
+      "text": "How do a hard link and a symbolic link differ when the original pathname is removed?",
+      "language": "en",
+      "intent": "Compare hard-link and symbolic-link behavior when the original pathname is removed.",
+      "category": "comparison",
+      "comparison_group": "hard_links",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 395,
+          "section": "8.6.3 File Linking"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 396,
+          "section": "8.6.3 File Linking"
+        }
+      ]
+    },
+    {
+      "id": "q164",
+      "text": "What does fsync add beyond a successful write system call?",
+      "language": "en",
+      "intent": "Understand what persistence guarantee an application seeks by calling fsync after writing.",
+      "category": "comparison",
+      "comparison_group": "fsync",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 399,
+          "section": "8.7 Metadata Integrity"
+        }
+      ]
+    },
+    {
+      "id": "q165",
+      "text": "How does a write-ahead log make a filesystem operation recoverable after a crash?",
+      "language": "en",
+      "intent": "Understand how logging supports atomic recovery of filesystem updates after a crash.",
+      "category": "conceptual",
+      "comparison_group": "filesystem_log",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 93,
+          "section": "10.4 Logging layer"
+        }
+      ]
+    },
+    {
+      "id": "q166",
+      "text": "Why can xv6 begin_op wait before allowing a filesystem operation to proceed?",
+      "language": "en",
+      "intent": "Find the conditions under which xv6 delays entry into a filesystem transaction.",
+      "category": "conceptual",
+      "comparison_group": "filesystem_log",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 94,
+          "section": "10.6 Code: logging"
+        }
+      ]
+    },
+    {
+      "id": "q167",
+      "text": "Why does xv6 keep only one cached buffer for a given disk block?",
+      "language": "en",
+      "intent": "Understand the correctness reason for keeping one cached buffer per disk block in xv6.",
+      "category": "conceptual",
+      "comparison_group": "buffer_cache",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 92,
+          "section": "10.3 Code: Buffer cache"
+        }
+      ]
+    },
+    {
+      "id": "q168",
+      "text": "Why are xv6 inode reference counts and inode locks separate mechanisms?",
+      "language": "en",
+      "intent": "Understand how inode reference ownership differs from exclusive inode locking in xv6.",
+      "category": "comparison",
+      "comparison_group": "inode_lifetime",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 96,
+          "section": "10.8 Inode layer"
+        }
+      ]
+    },
+    {
+      "id": "q169",
+      "text": "How does xv6 resolve an absolute pathname differently from a relative pathname?",
+      "language": "en",
+      "intent": "Find where xv6 starts pathname resolution for absolute and relative paths.",
+      "category": "comparison",
+      "comparison_group": "pathname_resolution",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 100,
+          "section": "10.12 Code: Path names"
+        }
+      ]
+    },
+    {
+      "id": "q170",
+      "text": "After a crash, how does xv6 decide whether to replay or discard its on-disk log?",
+      "language": "en",
+      "intent": "Find the concrete on-disk condition xv6 uses to decide whether recovery replays a log transaction.",
+      "category": "exact_lookup",
+      "comparison_group": "filesystem_log",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 93,
+          "section": "10.5 Log design"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 93,
+          "section": "10.4 Logging layer"
+        }
+      ]
+    },
+    {
+      "id": "q171",
+      "text": "Why can two reads of the same size from a rotating hard disk take very different amounts of time?",
+      "language": "en",
+      "intent": "Understand why equal-sized reads from a rotating hard disk can have very different latency.",
+      "category": "conceptual",
+      "comparison_group": "disk_access_cost",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 358,
+          "section": "8.2 Disk Storage Technology"
+        }
+      ]
+    },
+    {
+      "id": "q172",
+      "text": "What does pread do differently from lseek followed by read?",
+      "language": "en",
+      "intent": "Compare pread with an lseek call followed by read.",
+      "category": "comparison",
+      "comparison_group": "pread_offset",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 368,
+          "section": "8.3.3 Reading and Writing Files at Specified Positions"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 370,
+          "section": "8.3.4 Sequential Reading and Writing"
+        }
+      ]
+    },
+    {
+      "id": "q173",
+      "text": "large file needs more data-block addresses than fit in its inode",
+      "language": "en",
+      "intent": "Find how a file can be represented when its data-block addresses do not all fit in the inode.",
+      "category": "problem_description",
+      "comparison_group": "indirect_file_blocks",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 99,
+          "section": "10.10 Code: Inode content"
+        }
+      ]
+    },
+    {
+      "id": "q174",
+      "text": "Why is a disk block marked both allocated and free more dangerous than a lost block after a crash?",
+      "language": "en",
+      "intent": "Compare the consequences of a lost block with a block that is both in use and marked free after a crash.",
+      "category": "conceptual",
+      "comparison_group": "metadata_integrity",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 400,
+          "section": "8.7 Metadata Integrity"
+        },
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 92,
+          "section": "10.4 Logging layer"
+        }
+      ]
+    },
+    {
+      "id": "q175",
+      "text": "A program opens a remote file through its normal pathname; where does the kernel dispatch the operation to the network filesystem?",
+      "language": "en",
+      "intent": "Find how an ordinary file operation is routed to a network filesystem implementation.",
+      "category": "conceptual",
+      "comparison_group": "vfs_dispatch",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 430,
+          "section": "9.2.3 Distributed File Systems: An Application Viewed Through Operating Systems"
+        }
+      ]
+    },
+    {
+      "id": "q176",
+      "text": "Why must a crash-recovery undo operation still work correctly if it is executed more than once?",
+      "language": "en",
+      "intent": "Find why repeating a crash-recovery undo operation must remain safe.",
+      "category": "conceptual",
+      "comparison_group": "undo_idempotence",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 209,
+          "section": "5.4 Transaction Durability: Write-Ahead Logging"
+        }
+      ]
+    },
+    {
+      "id": "q177",
+      "text": "How do access control lists and capabilities represent authority differently?",
+      "language": "en",
+      "intent": "Compare how capabilities and access control lists associate authority with subjects and objects.",
+      "category": "comparison",
+      "comparison_group": "access_control",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 319,
+          "section": "7.4.2 Capabilities"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 323,
+          "section": "7.4.3 Access Control Lists and Credentials"
+        }
+      ]
+    },
+    {
+      "id": "q178",
+      "text": "Why are authentication and authorization separate decisions?",
+      "language": "en",
+      "intent": "Understand why authentication and authorization are treated as separate security decisions.",
+      "category": "comparison",
+      "comparison_group": "authentication",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 491,
+          "section": "11.2 Security Objectives and Principles"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 323,
+          "section": "7.4.3 Access Control Lists and Credentials"
+        }
+      ]
+    },
+    {
+      "id": "q179",
+      "text": "In trap-and-emulate virtualization, why must the VMM intercept privileged guest instructions?",
+      "language": "en",
+      "intent": "Understand why trap-and-emulate virtualization requires the monitor to take control of privileged guest operations.",
+      "category": "conceptual",
+      "comparison_group": "virtualization",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 335,
+          "section": "7.5.2 Protection of Entire Simulated Machines"
+        }
+      ]
+    },
+    {
+      "id": "q180",
+      "text": "How does a monitor combine mutual exclusion with waiting for a condition?",
+      "language": "en",
+      "intent": "Understand how monitor-style synchronization combines exclusive access with condition waiting.",
+      "category": "conceptual",
+      "comparison_group": "monitor",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 124,
+          "section": "4.3.2 Monitors: A More Structured Interface to Mutexes"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 140,
+          "section": "4.5 Condition Variables"
+        }
+      ]
+    },
+    {
+      "id": "q194",
+      "text": "In an IA-32 system where user and kernel share a page table, what prevents user code from accessing kernel memory?",
+      "language": "en",
+      "intent": "Find how an IA-32 system protects kernel memory when user and kernel code share a page table.",
+      "category": "conceptual",
+      "comparison_group": "x86_example",
+      "architecture_scope": "x86",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 307,
+          "section": "7.3.1 The Foundation of Protection: Two Processor Modes"
+        }
+      ]
+    },
+    {
+      "id": "q195",
+      "text": "Which LoongArch CPUCFG field indicates support for ARM binary translation?",
+      "language": "en",
+      "intent": "Locate the CPUCFG capability indicator for ARM binary translation.",
+      "category": "exact_lookup",
+      "comparison_group": "cpu_identity",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 72,
+          "section": "2.2.10.5. cpucfg, Table 3"
+        }
+      ]
+    },
+    {
+      "id": "q196",
+      "text": "What is the RISC-V analogue of ARM's load-exclusive/store-exclusive approach for implementing a lock?",
+      "language": "en",
+      "intent": "Find the RISC-V analogue of the ARM exclusive-load/store pattern for atomic updates.",
+      "category": "comparison",
+      "comparison_group": "conditional_store",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 674,
+          "section": "A.5. Code Porting and Mapping Guidelines"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 93,
+          "section": "13.2. Zalrsc Extension for Load-Reserved/Store-Conditional Instructions"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 94,
+          "section": "13.2. Zalrsc Extension for Load-Reserved/Store-Conditional Instructions"
+        },
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 96,
+          "section": "13.3. Eventual Success of Store-Conditional Instructions"
+        }
+      ]
+    },
+    {
+      "id": "q197",
+      "text": "I am porting ARM code to LoongArch. Which instructions order data accesses and synchronize instruction fetch?",
+      "language": "en",
+      "intent": "Find LoongArch instructions for data-access ordering and instruction-fetch synchronization when porting code.",
+      "category": "comparison",
+      "comparison_group": "memory_barrier",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 66,
+          "section": "2.2.8.1. DBAR"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 67,
+          "section": "2.2.8.2. IBAR"
+        }
+      ]
+    },
+    {
+      "id": "q198",
+      "text": "What do the client stub and server skeleton do during a remote procedure call?",
+      "language": "en",
+      "intent": "Understand the responsibilities of client and server middleware during a remote procedure call.",
+      "category": "conceptual",
+      "comparison_group": "rpc_stubs",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 472,
+          "section": "10.3.1 Principles of Operation for RPC"
+        },
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 473,
+          "section": "10.3.1 Principles of Operation for RPC"
+        }
+      ]
+    },
+    {
+      "id": "q199",
+      "text": "In RISC-V, what happens to floating-point register contents when software sets FS to Initial?",
+      "language": "en",
+      "intent": "Find the effect of setting RISC-V FS to Initial on floating-point register contents.",
+      "category": "exact_lookup",
+      "comparison_group": "fp_context_state",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 43,
+          "section": "3.1.6.7. Extension Context Status in mstatus Register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 44,
+          "section": "3.1.6.7. Extension Context Status in mstatus Register"
+        }
+      ]
+    },
+    {
+      "id": "q200",
+      "text": "Under what conditions can non-virtualized RISC-V supervisor-mode software access stimecmp?",
+      "language": "en",
+      "intent": "Find the conditions governing access to stimecmp from non-virtualized RISC-V supervisor mode.",
+      "category": "exact_lookup",
+      "comparison_group": "supervisor_timer_access",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 160,
+          "section": "19.1.1. Supervisor Timer (stimecmp) Register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 161,
+          "section": "19.1.4. Machine Counter-Enable (mcounteren) Register"
+        },
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 162,
+          "section": "19.3. Environment Config (menvcfg and henvcfg) Support"
+        }
+      ]
+    }
+  ]
+}

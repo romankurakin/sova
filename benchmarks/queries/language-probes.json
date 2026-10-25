@@ -1,0 +1,452 @@
+{
+  "schema_version": 7,
+  "corpus_id": "os-architectures-v1",
+  "source_lock_sha256": "98b4c2dfe0a749c9f54c2eabf8c606b4771c665882a1f708c2207c2fc7c59b37",
+  "editor_revision": 6,
+  "updated": "2026-10-03",
+  "notes": [
+    "The repository is the canonical source of query texts, metadata and source references.",
+    "Source references identify pinned PDF pages for editorial verification; they are not exclusive relevance targets or qrels. Corpus excerpts are not bundled.",
+    "Search receives text only. Pair judges receive id/text/neutral intent plus the candidate passage and provenance; source_refs and editorial metadata are excluded.",
+    "Russian and Chinese probes are included in every default run and reported separately by language. Independent translation review remains pending without blocking execution. Both languages use the same ten English anchors.",
+    "English source verification does not establish translation equivalence or allow automatic transfer of qrels.",
+    "All 20 translations received language-specific editorial review against the current English anchors: six Russian and five Chinese formulations improved. This is same-provider review, not independent provider or human validation.",
+    "Revision 5 synchronizes neutral intents and primary-task categories with English bank revision 6. English anchor texts and all RU/ZH query texts are unchanged.",
+    "Revision 6 enables all translations by default under the cross_lingual track; query texts, intents and anchors are unchanged.",
+    "Schema 7 removes metadata that no code reads; query texts, intents and anchors are unchanged."
+  ],
+  "queries": [
+    {
+      "id": "probe-ru-q005",
+      "text": "Чем в RISC-V отличаются LB и LBU, если старший бит загруженного байта равен 1?",
+      "language": "ru",
+      "intent": "Compare how signed and unsigned byte loads extend the value to the register width.",
+      "category": "comparison",
+      "comparison_group": "load_extension",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 54,
+          "section": "2.6. Load and Store Instructions"
+        }
+      ],
+      "anchor_id": "q005",
+      "anchor_text_sha256": "0977927a339c248403343609eddc742ec5661c6fbf00880d0df0abc96f59260f"
+    },
+    {
+      "id": "probe-ru-q065",
+      "text": "Как stvec в RISC-V выбирает прямой или векторный вход в обработчик?",
+      "language": "ru",
+      "intent": "Find how RISC-V stvec.MODE changes the target address for synchronous traps and interrupts.",
+      "category": "exact_lookup",
+      "comparison_group": "handler_entry",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 127,
+          "section": "12.1.2. Supervisor Trap Vector Base Address (stvec) Register"
+        }
+      ],
+      "anchor_id": "q065",
+      "anchor_text_sha256": "ba2d3cb273e8cfcc3481f0c2098d12869e9dc5b0e0c54e3eeddccdd1f8322dea"
+    },
+    {
+      "id": "probe-ru-q107",
+      "text": "Синхронизирует ли локальная инструкция FENCE.I выборку инструкций на всех hart RISC-V?",
+      "language": "ru",
+      "intent": "Determine whether a local instruction-fetch fence synchronizes other RISC-V harts.",
+      "category": "exact_lookup",
+      "comparison_group": "instruction_sync",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 68,
+          "section": "Chapter 5. Zifencei Extension for Instruction-Fetch Fence, Version 2.0"
+        }
+      ],
+      "anchor_id": "q107",
+      "anchor_text_sha256": "6a15ac62dcfc5ceea6dff93e24a2ad46da22ea493457c3534d2b86f16afcd4ba"
+    },
+    {
+      "id": "probe-ru-q021",
+      "text": "Почему в LoongArch SC.W может завершиться неудачей после LL.W и что означает возвращаемое значение?",
+      "language": "ru",
+      "intent": "Understand conditional-store failures and the meaning of their return status in an atomic-update loop.",
+      "category": "exact_lookup",
+      "comparison_group": "conditional_store",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 65,
+          "section": "2.2.7.4. LL.{W/D}, SC.{W/D}"
+        }
+      ],
+      "anchor_id": "q021",
+      "anchor_text_sha256": "cdda507fcd5d0b0f5568d1cae61f0e3c9b8cb3e774e0a920d34565a954dbdfae"
+    },
+    {
+      "id": "probe-ru-q072",
+      "text": "Какой адрес хранит BADV в LoongArch и чем отличается TLBRBADV?",
+      "language": "ru",
+      "intent": "Find what LoongArch BADV and TLBRBADV record and which fault contexts use each register.",
+      "category": "comparison",
+      "comparison_group": "fault_address",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 145,
+          "section": "7.4.8. Bad Virtual Address (BADV)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 155,
+          "section": "7.5.12. TLB Refill Exception Bad Virtual Address (TLBRBADV)"
+        }
+      ],
+      "anchor_id": "q072",
+      "anchor_text_sha256": "d1e5c20798d6267b525280e5186c6a5f33356e926379c4fa4f067de5c9488786"
+    },
+    {
+      "id": "probe-ru-q120",
+      "text": "Как RPLV в LoongArch LA64 меняет проверку привилегий при использовании записи TLB?",
+      "language": "ru",
+      "intent": "Find how RPLV changes which privilege levels may access a LoongArch LA64 TLB mapping.",
+      "category": "comparison",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 119,
+          "section": "5.4.2. TLB Entry"
+        }
+      ],
+      "anchor_id": "q120",
+      "anchor_text_sha256": "6179606817905faf4022e2b97e74df026887332ba1996e927af3eb657657f289"
+    },
+    {
+      "id": "probe-ru-q125",
+      "text": "чтение из pipe не доходит до EOF после завершения дочернего процесса",
+      "language": "ru",
+      "intent": "Diagnose a pipe reader that does not observe end-of-file after a child terminates.",
+      "category": "problem_description",
+      "comparison_group": "pipe_eof",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 16,
+          "section": "1.3 Pipes"
+        }
+      ],
+      "anchor_id": "q125",
+      "anchor_text_sha256": "22f7d810308763aeb629e3db53479a3d7a769182faf699386fda97a923ed4d2a"
+    },
+    {
+      "id": "probe-ru-q142",
+      "text": "Почему ожидание условной переменной обычно нужно помещать в цикл while?",
+      "language": "ru",
+      "intent": "Find why condition-variable waits are usually placed inside a while loop.",
+      "category": "conceptual",
+      "comparison_group": "condition_variables",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 140,
+          "section": "4.5 Condition Variables"
+        }
+      ],
+      "anchor_id": "q142",
+      "anchor_text_sha256": "2109d85bfb4fd98da931be93f4b047cef61f146584150d1517c1ea6d162ee508"
+    },
+    {
+      "id": "probe-ru-q162",
+      "text": "файл всё ещё читается после unlink",
+      "language": "ru",
+      "intent": "Investigate why a file can still be read after unlink.",
+      "category": "problem_description",
+      "comparison_group": "unlink_open",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 18,
+          "section": "1.4 File system"
+        }
+      ],
+      "anchor_id": "q162",
+      "anchor_text_sha256": "e07f7aacdb1729ab241ed10460e5bad904a61eff6eede978848e23ce32ee881e"
+    },
+    {
+      "id": "probe-ru-q173",
+      "text": "для большого файла нужно больше адресов блоков данных, чем помещается в inode",
+      "language": "ru",
+      "intent": "Find how a file can be represented when its data-block addresses do not all fit in the inode.",
+      "category": "problem_description",
+      "comparison_group": "indirect_file_blocks",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 99,
+          "section": "10.10 Code: Inode content"
+        }
+      ],
+      "anchor_id": "q173",
+      "anchor_text_sha256": "9b69e34207e2b7202cfe6bde093a3157bc835e4c39dffb2efc800385b6c1a681"
+    },
+    {
+      "id": "probe-zh-q005",
+      "text": "在 RISC-V 中，加载的字节最高位为 1 时，LB 和 LBU 有什么区别？",
+      "language": "zh",
+      "intent": "Compare how signed and unsigned byte loads extend the value to the register width.",
+      "category": "comparison",
+      "comparison_group": "load_extension",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 54,
+          "section": "2.6. Load and Store Instructions"
+        }
+      ],
+      "anchor_id": "q005",
+      "anchor_text_sha256": "0977927a339c248403343609eddc742ec5661c6fbf00880d0df0abc96f59260f"
+    },
+    {
+      "id": "probe-zh-q065",
+      "text": "RISC-V 的 stvec 如何在直接模式和向量模式下确定陷入入口？",
+      "language": "zh",
+      "intent": "Find how RISC-V stvec.MODE changes the target address for synchronous traps and interrupts.",
+      "category": "exact_lookup",
+      "comparison_group": "handler_entry",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "riscv-privileged",
+          "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+          "pdf_page": 127,
+          "section": "12.1.2. Supervisor Trap Vector Base Address (stvec) Register"
+        }
+      ],
+      "anchor_id": "q065",
+      "anchor_text_sha256": "ba2d3cb273e8cfcc3481f0c2098d12869e9dc5b0e0c54e3eeddccdd1f8322dea"
+    },
+    {
+      "id": "probe-zh-q107",
+      "text": "本地执行 FENCE.I 会同步所有 RISC-V hart 的取指吗？",
+      "language": "zh",
+      "intent": "Determine whether a local instruction-fetch fence synchronizes other RISC-V harts.",
+      "category": "exact_lookup",
+      "comparison_group": "instruction_sync",
+      "architecture_scope": "riscv",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "riscv-unprivileged",
+          "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+          "pdf_page": 68,
+          "section": "Chapter 5. Zifencei Extension for Instruction-Fetch Fence, Version 2.0"
+        }
+      ],
+      "anchor_id": "q107",
+      "anchor_text_sha256": "6a15ac62dcfc5ceea6dff93e24a2ad46da22ea493457c3534d2b86f16afcd4ba"
+    },
+    {
+      "id": "probe-zh-q021",
+      "text": "为什么 LoongArch 的 SC.W 在 LL.W 之后仍可能失败？返回结果表示什么？",
+      "language": "zh",
+      "intent": "Understand conditional-store failures and the meaning of their return status in an atomic-update loop.",
+      "category": "exact_lookup",
+      "comparison_group": "conditional_store",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "instructions",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 65,
+          "section": "2.2.7.4. LL.{W/D}, SC.{W/D}"
+        }
+      ],
+      "anchor_id": "q021",
+      "anchor_text_sha256": "cdda507fcd5d0b0f5568d1cae61f0e3c9b8cb3e774e0a920d34565a954dbdfae"
+    },
+    {
+      "id": "probe-zh-q072",
+      "text": "LoongArch 的 BADV 记录什么地址？它与 TLBRBADV 有什么区别？",
+      "language": "zh",
+      "intent": "Find what LoongArch BADV and TLBRBADV record and which fault contexts use each register.",
+      "category": "comparison",
+      "comparison_group": "fault_address",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 145,
+          "section": "7.4.8. Bad Virtual Address (BADV)"
+        },
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 155,
+          "section": "7.5.12. TLB Refill Exception Bad Virtual Address (TLBRBADV)"
+        }
+      ],
+      "anchor_id": "q072",
+      "anchor_text_sha256": "d1e5c20798d6267b525280e5186c6a5f33356e926379c4fa4f067de5c9488786"
+    },
+    {
+      "id": "probe-zh-q120",
+      "text": "LoongArch LA64 的 RPLV 如何改变 TLB 项的特权级检查？",
+      "language": "zh",
+      "intent": "Find how RPLV changes which privilege levels may access a LoongArch LA64 TLB mapping.",
+      "category": "comparison",
+      "comparison_group": "page_permissions",
+      "architecture_scope": "loongarch",
+      "query_style": "question",
+      "topic": "privileged",
+      "source_refs": [
+        {
+          "source_id": "loongarch-vol1",
+          "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+          "pdf_page": 119,
+          "section": "5.4.2. TLB Entry"
+        }
+      ],
+      "anchor_id": "q120",
+      "anchor_text_sha256": "6179606817905faf4022e2b97e74df026887332ba1996e927af3eb657657f289"
+    },
+    {
+      "id": "probe-zh-q125",
+      "text": "子进程退出后，读管道一直读不到 EOF",
+      "language": "zh",
+      "intent": "Diagnose a pipe reader that does not observe end-of-file after a child terminates.",
+      "category": "problem_description",
+      "comparison_group": "pipe_eof",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 16,
+          "section": "1.3 Pipes"
+        }
+      ],
+      "anchor_id": "q125",
+      "anchor_text_sha256": "22f7d810308763aeb629e3db53479a3d7a769182faf699386fda97a923ed4d2a"
+    },
+    {
+      "id": "probe-zh-q142",
+      "text": "为什么条件变量的等待通常应该放在 while 循环里？",
+      "language": "zh",
+      "intent": "Find why condition-variable waits are usually placed inside a while loop.",
+      "category": "conceptual",
+      "comparison_group": "condition_variables",
+      "architecture_scope": "unspecified",
+      "query_style": "question",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "hailperin-osm",
+          "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+          "pdf_page": 140,
+          "section": "4.5 Condition Variables"
+        }
+      ],
+      "anchor_id": "q142",
+      "anchor_text_sha256": "2109d85bfb4fd98da931be93f4b047cef61f146584150d1517c1ea6d162ee508"
+    },
+    {
+      "id": "probe-zh-q162",
+      "text": "unlink 后文件仍然可以读取",
+      "language": "zh",
+      "intent": "Investigate why a file can still be read after unlink.",
+      "category": "problem_description",
+      "comparison_group": "unlink_open",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 18,
+          "section": "1.4 File system"
+        }
+      ],
+      "anchor_id": "q162",
+      "anchor_text_sha256": "e07f7aacdb1729ab241ed10460e5bad904a61eff6eede978848e23ce32ee881e"
+    },
+    {
+      "id": "probe-zh-q173",
+      "text": "大文件的数据块地址太多，inode 放不下",
+      "language": "zh",
+      "intent": "Find how a file can be represented when its data-block addresses do not all fit in the inode.",
+      "category": "problem_description",
+      "comparison_group": "indirect_file_blocks",
+      "architecture_scope": "unspecified",
+      "query_style": "short_search_request",
+      "topic": "os",
+      "source_refs": [
+        {
+          "source_id": "xv6-riscv",
+          "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+          "pdf_page": 99,
+          "section": "10.10 Code: Inode content"
+        }
+      ],
+      "anchor_id": "q173",
+      "anchor_text_sha256": "9b69e34207e2b7202cfe6bde093a3157bc835e4c39dffb2efc800385b6c1a681"
+    }
+  ]
+}

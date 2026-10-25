@@ -1,0 +1,1 @@
+{"schema_version":1,"codex":{"model":"gpt-6.1-sol","effort":"xhigh"},"claude":{"model":"claude-sonnet-5-5","effort":"xhigh"},"timeout_seconds":900,"retry_limit":2}
