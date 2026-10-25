@@ -5,6 +5,7 @@ import sqlite3
 import struct
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 
 from sova import config
 from sova.config import EMBEDDING_DIM, VECTOR_EXT
@@ -171,10 +172,13 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
-def init_db() -> sqlite3.Connection:
+def init_db(path: Path | None = None) -> sqlite3.Connection:
     """Initialize database with tables and indexes."""
-    config.get_data_dir().mkdir(parents=True, exist_ok=True)
-    db_path = config.get_db_path()
+    if path is None:
+        config.get_data_dir().mkdir(parents=True, exist_ok=True)
+        db_path = config.get_db_path()
+    else:
+        db_path = path
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.enable_load_extension(True)
@@ -282,10 +286,10 @@ def init_db() -> sqlite3.Connection:
     return conn
 
 
-def connect_readonly() -> sqlite3.Connection:
+def connect_readonly(path: Path | None = None) -> sqlite3.Connection:
     """Connect to database in read-only mode."""
-    db_path = config.get_db_path()
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    db_path = config.get_db_path() if path is None else path
+    conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
     conn.enable_load_extension(True)
     conn.load_extension(str(VECTOR_EXT))
     conn.enable_load_extension(False)
