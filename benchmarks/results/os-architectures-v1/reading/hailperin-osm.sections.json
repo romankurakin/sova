@@ -1,0 +1,2719 @@
+{
+  "source_id": "hailperin-osm",
+  "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+  "extractor": {
+    "code_sha256": "64b1cb65c71bb047b037bb7746d61a3442e909b4ad64af08dd26e6ba12f97636",
+    "structure_code_sha256": "dff50269b69426b3df1c9295aa2e4737a76bdb921ccdc3f22fcb4f3bf4e780f3",
+    "packages": {
+      "PyMuPDF": "1.28.2",
+      "pymupdf4llm": "1.28.2",
+      "pymupdf-layout": "1.28.2"
+    },
+    "method": "sova.extract.extract_pdf",
+    "section_parser": "sova.extract.parse_sections"
+  },
+  "markdown": "hailperin-osm.md",
+  "markdown_sha256": "78302d686c7af96b4fbdd3154ff80b01288029b737d243afc826b8e9c168b4b7",
+  "lines": 9259,
+  "characters": 1210522,
+  "section_count": 385,
+  "sections": [
+    {
+      "title": "About the Cover",
+      "level": 4,
+      "start_line": 15,
+      "end_line": 24,
+      "path": "About the Cover"
+    },
+    {
+      "title": "Contents",
+      "level": 1,
+      "start_line": 25,
+      "end_line": 56,
+      "path": "Contents"
+    },
+    {
+      "title": "vi",
+      "level": 5,
+      "start_line": 57,
+      "end_line": 242,
+      "path": "Contents > vi"
+    },
+    {
+      "title": "Preface",
+      "level": 1,
+      "start_line": 243,
+      "end_line": 250,
+      "path": "Preface"
+    },
+    {
+      "title": "Audience",
+      "level": 3,
+      "start_line": 251,
+      "end_line": 254,
+      "path": "Preface > Audience"
+    },
+    {
+      "title": "Systems Used as Examples",
+      "level": 3,
+      "start_line": 255,
+      "end_line": 260,
+      "path": "Preface > Systems Used as Examples"
+    },
+    {
+      "title": "PREFACE",
+      "level": 5,
+      "start_line": 261,
+      "end_line": 266,
+      "path": "Preface > Systems Used as Examples > PREFACE"
+    },
+    {
+      "title": "Organization of the Text",
+      "level": 3,
+      "start_line": 267,
+      "end_line": 274,
+      "path": "Preface > Organization of the Text"
+    },
+    {
+      "title": "xiv",
+      "level": 5,
+      "start_line": 275,
+      "end_line": 286,
+      "path": "Preface > Organization of the Text > xiv"
+    },
+    {
+      "title": "PREFACE",
+      "level": 5,
+      "start_line": 287,
+      "end_line": 288,
+      "path": "Preface > Organization of the Text > PREFACE"
+    },
+    {
+      "title": "the computer technology.",
+      "level": 5,
+      "start_line": 289,
+      "end_line": 292,
+      "path": "Preface > Organization of the Text > the computer technology."
+    },
+    {
+      "title": "Relationship to Computer Science Curriculum 2008",
+      "level": 3,
+      "start_line": 293,
+      "end_line": 318,
+      "path": "Preface > Relationship to Computer Science Curriculum 2008"
+    },
+    {
+      "title": "Your Feedback Is Welcome",
+      "level": 3,
+      "start_line": 319,
+      "end_line": 322,
+      "path": "Preface > Your Feedback Is Welcome"
+    },
+    {
+      "title": "Features of the Text",
+      "level": 3,
+      "start_line": 323,
+      "end_line": 328,
+      "path": "Preface > Features of the Text"
+    },
+    {
+      "title": "PREFACE",
+      "level": 5,
+      "start_line": 329,
+      "end_line": 332,
+      "path": "Preface > Features of the Text > PREFACE"
+    },
+    {
+      "title": "Supplemental Resources",
+      "level": 3,
+      "start_line": 333,
+      "end_line": 344,
+      "path": "Preface > Supplemental Resources"
+    },
+    {
+      "title": "About the Revised Edition",
+      "level": 3,
+      "start_line": 345,
+      "end_line": 364,
+      "path": "Preface > About the Revised Edition"
+    },
+    {
+      "title": "PREFACE",
+      "level": 5,
+      "start_line": 365,
+      "end_line": 366,
+      "path": "Preface > About the Revised Edition > PREFACE"
+    },
+    {
+      "title": "Acknowledgments",
+      "level": 3,
+      "start_line": 367,
+      "end_line": 374,
+      "path": "Preface > Acknowledgments"
+    },
+    {
+      "title": "Chapter 1",
+      "level": 2,
+      "start_line": 375,
+      "end_line": 376,
+      "path": "Preface > Chapter 1"
+    },
+    {
+      "title": "Introduction",
+      "level": 1,
+      "start_line": 377,
+      "end_line": 378,
+      "path": "Introduction"
+    },
+    {
+      "title": "1.1 Chapter Overview",
+      "level": 3,
+      "start_line": 379,
+      "end_line": 388,
+      "path": "Introduction > 1.1 Chapter Overview"
+    },
+    {
+      "title": "2",
+      "level": 5,
+      "start_line": 389,
+      "end_line": 392,
+      "path": "Introduction > 1.1 Chapter Overview > 2"
+    },
+    {
+      "title": "1.2 What Is an Operating System?",
+      "level": 3,
+      "start_line": 393,
+      "end_line": 402,
+      "path": "Introduction > 1.2 What Is an Operating System?"
+    },
+    {
+      "title": "1.2. WHAT IS AN OPERATING SYSTEM?",
+      "level": 3,
+      "start_line": 403,
+      "end_line": 418,
+      "path": "Introduction > 1.2. WHAT IS AN OPERATING SYSTEM?"
+    },
+    {
+      "title": "CHAPTER 1. INTRODUCTION",
+      "level": 5,
+      "start_line": 419,
+      "end_line": 445,
+      "path": "Introduction > 1.2. WHAT IS AN OPERATING SYSTEM? > CHAPTER 1. INTRODUCTION"
+    },
+    {
+      "title": "1.3 What Is Middleware?",
+      "level": 3,
+      "start_line": 446,
+      "end_line": 455,
+      "path": "Introduction > 1.3 What Is Middleware?"
+    },
+    {
+      "title": "1.3. WHAT IS MIDDLEWARE?",
+      "level": 3,
+      "start_line": 456,
+      "end_line": 474,
+      "path": "Introduction > 1.3. WHAT IS MIDDLEWARE?"
+    },
+    {
+      "title": "1.4 Objectives for the Book",
+      "level": 3,
+      "start_line": 475,
+      "end_line": 494,
+      "path": "Introduction > 1.4 Objectives for the Book"
+    },
+    {
+      "title": "1.5 Multiple Computations on One Computer",
+      "level": 3,
+      "start_line": 495,
+      "end_line": 498,
+      "path": "Introduction > 1.5 Multiple Computations on One Computer"
+    },
+    {
+      "title": "10",
+      "level": 5,
+      "start_line": 499,
+      "end_line": 514,
+      "path": "Introduction > 1.5 Multiple Computations on One Computer > 10"
+    },
+    {
+      "title": "1.6. INTERACTIONS BETWEEN COMPUTATIONS",
+      "level": 3,
+      "start_line": 515,
+      "end_line": 518,
+      "path": "Introduction > 1.6. INTERACTIONS BETWEEN COMPUTATIONS"
+    },
+    {
+      "title": "1.6 Controlling the Interactions Between Computations",
+      "level": 3,
+      "start_line": 519,
+      "end_line": 540,
+      "path": "Introduction > 1.6 Controlling the Interactions Between Computations"
+    },
+    {
+      "title": "1.7 Supporting Interaction Across Time",
+      "level": 3,
+      "start_line": 541,
+      "end_line": 560,
+      "path": "Introduction > 1.7 Supporting Interaction Across Time"
+    },
+    {
+      "title": "1.8 Supporting Interaction Across Space",
+      "level": 3,
+      "start_line": 561,
+      "end_line": 578,
+      "path": "Introduction > 1.8 Supporting Interaction Across Space"
+    },
+    {
+      "title": "1.9 Security",
+      "level": 3,
+      "start_line": 579,
+      "end_line": 592,
+      "path": "Introduction > 1.9 Security"
+    },
+    {
+      "title": "Exercises",
+      "level": 4,
+      "start_line": 593,
+      "end_line": 608,
+      "path": "Introduction > 1.9 Security > Exercises"
+    },
+    {
+      "title": "Programming Project",
+      "level": 4,
+      "start_line": 609,
+      "end_line": 612,
+      "path": "Introduction > 1.9 Security > Programming Project"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 4,
+      "start_line": 613,
+      "end_line": 620,
+      "path": "Introduction > 1.9 Security > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 4,
+      "start_line": 621,
+      "end_line": 628,
+      "path": "Introduction > 1.9 Security > Notes"
+    },
+    {
+      "title": "Chapter 2",
+      "level": 2,
+      "start_line": 629,
+      "end_line": 630,
+      "path": "Introduction > Chapter 2"
+    },
+    {
+      "title": "Threads",
+      "level": 1,
+      "start_line": 631,
+      "end_line": 632,
+      "path": "Threads"
+    },
+    {
+      "title": "2.1 Introduction",
+      "level": 3,
+      "start_line": 633,
+      "end_line": 663,
+      "path": "Threads > 2.1 Introduction"
+    },
+    {
+      "title": "2.2 Example of Multithreaded Programs",
+      "level": 3,
+      "start_line": 664,
+      "end_line": 667,
+      "path": "Threads > 2.2 Example of Multithreaded Programs"
+    },
+    {
+      "title": "24",
+      "level": 5,
+      "start_line": 668,
+      "end_line": 759,
+      "path": "Threads > 2.2 Example of Multithreaded Programs > 24"
+    },
+    {
+      "title": "2.3 Reasons for Using Concurrent Threads",
+      "level": 3,
+      "start_line": 760,
+      "end_line": 771,
+      "path": "Threads > 2.3 Reasons for Using Concurrent Threads"
+    },
+    {
+      "title": "28",
+      "level": 5,
+      "start_line": 772,
+      "end_line": 773,
+      "path": "Threads > 2.3 Reasons for Using Concurrent Threads > 28"
+    },
+    {
+      "title": "CHAPTER 2. THREADS",
+      "level": 5,
+      "start_line": 774,
+      "end_line": 800,
+      "path": "Threads > 2.3 Reasons for Using Concurrent Threads > CHAPTER 2. THREADS"
+    },
+    {
+      "title": "2.4 Switching Between Threads",
+      "level": 3,
+      "start_line": 801,
+      "end_line": 806,
+      "path": "Threads > 2.4 Switching Between Threads"
+    },
+    {
+      "title": "2.4. SWITCHING BETWEEN THREADS",
+      "level": 3,
+      "start_line": 807,
+      "end_line": 847,
+      "path": "Threads > 2.4. SWITCHING BETWEEN THREADS"
+    },
+    {
+      "title": "L:",
+      "level": 5,
+      "start_line": 848,
+      "end_line": 893,
+      "path": "Threads > 2.4. SWITCHING BETWEEN THREADS > L:"
+    },
+    {
+      "title": "outgoing = current;",
+      "level": 5,
+      "start_line": 894,
+      "end_line": 905,
+      "path": "Threads > 2.4. SWITCHING BETWEEN THREADS > outgoing = current;"
+    },
+    {
+      "title": "2.5. PREEMPTIVE MULTITASKING",
+      "level": 3,
+      "start_line": 906,
+      "end_line": 911,
+      "path": "Threads > 2.5. PREEMPTIVE MULTITASKING"
+    },
+    {
+      "title": "2.5 Preemptive Multitasking",
+      "level": 3,
+      "start_line": 912,
+      "end_line": 935,
+      "path": "Threads > 2.5 Preemptive Multitasking"
+    },
+    {
+      "title": "2.6 Security and Threads",
+      "level": 3,
+      "start_line": 936,
+      "end_line": 943,
+      "path": "Threads > 2.6 Security and Threads"
+    },
+    {
+      "title": "Exercises",
+      "level": 4,
+      "start_line": 944,
+      "end_line": 969,
+      "path": "Threads > 2.6 Security and Threads > Exercises"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 4,
+      "start_line": 970,
+      "end_line": 979,
+      "path": "Threads > 2.6 Security and Threads > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 4,
+      "start_line": 980,
+      "end_line": 987,
+      "path": "Threads > 2.6 Security and Threads > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 4,
+      "start_line": 988,
+      "end_line": 999,
+      "path": "Threads > 2.6 Security and Threads > Notes"
+    },
+    {
+      "title": "Chapter 3",
+      "level": 2,
+      "start_line": 1000,
+      "end_line": 1001,
+      "path": "Threads > Chapter 3"
+    },
+    {
+      "title": "Scheduling",
+      "level": 1,
+      "start_line": 1002,
+      "end_line": 1003,
+      "path": "Scheduling"
+    },
+    {
+      "title": "3.1 Introduction",
+      "level": 3,
+      "start_line": 1004,
+      "end_line": 1011,
+      "path": "Scheduling > 3.1 Introduction"
+    },
+    {
+      "title": "46",
+      "level": 5,
+      "start_line": 1012,
+      "end_line": 1019,
+      "path": "Scheduling > 3.1 Introduction > 46"
+    },
+    {
+      "title": "3.2 Thread States",
+      "level": 3,
+      "start_line": 1020,
+      "end_line": 1023,
+      "path": "Scheduling > 3.2 Thread States"
+    },
+    {
+      "title": "3.2. THREAD STATES",
+      "level": 3,
+      "start_line": 1024,
+      "end_line": 1042,
+      "path": "Scheduling > 3.2. THREAD STATES"
+    },
+    {
+      "title": "3.3. SCHEDULING GOALS",
+      "level": 3,
+      "start_line": 1043,
+      "end_line": 1056,
+      "path": "Scheduling > 3.3. SCHEDULING GOALS"
+    },
+    {
+      "title": "3.3 Scheduling Goals",
+      "level": 3,
+      "start_line": 1057,
+      "end_line": 1074,
+      "path": "Scheduling > 3.3 Scheduling Goals"
+    },
+    {
+      "title": "3.3.1 Throughput",
+      "level": 4,
+      "start_line": 1075,
+      "end_line": 1128,
+      "path": "Scheduling > 3.3 Scheduling Goals > 3.3.1 Throughput"
+    },
+    {
+      "title": "3.3.2 Response Time",
+      "level": 4,
+      "start_line": 1129,
+      "end_line": 1144,
+      "path": "Scheduling > 3.3 Scheduling Goals > 3.3.2 Response Time"
+    },
+    {
+      "title": "3.3.3 Urgency, Importance, and Resource Allocation",
+      "level": 4,
+      "start_line": 1145,
+      "end_line": 1148,
+      "path": "Scheduling > 3.3 Scheduling Goals > 3.3.3 Urgency, Importance, and Resource Allocation"
+    },
+    {
+      "title": "56",
+      "level": 5,
+      "start_line": 1149,
+      "end_line": 1209,
+      "path": "Scheduling > 3.3 Scheduling Goals > 3.3.3 Urgency, Importance, and Resource Allocation > 56"
+    },
+    {
+      "title": "3.4 Fixed-Priority Scheduling",
+      "level": 3,
+      "start_line": 1210,
+      "end_line": 1284,
+      "path": "Scheduling > 3.4 Fixed-Priority Scheduling"
+    },
+    {
+      "title": "3.5 Dynamic-Priority Scheduling",
+      "level": 3,
+      "start_line": 1285,
+      "end_line": 1288,
+      "path": "Scheduling > 3.5 Dynamic-Priority Scheduling"
+    },
+    {
+      "title": "3.5.1 Earliest Deadline First Scheduling",
+      "level": 4,
+      "start_line": 1289,
+      "end_line": 1303,
+      "path": "Scheduling > 3.5 Dynamic-Priority Scheduling > 3.5.1 Earliest Deadline First Scheduling"
+    },
+    {
+      "title": "66",
+      "level": 5,
+      "start_line": 1304,
+      "end_line": 1309,
+      "path": "Scheduling > 3.5 Dynamic-Priority Scheduling > 3.5.1 Earliest Deadline First Scheduling > 66"
+    },
+    {
+      "title": "3.5.2 Decay Usage Scheduling",
+      "level": 4,
+      "start_line": 1310,
+      "end_line": 1356,
+      "path": "Scheduling > 3.5 Dynamic-Priority Scheduling > 3.5.2 Decay Usage Scheduling"
+    },
+    {
+      "title": "3.6. PROPORTIONAL-SHARE SCHEDULING",
+      "level": 3,
+      "start_line": 1357,
+      "end_line": 1360,
+      "path": "Scheduling > 3.6. PROPORTIONAL-SHARE SCHEDULING"
+    },
+    {
+      "title": "3.6 Proportional-Share Scheduling",
+      "level": 3,
+      "start_line": 1361,
+      "end_line": 1406,
+      "path": "Scheduling > 3.6 Proportional-Share Scheduling"
+    },
+    {
+      "title": "74",
+      "level": 5,
+      "start_line": 1407,
+      "end_line": 1418,
+      "path": "Scheduling > 3.6 Proportional-Share Scheduling > 74"
+    },
+    {
+      "title": "3.6. PROPORTIONAL-SHARE SCHEDULING",
+      "level": 3,
+      "start_line": 1419,
+      "end_line": 1469,
+      "path": "Scheduling > 3.6. PROPORTIONAL-SHARE SCHEDULING"
+    },
+    {
+      "title": "3.7 Security and Scheduling",
+      "level": 3,
+      "start_line": 1470,
+      "end_line": 1493,
+      "path": "Scheduling > 3.7 Security and Scheduling"
+    },
+    {
+      "title": "Exercises",
+      "level": 4,
+      "start_line": 1494,
+      "end_line": 1525,
+      "path": "Scheduling > 3.7 Security and Scheduling > Exercises"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 4,
+      "start_line": 1526,
+      "end_line": 1537,
+      "path": "Scheduling > 3.7 Security and Scheduling > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 4,
+      "start_line": 1538,
+      "end_line": 1658,
+      "path": "Scheduling > 3.7 Security and Scheduling > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 4,
+      "start_line": 1659,
+      "end_line": 1684,
+      "path": "Scheduling > 3.7 Security and Scheduling > Notes"
+    },
+    {
+      "title": "Chapter 4",
+      "level": 2,
+      "start_line": 1685,
+      "end_line": 1686,
+      "path": "Scheduling > Chapter 4"
+    },
+    {
+      "title": "Synchronization and Deadlocks",
+      "level": 1,
+      "start_line": 1687,
+      "end_line": 1688,
+      "path": "Synchronization and Deadlocks"
+    },
+    {
+      "title": "4.1 Introduction",
+      "level": 3,
+      "start_line": 1689,
+      "end_line": 1717,
+      "path": "Synchronization and Deadlocks > 4.1 Introduction"
+    },
+    {
+      "title": "4.2 Races and the Need for Mutual Exclusion",
+      "level": 3,
+      "start_line": 1718,
+      "end_line": 1727,
+      "path": "Synchronization and Deadlocks > 4.2 Races and the Need for Mutual Exclusion"
+    },
+    {
+      "title": "96",
+      "level": 5,
+      "start_line": 1728,
+      "end_line": 1781,
+      "path": "Synchronization and Deadlocks > 4.2 Races and the Need for Mutual Exclusion > 96"
+    },
+    {
+      "title": "4.3 Mutexes and Monitors",
+      "level": 3,
+      "start_line": 1782,
+      "end_line": 1791,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors"
+    },
+    {
+      "title": "4.3.1 The Mutex Application Programming Interface",
+      "level": 4,
+      "start_line": 1792,
+      "end_line": 1816,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors > 4.3.1 The Mutex Application Programming Interface"
+    },
+    {
+      "title": "pthread_mutex_t my_mutex;",
+      "level": 5,
+      "start_line": 1817,
+      "end_line": 1835,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors > 4.3.1 The Mutex Application Programming Interface > pthread_mutex_t my_mutex;"
+    },
+    {
+      "title": "pthread_mutex_destroy(&my_mutex);",
+      "level": 5,
+      "start_line": 1836,
+      "end_line": 1907,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors > 4.3.1 The Mutex Application Programming Interface > pthread_mutex_destroy(&my_mutex);"
+    },
+    {
+      "title": "4.3.2 Monitors: A More Structured Interface to Mutexes",
+      "level": 4,
+      "start_line": 1908,
+      "end_line": 1929,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors > 4.3.2 Monitors: A More Structured Interface to Mutexes"
+    },
+    {
+      "title": "synchronized(someObject){",
+      "level": 5,
+      "start_line": 1930,
+      "end_line": 1941,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors > 4.3.2 Monitors: A More Structured Interface to Mutexes > synchronized(someObject){"
+    },
+    {
+      "title": "synchronized(this){",
+      "level": 5,
+      "start_line": 1942,
+      "end_line": 1980,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors > 4.3.2 Monitors: A More Structured Interface to Mutexes > synchronized(this){"
+    },
+    {
+      "title": "106",
+      "level": 5,
+      "start_line": 1981,
+      "end_line": 1986,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors > 4.3.2 Monitors: A More Structured Interface to Mutexes > 106"
+    },
+    {
+      "title": "4.3.3 Underlying Mechanisms for Mutexes",
+      "level": 4,
+      "start_line": 1987,
+      "end_line": 2066,
+      "path": "Synchronization and Deadlocks > 4.3 Mutexes and Monitors > 4.3.3 Underlying Mechanisms for Mutexes"
+    },
+    {
+      "title": "4.4 Other Synchronization Patterns",
+      "level": 3,
+      "start_line": 2067,
+      "end_line": 2132,
+      "path": "Synchronization and Deadlocks > 4.4 Other Synchronization Patterns"
+    },
+    {
+      "title": "4.4.1 Bounded Buffers",
+      "level": 4,
+      "start_line": 2133,
+      "end_line": 2155,
+      "path": "Synchronization and Deadlocks > 4.4 Other Synchronization Patterns > 4.4.1 Bounded Buffers"
+    },
+    {
+      "title": "ls | say",
+      "level": 5,
+      "start_line": 2156,
+      "end_line": 2161,
+      "path": "Synchronization and Deadlocks > 4.4 Other Synchronization Patterns > 4.4.1 Bounded Buffers > ls | say"
+    },
+    {
+      "title": "ls | tr a-z A-Z",
+      "level": 5,
+      "start_line": 2162,
+      "end_line": 2165,
+      "path": "Synchronization and Deadlocks > 4.4 Other Synchronization Patterns > 4.4.1 Bounded Buffers > ls | tr a-z A-Z"
+    },
+    {
+      "title": "4.4.2 Readers/Writers Locks",
+      "level": 4,
+      "start_line": 2166,
+      "end_line": 2193,
+      "path": "Synchronization and Deadlocks > 4.4 Other Synchronization Patterns > 4.4.2 Readers/Writers Locks"
+    },
+    {
+      "title": "4.4.3 Barriers",
+      "level": 4,
+      "start_line": 2194,
+      "end_line": 2203,
+      "path": "Synchronization and Deadlocks > 4.4 Other Synchronization Patterns > 4.4.3 Barriers"
+    },
+    {
+      "title": "4.5 Condition Variables",
+      "level": 3,
+      "start_line": 2204,
+      "end_line": 2209,
+      "path": "Synchronization and Deadlocks > 4.5 Condition Variables"
+    },
+    {
+      "title": "118",
+      "level": 5,
+      "start_line": 2210,
+      "end_line": 2211,
+      "path": "Synchronization and Deadlocks > 4.5 Condition Variables > 118"
+    },
+    {
+      "title": "CHAPTER 4. SYNCHRONIZATION AND DEADLOCKS",
+      "level": 5,
+      "start_line": 2212,
+      "end_line": 2312,
+      "path": "Synchronization and Deadlocks > 4.5 Condition Variables > CHAPTER 4. SYNCHRONIZATION AND DEADLOCKS"
+    },
+    {
+      "title": "4.6 Semaphores",
+      "level": 3,
+      "start_line": 2313,
+      "end_line": 2334,
+      "path": "Synchronization and Deadlocks > 4.6 Semaphores"
+    },
+    {
+      "title": "4.7 Deadlock",
+      "level": 3,
+      "start_line": 2335,
+      "end_line": 2386,
+      "path": "Synchronization and Deadlocks > 4.7 Deadlock"
+    },
+    {
+      "title": "4.7.1 The Deadlock Problem",
+      "level": 4,
+      "start_line": 2387,
+      "end_line": 2456,
+      "path": "Synchronization and Deadlocks > 4.7 Deadlock > 4.7.1 The Deadlock Problem"
+    },
+    {
+      "title": "4.7.2 Deadlock Prevention Through Resource Ordering",
+      "level": 4,
+      "start_line": 2457,
+      "end_line": 2485,
+      "path": "Synchronization and Deadlocks > 4.7 Deadlock > 4.7.2 Deadlock Prevention Through Resource Ordering"
+    },
+    {
+      "title": "4.7.3 Ex Post Facto Deadlock Detection",
+      "level": 4,
+      "start_line": 2486,
+      "end_line": 2506,
+      "path": "Synchronization and Deadlocks > 4.7 Deadlock > 4.7.3 Ex Post Facto Deadlock Detection"
+    },
+    {
+      "title": "4.7.4 Immediate Deadlock Detection",
+      "level": 4,
+      "start_line": 2507,
+      "end_line": 2604,
+      "path": "Synchronization and Deadlocks > 4.7 Deadlock > 4.7.4 Immediate Deadlock Detection"
+    },
+    {
+      "title": "4.8 The Interaction of Synchronization with Scheduling",
+      "level": 3,
+      "start_line": 2605,
+      "end_line": 2608,
+      "path": "Synchronization and Deadlocks > 4.8 The Interaction of Synchronization with Scheduling"
+    },
+    {
+      "title": "4.8.1 Priority Inversion",
+      "level": 4,
+      "start_line": 2609,
+      "end_line": 2646,
+      "path": "Synchronization and Deadlocks > 4.8 The Interaction of Synchronization with Scheduling > 4.8.1 Priority Inversion"
+    },
+    {
+      "title": "4.8.2 The Convoy Phenomenon",
+      "level": 4,
+      "start_line": 2647,
+      "end_line": 2710,
+      "path": "Synchronization and Deadlocks > 4.8 The Interaction of Synchronization with Scheduling > 4.8.2 The Convoy Phenomenon"
+    },
+    {
+      "title": "4.9. NONBLOCKING SYNCHRONIZATION",
+      "level": 3,
+      "start_line": 2711,
+      "end_line": 2720,
+      "path": "Synchronization and Deadlocks > 4.9. NONBLOCKING SYNCHRONIZATION"
+    },
+    {
+      "title": "4.9 Nonblocking Synchronization",
+      "level": 3,
+      "start_line": 2721,
+      "end_line": 2738,
+      "path": "Synchronization and Deadlocks > 4.9 Nonblocking Synchronization"
+    },
+    {
+      "title": "state.compareAndSet(snapshot, next)",
+      "level": 5,
+      "start_line": 2739,
+      "end_line": 2861,
+      "path": "Synchronization and Deadlocks > 4.9 Nonblocking Synchronization > state.compareAndSet(snapshot, next)"
+    },
+    {
+      "title": "4.10 Security and Synchronization",
+      "level": 3,
+      "start_line": 2862,
+      "end_line": 2897,
+      "path": "Synchronization and Deadlocks > 4.10 Security and Synchronization"
+    },
+    {
+      "title": "Exercises",
+      "level": 4,
+      "start_line": 2898,
+      "end_line": 2956,
+      "path": "Synchronization and Deadlocks > 4.10 Security and Synchronization > Exercises"
+    },
+    {
+      "title": "4.10. SECURITY AND SYNCHRONIZATION",
+      "level": 3,
+      "start_line": 2957,
+      "end_line": 3020,
+      "path": "Synchronization and Deadlocks > 4.10. SECURITY AND SYNCHRONIZATION"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 3,
+      "start_line": 3021,
+      "end_line": 3062,
+      "path": "Synchronization and Deadlocks > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 3,
+      "start_line": 3063,
+      "end_line": 3113,
+      "path": "Synchronization and Deadlocks > Exploration Projects"
+    },
+    {
+      "title": "156",
+      "level": 5,
+      "start_line": 3114,
+      "end_line": 3133,
+      "path": "Synchronization and Deadlocks > Exploration Projects > 156"
+    },
+    {
+      "title": "Notes",
+      "level": 3,
+      "start_line": 3134,
+      "end_line": 3179,
+      "path": "Synchronization and Deadlocks > Notes"
+    },
+    {
+      "title": "Chapter 5",
+      "level": 2,
+      "start_line": 3180,
+      "end_line": 3181,
+      "path": "Synchronization and Deadlocks > Chapter 5"
+    },
+    {
+      "title": "Atomic Transactions",
+      "level": 1,
+      "start_line": 3182,
+      "end_line": 3183,
+      "path": "Atomic Transactions"
+    },
+    {
+      "title": "5.1 Introduction",
+      "level": 3,
+      "start_line": 3184,
+      "end_line": 3226,
+      "path": "Atomic Transactions > 5.1 Introduction"
+    },
+    {
+      "title": "5.2 Example Applications of Transactions",
+      "level": 3,
+      "start_line": 3227,
+      "end_line": 3230,
+      "path": "Atomic Transactions > 5.2 Example Applications of Transactions"
+    },
+    {
+      "title": "5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS",
+      "level": 3,
+      "start_line": 3231,
+      "end_line": 3234,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS"
+    },
+    {
+      "title": "5.2.1 Database Systems",
+      "level": 4,
+      "start_line": 3235,
+      "end_line": 3357,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS > 5.2.1 Database Systems"
+    },
+    {
+      "title": "5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS",
+      "level": 3,
+      "start_line": 3358,
+      "end_line": 3363,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS"
+    },
+    {
+      "title": "5.2.2 Message-Queuing Systems",
+      "level": 4,
+      "start_line": 3364,
+      "end_line": 3378,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS > 5.2.2 Message-Queuing Systems"
+    },
+    {
+      "title": "5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS",
+      "level": 3,
+      "start_line": 3379,
+      "end_line": 3392,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS"
+    },
+    {
+      "title": "troubleshooter’s request queue.)",
+      "level": 5,
+      "start_line": 3393,
+      "end_line": 3400,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS > troubleshooter’s request queue.)"
+    },
+    {
+      "title": "CHAPTER 5. ATOMIC TRANSACTIONS",
+      "level": 5,
+      "start_line": 3401,
+      "end_line": 3429,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS > CHAPTER 5. ATOMIC TRANSACTIONS"
+    },
+    {
+      "title": "174",
+      "level": 5,
+      "start_line": 3430,
+      "end_line": 3435,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS > 174"
+    },
+    {
+      "title": "5.2.3 Journaled File Systems",
+      "level": 4,
+      "start_line": 3436,
+      "end_line": 3457,
+      "path": "Atomic Transactions > 5.2. EXAMPLE APPLICATIONS OF TRANSACTIONS > 5.2.3 Journaled File Systems"
+    },
+    {
+      "title": "5.3 Mechanisms to Ensure Atomicity",
+      "level": 3,
+      "start_line": 3458,
+      "end_line": 3461,
+      "path": "Atomic Transactions > 5.3 Mechanisms to Ensure Atomicity"
+    },
+    {
+      "title": "5.3.1 Serializability: Two-Phase Locking",
+      "level": 4,
+      "start_line": 3462,
+      "end_line": 3573,
+      "path": "Atomic Transactions > 5.3 Mechanisms to Ensure Atomicity > 5.3.1 Serializability: Two-Phase Locking"
+    },
+    {
+      "title": "5.3. MECHANISMS TO ENSURE ATOMICITY",
+      "level": 3,
+      "start_line": 3574,
+      "end_line": 3646,
+      "path": "Atomic Transactions > 5.3. MECHANISMS TO ENSURE ATOMICITY"
+    },
+    {
+      "title": "5.3.2 Failure Atomicity: Undo Logging",
+      "level": 4,
+      "start_line": 3647,
+      "end_line": 3679,
+      "path": "Atomic Transactions > 5.3. MECHANISMS TO ENSURE ATOMICITY > 5.3.2 Failure Atomicity: Undo Logging"
+    },
+    {
+      "title": "5.4 Transaction Durability: Write-Ahead Logging",
+      "level": 3,
+      "start_line": 3680,
+      "end_line": 3716,
+      "path": "Atomic Transactions > 5.4 Transaction Durability: Write-Ahead Logging"
+    },
+    {
+      "title": "190",
+      "level": 5,
+      "start_line": 3717,
+      "end_line": 3718,
+      "path": "Atomic Transactions > 5.4 Transaction Durability: Write-Ahead Logging > 190"
+    },
+    {
+      "title": "CHAPTER 5. ATOMIC TRANSACTIONS",
+      "level": 5,
+      "start_line": 3719,
+      "end_line": 3759,
+      "path": "Atomic Transactions > 5.4 Transaction Durability: Write-Ahead Logging > CHAPTER 5. ATOMIC TRANSACTIONS"
+    },
+    {
+      "title": "5.5 Additional Transaction Mechanisms",
+      "level": 3,
+      "start_line": 3760,
+      "end_line": 3763,
+      "path": "Atomic Transactions > 5.5 Additional Transaction Mechanisms"
+    },
+    {
+      "title": "5.5.1 Increased Transaction Concurrency: Reduced Isolation",
+      "level": 4,
+      "start_line": 3764,
+      "end_line": 3802,
+      "path": "Atomic Transactions > 5.5 Additional Transaction Mechanisms > 5.5.1 Increased Transaction Concurrency: Reduced Isolation"
+    },
+    {
+      "title": "5.5.2 Coordinated Transaction Participants: Two-Phase Commit",
+      "level": 4,
+      "start_line": 3803,
+      "end_line": 3853,
+      "path": "Atomic Transactions > 5.5 Additional Transaction Mechanisms > 5.5.2 Coordinated Transaction Participants: Two-Phase Commit"
+    },
+    {
+      "title": "5.6 Security and Transactions",
+      "level": 3,
+      "start_line": 3854,
+      "end_line": 3883,
+      "path": "Atomic Transactions > 5.6 Security and Transactions"
+    },
+    {
+      "title": "Exercises",
+      "level": 4,
+      "start_line": 3884,
+      "end_line": 3939,
+      "path": "Atomic Transactions > 5.6 Security and Transactions > Exercises"
+    },
+    {
+      "title": "Programming Project",
+      "level": 4,
+      "start_line": 3940,
+      "end_line": 3951,
+      "path": "Atomic Transactions > 5.6 Security and Transactions > Programming Project"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 4,
+      "start_line": 3952,
+      "end_line": 3967,
+      "path": "Atomic Transactions > 5.6 Security and Transactions > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 4,
+      "start_line": 3968,
+      "end_line": 3995,
+      "path": "Atomic Transactions > 5.6 Security and Transactions > Notes"
+    },
+    {
+      "title": "Chapter 6",
+      "level": 2,
+      "start_line": 3996,
+      "end_line": 3997,
+      "path": "Atomic Transactions > Chapter 6"
+    },
+    {
+      "title": "Virtual Memory",
+      "level": 1,
+      "start_line": 3998,
+      "end_line": 3999,
+      "path": "Virtual Memory"
+    },
+    {
+      "title": "6.1 Introduction",
+      "level": 3,
+      "start_line": 4000,
+      "end_line": 4007,
+      "path": "Virtual Memory > 6.1 Introduction"
+    },
+    {
+      "title": "CHAPTER 6. VIRTUAL MEMORY",
+      "level": 5,
+      "start_line": 4008,
+      "end_line": 4047,
+      "path": "Virtual Memory > 6.1 Introduction > CHAPTER 6. VIRTUAL MEMORY"
+    },
+    {
+      "title": "CHAPTER 6. VIRTUAL MEMORY",
+      "level": 5,
+      "start_line": 4048,
+      "end_line": 4081,
+      "path": "Virtual Memory > 6.1 Introduction > CHAPTER 6. VIRTUAL MEMORY"
+    },
+    {
+      "title": "214",
+      "level": 5,
+      "start_line": 4082,
+      "end_line": 4085,
+      "path": "Virtual Memory > 6.1 Introduction > 214"
+    },
+    {
+      "title": "6.2 Uses for Virtual Memory",
+      "level": 3,
+      "start_line": 4086,
+      "end_line": 4089,
+      "path": "Virtual Memory > 6.2 Uses for Virtual Memory"
+    },
+    {
+      "title": "6.2.1 Private Storage",
+      "level": 4,
+      "start_line": 4090,
+      "end_line": 4101,
+      "path": "Virtual Memory > 6.2 Uses for Virtual Memory > 6.2.1 Private Storage"
+    },
+    {
+      "title": "6.2. USES FOR VIRTUAL MEMORY",
+      "level": 3,
+      "start_line": 4102,
+      "end_line": 4109,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY"
+    },
+    {
+      "title": "6.2.2 Controlled Sharing",
+      "level": 4,
+      "start_line": 4110,
+      "end_line": 4143,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.2 Controlled Sharing"
+    },
+    {
+      "title": "CHAPTER 6. VIRTUAL MEMORY",
+      "level": 5,
+      "start_line": 4144,
+      "end_line": 4156,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.2 Controlled Sharing > CHAPTER 6. VIRTUAL MEMORY"
+    },
+    {
+      "title": "6.2.3 Flexible Memory Allocation",
+      "level": 4,
+      "start_line": 4157,
+      "end_line": 4173,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.3 Flexible Memory Allocation"
+    },
+    {
+      "title": "220",
+      "level": 5,
+      "start_line": 4174,
+      "end_line": 4183,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.3 Flexible Memory Allocation > 220"
+    },
+    {
+      "title": "6.2.4 Sparse Address Spaces",
+      "level": 4,
+      "start_line": 4184,
+      "end_line": 4228,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.4 Sparse Address Spaces"
+    },
+    {
+      "title": "6.2.5 Persistence",
+      "level": 4,
+      "start_line": 4229,
+      "end_line": 4236,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.5 Persistence"
+    },
+    {
+      "title": "6.2. USES FOR VIRTUAL MEMORY",
+      "level": 3,
+      "start_line": 4237,
+      "end_line": 4244,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY"
+    },
+    {
+      "title": "6.2.6 Demand-Driven Program Loading",
+      "level": 4,
+      "start_line": 4245,
+      "end_line": 4252,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.6 Demand-Driven Program Loading"
+    },
+    {
+      "title": "224",
+      "level": 5,
+      "start_line": 4253,
+      "end_line": 4258,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.6 Demand-Driven Program Loading > 224"
+    },
+    {
+      "title": "6.2.7 Efficient Zero Filling",
+      "level": 4,
+      "start_line": 4259,
+      "end_line": 4268,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.7 Efficient Zero Filling"
+    },
+    {
+      "title": "6.2. USES FOR VIRTUAL MEMORY",
+      "level": 3,
+      "start_line": 4269,
+      "end_line": 4274,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY"
+    },
+    {
+      "title": "6.2.8 Substituting Disk Storage for RAM",
+      "level": 4,
+      "start_line": 4275,
+      "end_line": 4284,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.8 Substituting Disk Storage for RAM"
+    },
+    {
+      "title": "226",
+      "level": 5,
+      "start_line": 4285,
+      "end_line": 4286,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.8 Substituting Disk Storage for RAM > 226"
+    },
+    {
+      "title": "CHAPTER 6. VIRTUAL MEMORY",
+      "level": 5,
+      "start_line": 4287,
+      "end_line": 4290,
+      "path": "Virtual Memory > 6.2. USES FOR VIRTUAL MEMORY > 6.2.8 Substituting Disk Storage for RAM > CHAPTER 6. VIRTUAL MEMORY"
+    },
+    {
+      "title": "6.3 Mechanisms for Virtual Memory",
+      "level": 3,
+      "start_line": 4291,
+      "end_line": 4300,
+      "path": "Virtual Memory > 6.3 Mechanisms for Virtual Memory"
+    },
+    {
+      "title": "6.3. MECHANISMS FOR VIRTUAL MEMORY",
+      "level": 3,
+      "start_line": 4301,
+      "end_line": 4331,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY"
+    },
+    {
+      "title": "6.3.1 Software/Hardware Interface",
+      "level": 4,
+      "start_line": 4332,
+      "end_line": 4375,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.1 Software/Hardware Interface"
+    },
+    {
+      "title": "232",
+      "level": 5,
+      "start_line": 4376,
+      "end_line": 4379,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.1 Software/Hardware Interface > 232"
+    },
+    {
+      "title": "6.3.2 Linear Page Tables",
+      "level": 4,
+      "start_line": 4380,
+      "end_line": 4389,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.2 Linear Page Tables"
+    },
+    {
+      "title": "6.3. MECHANISMS FOR VIRTUAL MEMORY",
+      "level": 3,
+      "start_line": 4390,
+      "end_line": 4466,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY"
+    },
+    {
+      "title": "6.3.3 Multilevel Page Tables",
+      "level": 4,
+      "start_line": 4467,
+      "end_line": 4478,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.3 Multilevel Page Tables"
+    },
+    {
+      "title": "238",
+      "level": 5,
+      "start_line": 4479,
+      "end_line": 4522,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.3 Multilevel Page Tables > 238"
+    },
+    {
+      "title": "6.3. MECHANISMS FOR VIRTUAL MEMORY",
+      "level": 3,
+      "start_line": 4523,
+      "end_line": 4540,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY"
+    },
+    {
+      "title": "242",
+      "level": 5,
+      "start_line": 4541,
+      "end_line": 4548,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 242"
+    },
+    {
+      "title": "6.3.4 Hashed Page Tables",
+      "level": 4,
+      "start_line": 4549,
+      "end_line": 4566,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.4 Hashed Page Tables"
+    },
+    {
+      "title": "244",
+      "level": 5,
+      "start_line": 4567,
+      "end_line": 4568,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.4 Hashed Page Tables > 244"
+    },
+    {
+      "title": "CHAPTER 6. VIRTUAL MEMORY",
+      "level": 5,
+      "start_line": 4569,
+      "end_line": 4595,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.4 Hashed Page Tables > CHAPTER 6. VIRTUAL MEMORY"
+    },
+    {
+      "title": "6.3.5 Segmentation",
+      "level": 4,
+      "start_line": 4596,
+      "end_line": 4651,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 6.3.5 Segmentation"
+    },
+    {
+      "title": "6.3. MECHANISMS FOR VIRTUAL MEMORY",
+      "level": 3,
+      "start_line": 4652,
+      "end_line": 4676,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY"
+    },
+    {
+      "title": "250",
+      "level": 5,
+      "start_line": 4677,
+      "end_line": 4680,
+      "path": "Virtual Memory > 6.3. MECHANISMS FOR VIRTUAL MEMORY > 250"
+    },
+    {
+      "title": "6.4 Policies for Virtual Memory",
+      "level": 3,
+      "start_line": 4681,
+      "end_line": 4694,
+      "path": "Virtual Memory > 6.4 Policies for Virtual Memory"
+    },
+    {
+      "title": "6.4.1 Fetch Policy",
+      "level": 4,
+      "start_line": 4695,
+      "end_line": 4718,
+      "path": "Virtual Memory > 6.4 Policies for Virtual Memory > 6.4.1 Fetch Policy"
+    },
+    {
+      "title": "6.4.2 Placement Policy",
+      "level": 4,
+      "start_line": 4719,
+      "end_line": 4730,
+      "path": "Virtual Memory > 6.4 Policies for Virtual Memory > 6.4.2 Placement Policy"
+    },
+    {
+      "title": "254",
+      "level": 5,
+      "start_line": 4731,
+      "end_line": 4740,
+      "path": "Virtual Memory > 6.4 Policies for Virtual Memory > 6.4.2 Placement Policy > 254"
+    },
+    {
+      "title": "6.4.3 Replacement Policy",
+      "level": 4,
+      "start_line": 4741,
+      "end_line": 4795,
+      "path": "Virtual Memory > 6.4 Policies for Virtual Memory > 6.4.3 Replacement Policy"
+    },
+    {
+      "title": "CHAPTER 6. VIRTUAL MEMORY",
+      "level": 5,
+      "start_line": 4796,
+      "end_line": 4804,
+      "path": "Virtual Memory > 6.4 Policies for Virtual Memory > 6.4.3 Replacement Policy > CHAPTER 6. VIRTUAL MEMORY"
+    },
+    {
+      "title": "mance phenomenon.",
+      "level": 5,
+      "start_line": 4805,
+      "end_line": 4826,
+      "path": "Virtual Memory > 6.4 Policies for Virtual Memory > 6.4.3 Replacement Policy > mance phenomenon."
+    },
+    {
+      "title": "6.5 Security and Virtual Memory",
+      "level": 3,
+      "start_line": 4827,
+      "end_line": 4838,
+      "path": "Virtual Memory > 6.5 Security and Virtual Memory"
+    },
+    {
+      "title": "6.5. SECURITY AND VIRTUAL MEMORY",
+      "level": 3,
+      "start_line": 4839,
+      "end_line": 4842,
+      "path": "Virtual Memory > 6.5. SECURITY AND VIRTUAL MEMORY"
+    },
+    {
+      "title": "Exercises",
+      "level": 3,
+      "start_line": 4843,
+      "end_line": 4896,
+      "path": "Virtual Memory > Exercises"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 3,
+      "start_line": 4897,
+      "end_line": 4902,
+      "path": "Virtual Memory > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 3,
+      "start_line": 4903,
+      "end_line": 4906,
+      "path": "Virtual Memory > Exploration Projects"
+    },
+    {
+      "title": "cat /proc/` _n_ `/maps",
+      "level": 5,
+      "start_line": 4907,
+      "end_line": 4959,
+      "path": "Virtual Memory > Exploration Projects > cat /proc/` _n_ `/maps"
+    },
+    {
+      "title": "Notes",
+      "level": 3,
+      "start_line": 4960,
+      "end_line": 4981,
+      "path": "Virtual Memory > Notes"
+    },
+    {
+      "title": "Chapter 7",
+      "level": 2,
+      "start_line": 4982,
+      "end_line": 4983,
+      "path": "Virtual Memory > Chapter 7"
+    },
+    {
+      "title": "Processes and Protection",
+      "level": 1,
+      "start_line": 4984,
+      "end_line": 4985,
+      "path": "Processes and Protection"
+    },
+    {
+      "title": "7.1 Introduction",
+      "level": 3,
+      "start_line": 4986,
+      "end_line": 5013,
+      "path": "Processes and Protection > 7.1 Introduction"
+    },
+    {
+      "title": "7.2 POSIX Process Management API",
+      "level": 3,
+      "start_line": 5014,
+      "end_line": 5017,
+      "path": "Processes and Protection > 7.2 POSIX Process Management API"
+    },
+    {
+      "title": "including by Mac OS X.",
+      "level": 5,
+      "start_line": 5018,
+      "end_line": 5233,
+      "path": "Processes and Protection > 7.2 POSIX Process Management API > including by Mac OS X."
+    },
+    {
+      "title": "7.3. PROTECTING MEMORY",
+      "level": 3,
+      "start_line": 5234,
+      "end_line": 5239,
+      "path": "Processes and Protection > 7.3. PROTECTING MEMORY"
+    },
+    {
+      "title": "7.3 Protecting Memory",
+      "level": 3,
+      "start_line": 5240,
+      "end_line": 5245,
+      "path": "Processes and Protection > 7.3 Protecting Memory"
+    },
+    {
+      "title": "7.3.1 The Foundation of Protection: Two Processor Modes",
+      "level": 4,
+      "start_line": 5246,
+      "end_line": 5282,
+      "path": "Processes and Protection > 7.3 Protecting Memory > 7.3.1 The Foundation of Protection: Two Processor Modes"
+    },
+    {
+      "title": "7.3. PROTECTING MEMORY",
+      "level": 3,
+      "start_line": 5283,
+      "end_line": 5295,
+      "path": "Processes and Protection > 7.3. PROTECTING MEMORY"
+    },
+    {
+      "title": "7.3.2 The Mainstream: Multiple Address Space Systems",
+      "level": 4,
+      "start_line": 5296,
+      "end_line": 5309,
+      "path": "Processes and Protection > 7.3. PROTECTING MEMORY > 7.3.2 The Mainstream: Multiple Address Space Systems"
+    },
+    {
+      "title": "7.3. PROTECTING MEMORY",
+      "level": 3,
+      "start_line": 5310,
+      "end_line": 5315,
+      "path": "Processes and Protection > 7.3. PROTECTING MEMORY"
+    },
+    {
+      "title": "7.3.3 An Alternative: Single Address Space Systems",
+      "level": 4,
+      "start_line": 5316,
+      "end_line": 5333,
+      "path": "Processes and Protection > 7.3. PROTECTING MEMORY > 7.3.3 An Alternative: Single Address Space Systems"
+    },
+    {
+      "title": "7.4. REPRESENTING ACCESS RIGHTS",
+      "level": 3,
+      "start_line": 5334,
+      "end_line": 5337,
+      "path": "Processes and Protection > 7.4. REPRESENTING ACCESS RIGHTS"
+    },
+    {
+      "title": "7.4 Representing Access Rights",
+      "level": 3,
+      "start_line": 5338,
+      "end_line": 5341,
+      "path": "Processes and Protection > 7.4 Representing Access Rights"
+    },
+    {
+      "title": "7.4.1 Fundamentals of Access Rights",
+      "level": 4,
+      "start_line": 5342,
+      "end_line": 5415,
+      "path": "Processes and Protection > 7.4 Representing Access Rights > 7.4.1 Fundamentals of Access Rights"
+    },
+    {
+      "title": "7.4.2 Capabilities",
+      "level": 4,
+      "start_line": 5416,
+      "end_line": 5457,
+      "path": "Processes and Protection > 7.4 Representing Access Rights > 7.4.2 Capabilities"
+    },
+    {
+      "title": "7.4. REPRESENTING ACCESS RIGHTS",
+      "level": 3,
+      "start_line": 5458,
+      "end_line": 5463,
+      "path": "Processes and Protection > 7.4. REPRESENTING ACCESS RIGHTS"
+    },
+    {
+      "title": "7.4.3 Access Control Lists and Credentials",
+      "level": 4,
+      "start_line": 5464,
+      "end_line": 5565,
+      "path": "Processes and Protection > 7.4. REPRESENTING ACCESS RIGHTS > 7.4.3 Access Control Lists and Credentials"
+    },
+    {
+      "title": "7.5 Alternative Granularities of Protection",
+      "level": 3,
+      "start_line": 5566,
+      "end_line": 5571,
+      "path": "Processes and Protection > 7.5 Alternative Granularities of Protection"
+    },
+    {
+      "title": "7.5.1 Protection Within a Process",
+      "level": 4,
+      "start_line": 5572,
+      "end_line": 5591,
+      "path": "Processes and Protection > 7.5 Alternative Granularities of Protection > 7.5.1 Protection Within a Process"
+    },
+    {
+      "title": "7.5.2 Protection of Entire Simulated Machines",
+      "level": 4,
+      "start_line": 5592,
+      "end_line": 5605,
+      "path": "Processes and Protection > 7.5 Alternative Granularities of Protection > 7.5.2 Protection of Entire Simulated Machines"
+    },
+    {
+      "title": "7.5. ALTERNATIVE GRANULARITIES OF PROTECTION",
+      "level": 3,
+      "start_line": 5606,
+      "end_line": 5641,
+      "path": "Processes and Protection > 7.5. ALTERNATIVE GRANULARITIES OF PROTECTION"
+    },
+    {
+      "title": "7.6 Security and Protection",
+      "level": 3,
+      "start_line": 5642,
+      "end_line": 5703,
+      "path": "Processes and Protection > 7.6 Security and Protection"
+    },
+    {
+      "title": "7.6. SECURITY AND PROTECTION",
+      "level": 3,
+      "start_line": 5704,
+      "end_line": 5707,
+      "path": "Processes and Protection > 7.6. SECURITY AND PROTECTION"
+    },
+    {
+      "title": "Exercises",
+      "level": 3,
+      "start_line": 5708,
+      "end_line": 5749,
+      "path": "Processes and Protection > Exercises"
+    },
+    {
+      "title": "7.6. SECURITY AND PROTECTION",
+      "level": 3,
+      "start_line": 5750,
+      "end_line": 5787,
+      "path": "Processes and Protection > 7.6. SECURITY AND PROTECTION"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 3,
+      "start_line": 5788,
+      "end_line": 5810,
+      "path": "Processes and Protection > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 3,
+      "start_line": 5811,
+      "end_line": 5850,
+      "path": "Processes and Protection > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 3,
+      "start_line": 5851,
+      "end_line": 5876,
+      "path": "Processes and Protection > Notes"
+    },
+    {
+      "title": "7.6. SECURITY AND PROTECTION",
+      "level": 3,
+      "start_line": 5877,
+      "end_line": 5882,
+      "path": "Processes and Protection > 7.6. SECURITY AND PROTECTION"
+    },
+    {
+      "title": "Chapter 8",
+      "level": 2,
+      "start_line": 5883,
+      "end_line": 5884,
+      "path": "Processes and Protection > Chapter 8"
+    },
+    {
+      "title": "Files and Other Persistent Storage",
+      "level": 1,
+      "start_line": 5885,
+      "end_line": 5886,
+      "path": "Files and Other Persistent Storage"
+    },
+    {
+      "title": "8.1 Introduction",
+      "level": 3,
+      "start_line": 5887,
+      "end_line": 5918,
+      "path": "Files and Other Persistent Storage > 8.1 Introduction"
+    },
+    {
+      "title": "336 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 5919,
+      "end_line": 5924,
+      "path": "Files and Other Persistent Storage > 8.1 Introduction > 336 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "8.2 Disk Storage Technology",
+      "level": 3,
+      "start_line": 5925,
+      "end_line": 5973,
+      "path": "Files and Other Persistent Storage > 8.2 Disk Storage Technology"
+    },
+    {
+      "title": "8.3 POSIX File API",
+      "level": 3,
+      "start_line": 5974,
+      "end_line": 5977,
+      "path": "Files and Other Persistent Storage > 8.3 POSIX File API"
+    },
+    {
+      "title": "8.3.1 File Descriptors",
+      "level": 4,
+      "start_line": 5978,
+      "end_line": 5989,
+      "path": "Files and Other Persistent Storage > 8.3 POSIX File API > 8.3.1 File Descriptors"
+    },
+    {
+      "title": "ps l >my-processes",
+      "level": 5,
+      "start_line": 5990,
+      "end_line": 6043,
+      "path": "Files and Other Persistent Storage > 8.3 POSIX File API > 8.3.1 File Descriptors > ps l >my-processes"
+    },
+    {
+      "title": "./fstater </etc/passwd",
+      "level": 5,
+      "start_line": 6044,
+      "end_line": 6087,
+      "path": "Files and Other Persistent Storage > 8.3 POSIX File API > 8.3.1 File Descriptors > ./fstater </etc/passwd"
+    },
+    {
+      "title": "8.3. POSIX FILE API",
+      "level": 3,
+      "start_line": 6088,
+      "end_line": 6091,
+      "path": "Files and Other Persistent Storage > 8.3. POSIX FILE API"
+    },
+    {
+      "title": "8.3.2 Mapping Files into Virtual Memory",
+      "level": 4,
+      "start_line": 6092,
+      "end_line": 6159,
+      "path": "Files and Other Persistent Storage > 8.3. POSIX FILE API > 8.3.2 Mapping Files into Virtual Memory"
+    },
+    {
+      "title": "348 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6160,
+      "end_line": 6163,
+      "path": "Files and Other Persistent Storage > 8.3. POSIX FILE API > 8.3.2 Mapping Files into Virtual Memory > 348 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "8.3.3 Reading and Writing Files at Specified Positions",
+      "level": 4,
+      "start_line": 6164,
+      "end_line": 6175,
+      "path": "Files and Other Persistent Storage > 8.3. POSIX FILE API > 8.3.3 Reading and Writing Files at Specified Positions"
+    },
+    {
+      "title": "8.3.4 Sequential Reading and Writing",
+      "level": 4,
+      "start_line": 6176,
+      "end_line": 6183,
+      "path": "Files and Other Persistent Storage > 8.3. POSIX FILE API > 8.3.4 Sequential Reading and Writing"
+    },
+    {
+      "title": "(ls; ps) > information",
+      "level": 5,
+      "start_line": 6184,
+      "end_line": 6199,
+      "path": "Files and Other Persistent Storage > 8.3. POSIX FILE API > 8.3.4 Sequential Reading and Writing > (ls; ps) > information"
+    },
+    {
+      "title": "8.4 Disk Space Allocation",
+      "level": 3,
+      "start_line": 6200,
+      "end_line": 6207,
+      "path": "Files and Other Persistent Storage > 8.4 Disk Space Allocation"
+    },
+    {
+      "title": "8.4. DISK SPACE ALLOCATION",
+      "level": 3,
+      "start_line": 6208,
+      "end_line": 6213,
+      "path": "Files and Other Persistent Storage > 8.4. DISK SPACE ALLOCATION"
+    },
+    {
+      "title": "8.4.1 Fragmentation",
+      "level": 4,
+      "start_line": 6214,
+      "end_line": 6268,
+      "path": "Files and Other Persistent Storage > 8.4. DISK SPACE ALLOCATION > 8.4.1 Fragmentation"
+    },
+    {
+      "title": "354 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6269,
+      "end_line": 6276,
+      "path": "Files and Other Persistent Storage > 8.4. DISK SPACE ALLOCATION > 8.4.1 Fragmentation > 354 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "8.4.2 Locality",
+      "level": 4,
+      "start_line": 6277,
+      "end_line": 6294,
+      "path": "Files and Other Persistent Storage > 8.4. DISK SPACE ALLOCATION > 8.4.2 Locality"
+    },
+    {
+      "title": "356 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6295,
+      "end_line": 6296,
+      "path": "Files and Other Persistent Storage > 8.4. DISK SPACE ALLOCATION > 8.4.2 Locality > 356 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "8.4.3 Allocation Policies and Mechanisms",
+      "level": 4,
+      "start_line": 6297,
+      "end_line": 6328,
+      "path": "Files and Other Persistent Storage > 8.4. DISK SPACE ALLOCATION > 8.4.3 Allocation Policies and Mechanisms"
+    },
+    {
+      "title": "8.5 Metadata",
+      "level": 3,
+      "start_line": 6329,
+      "end_line": 6338,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata"
+    },
+    {
+      "title": "8.5.1 Data Location Metadata",
+      "level": 4,
+      "start_line": 6339,
+      "end_line": 6342,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata > 8.5.1 Data Location Metadata"
+    },
+    {
+      "title": "Inodes and Indirect Blocks",
+      "level": 5,
+      "start_line": 6343,
+      "end_line": 6396,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata > 8.5.1 Data Location Metadata > Inodes and Indirect Blocks"
+    },
+    {
+      "title": "362 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6397,
+      "end_line": 6404,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata > 8.5.1 Data Location Metadata > 362 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "Extent Maps",
+      "level": 5,
+      "start_line": 6405,
+      "end_line": 6429,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata > 8.5.1 Data Location Metadata > Extent Maps"
+    },
+    {
+      "title": "364 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6430,
+      "end_line": 6449,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata > 8.5.1 Data Location Metadata > 364 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "B-Trees",
+      "level": 5,
+      "start_line": 6450,
+      "end_line": 6505,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata > 8.5.1 Data Location Metadata > B-Trees"
+    },
+    {
+      "title": "8.5.2 Access Control Metadata",
+      "level": 4,
+      "start_line": 6506,
+      "end_line": 6543,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata > 8.5.2 Access Control Metadata"
+    },
+    {
+      "title": "8.5.3 Other Metadata",
+      "level": 4,
+      "start_line": 6544,
+      "end_line": 6549,
+      "path": "Files and Other Persistent Storage > 8.5 Metadata > 8.5.3 Other Metadata"
+    },
+    {
+      "title": "8.6 Directories and Indexing",
+      "level": 3,
+      "start_line": 6550,
+      "end_line": 6553,
+      "path": "Files and Other Persistent Storage > 8.6 Directories and Indexing"
+    },
+    {
+      "title": "8.6.1 File Directories Versus Database Indexes",
+      "level": 4,
+      "start_line": 6554,
+      "end_line": 6571,
+      "path": "Files and Other Persistent Storage > 8.6 Directories and Indexing > 8.6.1 File Directories Versus Database Indexes"
+    },
+    {
+      "title": "8.6.2 Using Indexes to Locate Files",
+      "level": 4,
+      "start_line": 6572,
+      "end_line": 6581,
+      "path": "Files and Other Persistent Storage > 8.6 Directories and Indexing > 8.6.2 Using Indexes to Locate Files"
+    },
+    {
+      "title": "374 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6582,
+      "end_line": 6587,
+      "path": "Files and Other Persistent Storage > 8.6 Directories and Indexing > 8.6.2 Using Indexes to Locate Files > 374 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "8.6.3 File Linking",
+      "level": 4,
+      "start_line": 6588,
+      "end_line": 6620,
+      "path": "Files and Other Persistent Storage > 8.6 Directories and Indexing > 8.6.3 File Linking"
+    },
+    {
+      "title": "376 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6621,
+      "end_line": 6662,
+      "path": "Files and Other Persistent Storage > 8.6 Directories and Indexing > 8.6.3 File Linking > 376 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "378 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6663,
+      "end_line": 6664,
+      "path": "Files and Other Persistent Storage > 8.6 Directories and Indexing > 8.6.3 File Linking > 378 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "8.6.4 Directory and Index Data Structures",
+      "level": 4,
+      "start_line": 6665,
+      "end_line": 6680,
+      "path": "Files and Other Persistent Storage > 8.6 Directories and Indexing > 8.6.4 Directory and Index Data Structures"
+    },
+    {
+      "title": "8.7 Metadata Integrity",
+      "level": 3,
+      "start_line": 6681,
+      "end_line": 6728,
+      "path": "Files and Other Persistent Storage > 8.7 Metadata Integrity"
+    },
+    {
+      "title": "8.8 Polymorphism in File System Implementations",
+      "level": 3,
+      "start_line": 6729,
+      "end_line": 6736,
+      "path": "Files and Other Persistent Storage > 8.8 Polymorphism in File System Implementations"
+    },
+    {
+      "title": "384 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6737,
+      "end_line": 6740,
+      "path": "Files and Other Persistent Storage > 8.8 Polymorphism in File System Implementations > 384 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "8.9 Security and Persistent Storage",
+      "level": 3,
+      "start_line": 6741,
+      "end_line": 6782,
+      "path": "Files and Other Persistent Storage > 8.9 Security and Persistent Storage"
+    },
+    {
+      "title": "386 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_",
+      "level": 5,
+      "start_line": 6783,
+      "end_line": 6792,
+      "path": "Files and Other Persistent Storage > 8.9 Security and Persistent Storage > 386 _CHAPTER 8. FILES AND OTHER PERSISTENT STORAGE_"
+    },
+    {
+      "title": "Exercises",
+      "level": 3,
+      "start_line": 6793,
+      "end_line": 6832,
+      "path": "Files and Other Persistent Storage > Exercises"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 3,
+      "start_line": 6833,
+      "end_line": 6860,
+      "path": "Files and Other Persistent Storage > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 3,
+      "start_line": 6861,
+      "end_line": 6916,
+      "path": "Files and Other Persistent Storage > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 3,
+      "start_line": 6917,
+      "end_line": 6940,
+      "path": "Files and Other Persistent Storage > Notes"
+    },
+    {
+      "title": "Chapter 9",
+      "level": 2,
+      "start_line": 6941,
+      "end_line": 6942,
+      "path": "Files and Other Persistent Storage > Chapter 9"
+    },
+    {
+      "title": "Networking",
+      "level": 1,
+      "start_line": 6943,
+      "end_line": 6944,
+      "path": "Networking"
+    },
+    {
+      "title": "9.1 Introduction",
+      "level": 3,
+      "start_line": 6945,
+      "end_line": 6950,
+      "path": "Networking > 9.1 Introduction"
+    },
+    {
+      "title": "9.1.1 Networks and Internets",
+      "level": 4,
+      "start_line": 6951,
+      "end_line": 6979,
+      "path": "Networking > 9.1 Introduction > 9.1.1 Networks and Internets"
+    },
+    {
+      "title": "CHAPTER 9. NETWORKING",
+      "level": 5,
+      "start_line": 6980,
+      "end_line": 6988,
+      "path": "Networking > 9.1 Introduction > 9.1.1 Networks and Internets > CHAPTER 9. NETWORKING"
+    },
+    {
+      "title": "the destination network’s mechanisms.",
+      "level": 5,
+      "start_line": 6989,
+      "end_line": 6992,
+      "path": "Networking > 9.1 Introduction > 9.1.1 Networks and Internets > the destination network’s mechanisms."
+    },
+    {
+      "title": "9.1.2 Protocol Layers",
+      "level": 4,
+      "start_line": 6993,
+      "end_line": 7022,
+      "path": "Networking > 9.1 Introduction > 9.1.2 Protocol Layers"
+    },
+    {
+      "title": "9.1. INTRODUCTION",
+      "level": 3,
+      "start_line": 7023,
+      "end_line": 7033,
+      "path": "Networking > 9.1. INTRODUCTION"
+    },
+    {
+      "title": "9.1.3 The End-to-End Principle",
+      "level": 4,
+      "start_line": 7034,
+      "end_line": 7041,
+      "path": "Networking > 9.1. INTRODUCTION > 9.1.3 The End-to-End Principle"
+    },
+    {
+      "title": "402",
+      "level": 5,
+      "start_line": 7042,
+      "end_line": 7047,
+      "path": "Networking > 9.1. INTRODUCTION > 9.1.3 The End-to-End Principle > 402"
+    },
+    {
+      "title": "9.1.4 The Networking Roles of Operating Systems, Middleware, and Application Software",
+      "level": 4,
+      "start_line": 7048,
+      "end_line": 7063,
+      "path": "Networking > 9.1. INTRODUCTION > 9.1.4 The Networking Roles of Operating Systems, Middleware, and Application Software"
+    },
+    {
+      "title": "9.2 The Application Layer",
+      "level": 3,
+      "start_line": 7064,
+      "end_line": 7067,
+      "path": "Networking > 9.2 The Application Layer"
+    },
+    {
+      "title": "9.2.1 The Web as a Typical Example",
+      "level": 4,
+      "start_line": 7068,
+      "end_line": 7147,
+      "path": "Networking > 9.2 The Application Layer > 9.2.1 The Web as a Typical Example"
+    },
+    {
+      "title": "ETag: W/\"30ba07-b94-21857f40\"",
+      "level": 5,
+      "start_line": 7148,
+      "end_line": 7151,
+      "path": "Networking > 9.2 The Application Layer > 9.2.1 The Web as a Typical Example > ETag: W/\"30ba07-b94-21857f40\""
+    },
+    {
+      "title": "9.2.2 The Domain Name System: Application Layer as Infrastructure",
+      "level": 4,
+      "start_line": 7152,
+      "end_line": 7187,
+      "path": "Networking > 9.2 The Application Layer > 9.2.2 The Domain Name System: Application Layer as Infrastructure"
+    },
+    {
+      "title": "9.2.3 Distributed File Systems: An Application Viewed Through Operating Systems",
+      "level": 4,
+      "start_line": 7188,
+      "end_line": 7193,
+      "path": "Networking > 9.2 The Application Layer > 9.2.3 Distributed File Systems: An Application Viewed Through Operating Systems"
+    },
+    {
+      "title": "410",
+      "level": 5,
+      "start_line": 7194,
+      "end_line": 7203,
+      "path": "Networking > 9.2 The Application Layer > 9.2.3 Distributed File Systems: An Application Viewed Through Operating Systems > 410"
+    },
+    {
+      "title": "9.3. THE TRANSPORT LAYER",
+      "level": 3,
+      "start_line": 7204,
+      "end_line": 7207,
+      "path": "Networking > 9.3. THE TRANSPORT LAYER"
+    },
+    {
+      "title": "9.3 The Transport Layer",
+      "level": 3,
+      "start_line": 7208,
+      "end_line": 7217,
+      "path": "Networking > 9.3 The Transport Layer"
+    },
+    {
+      "title": "9.3.1 Socket APIs",
+      "level": 4,
+      "start_line": 7218,
+      "end_line": 7308,
+      "path": "Networking > 9.3 The Transport Layer > 9.3.1 Socket APIs"
+    },
+    {
+      "title": "416",
+      "level": 5,
+      "start_line": 7309,
+      "end_line": 7316,
+      "path": "Networking > 9.3 The Transport Layer > 9.3.1 Socket APIs > 416"
+    },
+    {
+      "title": "java Client localhost test-message",
+      "level": 5,
+      "start_line": 7317,
+      "end_line": 7358,
+      "path": "Networking > 9.3 The Transport Layer > 9.3.1 Socket APIs > java Client localhost test-message"
+    },
+    {
+      "title": "9.3.2 TCP, the Dominant Transport Protocol",
+      "level": 4,
+      "start_line": 7359,
+      "end_line": 7378,
+      "path": "Networking > 9.3 The Transport Layer > 9.3.2 TCP, the Dominant Transport Protocol"
+    },
+    {
+      "title": "420",
+      "level": 5,
+      "start_line": 7379,
+      "end_line": 7388,
+      "path": "Networking > 9.3 The Transport Layer > 9.3.2 TCP, the Dominant Transport Protocol > 420"
+    },
+    {
+      "title": "9.3.3 Evolution Within and Beyond TCP",
+      "level": 4,
+      "start_line": 7389,
+      "end_line": 7398,
+      "path": "Networking > 9.3 The Transport Layer > 9.3.3 Evolution Within and Beyond TCP"
+    },
+    {
+      "title": "422",
+      "level": 5,
+      "start_line": 7399,
+      "end_line": 7404,
+      "path": "Networking > 9.3 The Transport Layer > 9.3.3 Evolution Within and Beyond TCP > 422"
+    },
+    {
+      "title": "9.4 The Network Layer",
+      "level": 3,
+      "start_line": 7405,
+      "end_line": 7408,
+      "path": "Networking > 9.4 The Network Layer"
+    },
+    {
+      "title": "9.4.1 IP, Versions 4 and 6",
+      "level": 4,
+      "start_line": 7409,
+      "end_line": 7444,
+      "path": "Networking > 9.4 The Network Layer > 9.4.1 IP, Versions 4 and 6"
+    },
+    {
+      "title": "9.4. THE NETWORK LAYER",
+      "level": 3,
+      "start_line": 7445,
+      "end_line": 7452,
+      "path": "Networking > 9.4. THE NETWORK LAYER"
+    },
+    {
+      "title": "9.4.2 Routing and Label Switching",
+      "level": 4,
+      "start_line": 7453,
+      "end_line": 7460,
+      "path": "Networking > 9.4. THE NETWORK LAYER > 9.4.2 Routing and Label Switching"
+    },
+    {
+      "title": "426",
+      "level": 5,
+      "start_line": 7461,
+      "end_line": 7468,
+      "path": "Networking > 9.4. THE NETWORK LAYER > 9.4.2 Routing and Label Switching > 426"
+    },
+    {
+      "title": "9.4.3 Network Address Translation: An End to End-to-End?",
+      "level": 4,
+      "start_line": 7469,
+      "end_line": 7504,
+      "path": "Networking > 9.4. THE NETWORK LAYER > 9.4.3 Network Address Translation: An End to End-to-End?"
+    },
+    {
+      "title": "9.5. THE LINK AND PHYSICAL LAYERS",
+      "level": 3,
+      "start_line": 7505,
+      "end_line": 7512,
+      "path": "Networking > 9.5. THE LINK AND PHYSICAL LAYERS"
+    },
+    {
+      "title": "9.5 The Link and Physical Layers",
+      "level": 3,
+      "start_line": 7513,
+      "end_line": 7528,
+      "path": "Networking > 9.5 The Link and Physical Layers"
+    },
+    {
+      "title": "9.6 Network Security",
+      "level": 3,
+      "start_line": 7529,
+      "end_line": 7544,
+      "path": "Networking > 9.6 Network Security"
+    },
+    {
+      "title": "9.6.1 Security and the Protocol Layers",
+      "level": 4,
+      "start_line": 7545,
+      "end_line": 7556,
+      "path": "Networking > 9.6 Network Security > 9.6.1 Security and the Protocol Layers"
+    },
+    {
+      "title": "9.6. NETWORK SECURITY",
+      "level": 3,
+      "start_line": 7557,
+      "end_line": 7568,
+      "path": "Networking > 9.6. NETWORK SECURITY"
+    },
+    {
+      "title": "9.6.2 Firewalls and Intrusion Detection Systems",
+      "level": 4,
+      "start_line": 7569,
+      "end_line": 7580,
+      "path": "Networking > 9.6. NETWORK SECURITY > 9.6.2 Firewalls and Intrusion Detection Systems"
+    },
+    {
+      "title": "9.6. NETWORK SECURITY",
+      "level": 3,
+      "start_line": 7581,
+      "end_line": 7588,
+      "path": "Networking > 9.6. NETWORK SECURITY"
+    },
+    {
+      "title": "9.6.3 Cryptography",
+      "level": 4,
+      "start_line": 7589,
+      "end_line": 7627,
+      "path": "Networking > 9.6. NETWORK SECURITY > 9.6.3 Cryptography"
+    },
+    {
+      "title": "438",
+      "level": 5,
+      "start_line": 7628,
+      "end_line": 7644,
+      "path": "Networking > 9.6. NETWORK SECURITY > 9.6.3 Cryptography > 438"
+    },
+    {
+      "title": "440",
+      "level": 5,
+      "start_line": 7645,
+      "end_line": 7650,
+      "path": "Networking > 9.6. NETWORK SECURITY > 9.6.3 Cryptography > 440"
+    },
+    {
+      "title": "Exercises",
+      "level": 3,
+      "start_line": 7651,
+      "end_line": 7662,
+      "path": "Networking > Exercises"
+    },
+    {
+      "title": "9.6. NETWORK SECURITY",
+      "level": 3,
+      "start_line": 7663,
+      "end_line": 7742,
+      "path": "Networking > 9.6. NETWORK SECURITY"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 3,
+      "start_line": 7743,
+      "end_line": 7750,
+      "path": "Networking > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 3,
+      "start_line": 7751,
+      "end_line": 7778,
+      "path": "Networking > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 3,
+      "start_line": 7779,
+      "end_line": 7782,
+      "path": "Networking > Notes"
+    },
+    {
+      "title": "Chapter 10",
+      "level": 2,
+      "start_line": 7783,
+      "end_line": 7784,
+      "path": "Networking > Chapter 10"
+    },
+    {
+      "title": "Messaging, RPC, and Web Services",
+      "level": 1,
+      "start_line": 7785,
+      "end_line": 7786,
+      "path": "Messaging, RPC, and Web Services"
+    },
+    {
+      "title": "10.1 Introduction",
+      "level": 3,
+      "start_line": 7787,
+      "end_line": 7798,
+      "path": "Messaging, RPC, and Web Services > 10.1 Introduction"
+    },
+    {
+      "title": "10.2 Messaging Systems",
+      "level": 3,
+      "start_line": 7799,
+      "end_line": 7827,
+      "path": "Messaging, RPC, and Web Services > 10.2 Messaging Systems"
+    },
+    {
+      "title": "450",
+      "level": 5,
+      "start_line": 7828,
+      "end_line": 7867,
+      "path": "Messaging, RPC, and Web Services > 10.2 Messaging Systems > 450"
+    },
+    {
+      "title": "10.3 Remote Procedure Call",
+      "level": 3,
+      "start_line": 7868,
+      "end_line": 7873,
+      "path": "Messaging, RPC, and Web Services > 10.3 Remote Procedure Call"
+    },
+    {
+      "title": "10.3.1 Principles of Operation for RPC",
+      "level": 4,
+      "start_line": 7874,
+      "end_line": 7879,
+      "path": "Messaging, RPC, and Web Services > 10.3 Remote Procedure Call > 10.3.1 Principles of Operation for RPC"
+    },
+    {
+      "title": "Client",
+      "level": 6,
+      "start_line": 7880,
+      "end_line": 7908,
+      "path": "Messaging, RPC, and Web Services > 10.3 Remote Procedure Call > 10.3.1 Principles of Operation for RPC > Client"
+    },
+    {
+      "title": "Distributed system",
+      "level": 6,
+      "start_line": 7909,
+      "end_line": 7927,
+      "path": "Messaging, RPC, and Web Services > 10.3 Remote Procedure Call > 10.3.1 Principles of Operation for RPC > Distributed system"
+    },
+    {
+      "title": "10.3. REMOTE PROCEDURE CALL",
+      "level": 3,
+      "start_line": 7928,
+      "end_line": 7935,
+      "path": "Messaging, RPC, and Web Services > 10.3. REMOTE PROCEDURE CALL"
+    },
+    {
+      "title": "10.3.2 An Example Using Java RMI",
+      "level": 4,
+      "start_line": 7936,
+      "end_line": 8138,
+      "path": "Messaging, RPC, and Web Services > 10.3. REMOTE PROCEDURE CALL > 10.3.2 An Example Using Java RMI"
+    },
+    {
+      "title": "10.4 Web Services",
+      "level": 3,
+      "start_line": 8139,
+      "end_line": 8144,
+      "path": "Messaging, RPC, and Web Services > 10.4 Web Services"
+    },
+    {
+      "title": "10.5 Security and Communication Middleware",
+      "level": 3,
+      "start_line": 8145,
+      "end_line": 8212,
+      "path": "Messaging, RPC, and Web Services > 10.5 Security and Communication Middleware"
+    },
+    {
+      "title": "Exercises",
+      "level": 4,
+      "start_line": 8213,
+      "end_line": 8232,
+      "path": "Messaging, RPC, and Web Services > 10.5 Security and Communication Middleware > Exercises"
+    },
+    {
+      "title": "464",
+      "level": 5,
+      "start_line": 8233,
+      "end_line": 8238,
+      "path": "Messaging, RPC, and Web Services > 10.5 Security and Communication Middleware > Exercises > 464"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 4,
+      "start_line": 8239,
+      "end_line": 8260,
+      "path": "Messaging, RPC, and Web Services > 10.5 Security and Communication Middleware > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 4,
+      "start_line": 8261,
+      "end_line": 8266,
+      "path": "Messaging, RPC, and Web Services > 10.5 Security and Communication Middleware > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 4,
+      "start_line": 8267,
+      "end_line": 8270,
+      "path": "Messaging, RPC, and Web Services > 10.5 Security and Communication Middleware > Notes"
+    },
+    {
+      "title": "Chapter 11",
+      "level": 2,
+      "start_line": 8271,
+      "end_line": 8272,
+      "path": "Messaging, RPC, and Web Services > Chapter 11"
+    },
+    {
+      "title": "Security",
+      "level": 1,
+      "start_line": 8273,
+      "end_line": 8274,
+      "path": "Security"
+    },
+    {
+      "title": "11.1 Introduction",
+      "level": 3,
+      "start_line": 8275,
+      "end_line": 8286,
+      "path": "Security > 11.1 Introduction"
+    },
+    {
+      "title": "468",
+      "level": 5,
+      "start_line": 8287,
+      "end_line": 8292,
+      "path": "Security > 11.1 Introduction > 468"
+    },
+    {
+      "title": "11.2 Security Objectives and Principles",
+      "level": 3,
+      "start_line": 8293,
+      "end_line": 8314,
+      "path": "Security > 11.2 Security Objectives and Principles"
+    },
+    {
+      "title": "of a successful attack.",
+      "level": 5,
+      "start_line": 8315,
+      "end_line": 8368,
+      "path": "Security > 11.2 Security Objectives and Principles > of a successful attack."
+    },
+    {
+      "title": "11.3 User Authentication",
+      "level": 3,
+      "start_line": 8369,
+      "end_line": 8392,
+      "path": "Security > 11.3 User Authentication"
+    },
+    {
+      "title": "11.3.1 Password Capture Using Spoofing and Phishing",
+      "level": 4,
+      "start_line": 8393,
+      "end_line": 8402,
+      "path": "Security > 11.3 User Authentication > 11.3.1 Password Capture Using Spoofing and Phishing"
+    },
+    {
+      "title": "11.3.2 Checking Passwords Without Storing Them",
+      "level": 4,
+      "start_line": 8403,
+      "end_line": 8406,
+      "path": "Security > 11.3 User Authentication > 11.3.2 Checking Passwords Without Storing Them"
+    },
+    {
+      "title": "11.3.3 Passwords for Multiple, Independent Systems",
+      "level": 4,
+      "start_line": 8407,
+      "end_line": 8412,
+      "path": "Security > 11.3 User Authentication > 11.3.3 Passwords for Multiple, Independent Systems"
+    },
+    {
+      "title": "11.3.4 Two-Factor Authentication",
+      "level": 4,
+      "start_line": 8413,
+      "end_line": 8437,
+      "path": "Security > 11.3 User Authentication > 11.3.4 Two-Factor Authentication"
+    },
+    {
+      "title": "11.4 Access and Information-Flow Controls",
+      "level": 3,
+      "start_line": 8438,
+      "end_line": 8453,
+      "path": "Security > 11.4 Access and Information-Flow Controls"
+    },
+    {
+      "title": "482",
+      "level": 5,
+      "start_line": 8454,
+      "end_line": 8497,
+      "path": "Security > 11.4 Access and Information-Flow Controls > 482"
+    },
+    {
+      "title": "11.5 Viruses and Worms",
+      "level": 3,
+      "start_line": 8498,
+      "end_line": 8501,
+      "path": "Security > 11.5 Viruses and Worms"
+    },
+    {
+      "title": "486",
+      "level": 5,
+      "start_line": 8502,
+      "end_line": 8550,
+      "path": "Security > 11.5 Viruses and Worms > 486"
+    },
+    {
+      "title": "11.6 Security Assurance",
+      "level": 3,
+      "start_line": 8551,
+      "end_line": 8588,
+      "path": "Security > 11.6 Security Assurance"
+    },
+    {
+      "title": "11.7 Security Monitoring",
+      "level": 3,
+      "start_line": 8589,
+      "end_line": 8624,
+      "path": "Security > 11.7 Security Monitoring"
+    },
+    {
+      "title": "494",
+      "level": 5,
+      "start_line": 8625,
+      "end_line": 8630,
+      "path": "Security > 11.7 Security Monitoring > 494"
+    },
+    {
+      "title": "11.8 Key Security Best Practices",
+      "level": 3,
+      "start_line": 8631,
+      "end_line": 8670,
+      "path": "Security > 11.8 Key Security Best Practices"
+    },
+    {
+      "title": "Exercises",
+      "level": 4,
+      "start_line": 8671,
+      "end_line": 8770,
+      "path": "Security > 11.8 Key Security Best Practices > Exercises"
+    },
+    {
+      "title": "Programming Projects",
+      "level": 4,
+      "start_line": 8771,
+      "end_line": 8780,
+      "path": "Security > 11.8 Key Security Best Practices > Programming Projects"
+    },
+    {
+      "title": "Exploration Projects",
+      "level": 4,
+      "start_line": 8781,
+      "end_line": 8800,
+      "path": "Security > 11.8 Key Security Best Practices > Exploration Projects"
+    },
+    {
+      "title": "Notes",
+      "level": 4,
+      "start_line": 8801,
+      "end_line": 8818,
+      "path": "Security > 11.8 Key Security Best Practices > Notes"
+    },
+    {
+      "title": "Appendix A",
+      "level": 2,
+      "start_line": 8819,
+      "end_line": 8820,
+      "path": "Security > Appendix A"
+    },
+    {
+      "title": "Stacks",
+      "level": 1,
+      "start_line": 8821,
+      "end_line": 8826,
+      "path": "Stacks"
+    },
+    {
+      "title": "A.1 Stack-Allocated Storage: The Concept",
+      "level": 3,
+      "start_line": 8827,
+      "end_line": 8844,
+      "path": "Stacks > A.1 Stack-Allocated Storage: The Concept"
+    },
+    {
+      "title": "A.2 Representing a Stack in Memory",
+      "level": 3,
+      "start_line": 8845,
+      "end_line": 8858,
+      "path": "Stacks > A.2 Representing a Stack in Memory"
+    },
+    {
+      "title": "A.3 Using a Stack for Procedure Activations",
+      "level": 3,
+      "start_line": 8859,
+      "end_line": 8866,
+      "path": "Stacks > A.3 Using a Stack for Procedure Activations"
+    },
+    {
+      "title": "A.3. USING A STACK FOR PROCEDURE ACTIVATIONS",
+      "level": 3,
+      "start_line": 8867,
+      "end_line": 8891,
+      "path": "Stacks > A.3. USING A STACK FOR PROCEDURE ACTIVATIONS"
+    },
+    {
+      "title": "Bibliography",
+      "level": 1,
+      "start_line": 8892,
+      "end_line": 8981,
+      "path": "Bibliography"
+    },
+    {
+      "title": "BIBLIOGRAPHY",
+      "level": 5,
+      "start_line": 8982,
+      "end_line": 9215,
+      "path": "Bibliography > BIBLIOGRAPHY"
+    },
+    {
+      "title": "BIBLIOGRAPHY",
+      "level": 5,
+      "start_line": 9216,
+      "end_line": 9219,
+      "path": "Bibliography > BIBLIOGRAPHY"
+    },
+    {
+      "title": "Index",
+      "level": 1,
+      "start_line": 9220,
+      "end_line": 9233,
+      "path": "Index"
+    },
+    {
+      "title": "INDEX",
+      "level": 5,
+      "start_line": 9234,
+      "end_line": 9259,
+      "path": "Index > INDEX"
+    }
+  ],
+  "structure_file": "hailperin-osm.structure.json",
+  "structure_sha256": "37004ad369d0215488c89f1c2a3d7d428aa674651d27b32eaf931e213bf893d8"
+}

@@ -1,0 +1,10 @@
+# Downloaded, regenerable or local run state. Everything else here is committed.
+*/sources/
+*/embeddings/
+*/indexes/
+*/judge-attempts/
+*/judge-state/
+*/runs/*/
+*/logs/
+*/sources.lock.json
+*.lock

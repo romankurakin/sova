@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "corpus_id": "os-architectures-v1",
+  "source_lock_sha256": "98b4c2dfe0a749c9f54c2eabf8c606b4771c665882a1f708c2207c2fc7c59b37",
+  "status": "reading_copies_ready",
+  "documents": [
+    {
+      "source_id": "loongarch-vol1",
+      "source_sha256": "ef1213bcd2c3b9170a058c87fd2cee0e9739f0e0733a9cdc176fa24c1b3f3b9d",
+      "extractor": {
+        "code_sha256": "64b1cb65c71bb047b037bb7746d61a3442e909b4ad64af08dd26e6ba12f97636",
+        "structure_code_sha256": "dff50269b69426b3df1c9295aa2e4737a76bdb921ccdc3f22fcb4f3bf4e780f3",
+        "packages": {
+          "PyMuPDF": "1.28.2",
+          "pymupdf4llm": "1.28.2",
+          "pymupdf-layout": "1.28.2"
+        },
+        "method": "sova.extract.extract_pdf",
+        "section_parser": "sova.extract.parse_sections"
+      },
+      "markdown": "loongarch-vol1.md",
+      "markdown_sha256": "5ce76e3e5f021dda06a23cae5d7d5325dd5fd73d4bbf509bc18aa31c793f6938",
+      "lines": 7654,
+      "characters": 457401,
+      "section_count": 306,
+      "structure_file": "loongarch-vol1.structure.json",
+      "structure_sha256": "8736403a1495d23e9bb9eb9487b1b50b421a078b55a19f4091e44b6b10eebb7f",
+      "sections_file": "loongarch-vol1.sections.json",
+      "sections_sha256": "1858dc218e89f23906775c24b4ef8d29cdf2cdaff6362b23157b965629cf08cb"
+    },
+    {
+      "source_id": "riscv-privileged",
+      "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+      "extractor": {
+        "code_sha256": "64b1cb65c71bb047b037bb7746d61a3442e909b4ad64af08dd26e6ba12f97636",
+        "structure_code_sha256": "dff50269b69426b3df1c9295aa2e4737a76bdb921ccdc3f22fcb4f3bf4e780f3",
+        "packages": {
+          "PyMuPDF": "1.28.2",
+          "pymupdf4llm": "1.28.2",
+          "pymupdf-layout": "1.28.2"
+        },
+        "method": "sova.extract.extract_pdf",
+        "section_parser": "sova.extract.parse_sections"
+      },
+      "markdown": "riscv-privileged.md",
+      "markdown_sha256": "21ac66efca333435cf4190a7db1772d405f6fd8926d782f56943bf7438c53a60",
+      "lines": 7226,
+      "characters": 606812,
+      "section_count": 294,
+      "structure_file": "riscv-privileged.structure.json",
+      "structure_sha256": "9b8c6843bb45a2ab0b6811300d290a459d3ed1b817910296dff47a9f08734aa7",
+      "sections_file": "riscv-privileged.sections.json",
+      "sections_sha256": "ebfd0bf1a9a97125bba93ccd90b523e22cfdfcc01010bbb9b5f675bd9f474b80"
+    },
+    {
+      "source_id": "riscv-unprivileged",
+      "source_sha256": "cef2e63c08c6f82cf7acc9056a589954f5b1adf6f7dccaa38cd75278b093e984",
+      "extractor": {
+        "code_sha256": "64b1cb65c71bb047b037bb7746d61a3442e909b4ad64af08dd26e6ba12f97636",
+        "structure_code_sha256": "dff50269b69426b3df1c9295aa2e4737a76bdb921ccdc3f22fcb4f3bf4e780f3",
+        "packages": {
+          "PyMuPDF": "1.28.2",
+          "pymupdf4llm": "1.28.2",
+          "pymupdf-layout": "1.28.2"
+        },
+        "method": "sova.extract.extract_pdf",
+        "section_parser": "sova.extract.parse_sections"
+      },
+      "markdown": "riscv-unprivileged.md",
+      "markdown_sha256": "0753dc62ac6559656b450823c2bc1fb720a8660fb638c2f6702f81b1fe50868d",
+      "lines": 28094,
+      "characters": 1433796,
+      "section_count": 1825,
+      "structure_file": "riscv-unprivileged.structure.json",
+      "structure_sha256": "3d26c1cbf2269fff9001cf8f7f3a364755042821bd228a294e84df502646359b",
+      "sections_file": "riscv-unprivileged.sections.json",
+      "sections_sha256": "7c17d8060c63d2ef675b8df03286aca5e2ae07ce0a039d02032cdb42bd1e98cc"
+    },
+    {
+      "source_id": "xv6-riscv",
+      "source_sha256": "05c902ecc0a5c2fd147a3f77719b740ac454f9a28941d57d8cbce849c0539f49",
+      "extractor": {
+        "code_sha256": "64b1cb65c71bb047b037bb7746d61a3442e909b4ad64af08dd26e6ba12f97636",
+        "structure_code_sha256": "dff50269b69426b3df1c9295aa2e4737a76bdb921ccdc3f22fcb4f3bf4e780f3",
+        "packages": {
+          "PyMuPDF": "1.28.2",
+          "pymupdf4llm": "1.28.2",
+          "pymupdf-layout": "1.28.2"
+        },
+        "method": "sova.extract.extract_pdf",
+        "section_parser": "sova.extract.parse_sections"
+      },
+      "markdown": "xv6-riscv.md",
+      "markdown_sha256": "6ce00848fbda4838df82e123e7b3b284a77741f01111a8091c8c8122be2baf6e",
+      "lines": 2020,
+      "characters": 277448,
+      "section_count": 119,
+      "structure_file": "xv6-riscv.structure.json",
+      "structure_sha256": "1012e6cd2d6fb3ecb4f88cda445b91ec3788f649a6ea5046782a924f7e1e2468",
+      "sections_file": "xv6-riscv.sections.json",
+      "sections_sha256": "42457c7119d4d0a75845b944e659f4b67f736ff8453971cc28cde62c420b438e"
+    },
+    {
+      "source_id": "hailperin-osm",
+      "source_sha256": "35acb5ec62dd5c7e190bd9f64e4fabf82303b9304c54b849c4eaed2f4416cc92",
+      "extractor": {
+        "code_sha256": "64b1cb65c71bb047b037bb7746d61a3442e909b4ad64af08dd26e6ba12f97636",
+        "structure_code_sha256": "dff50269b69426b3df1c9295aa2e4737a76bdb921ccdc3f22fcb4f3bf4e780f3",
+        "packages": {
+          "PyMuPDF": "1.28.2",
+          "pymupdf4llm": "1.28.2",
+          "pymupdf-layout": "1.28.2"
+        },
+        "method": "sova.extract.extract_pdf",
+        "section_parser": "sova.extract.parse_sections"
+      },
+      "markdown": "hailperin-osm.md",
+      "markdown_sha256": "78302d686c7af96b4fbdd3154ff80b01288029b737d243afc826b8e9c168b4b7",
+      "lines": 9259,
+      "characters": 1210522,
+      "section_count": 385,
+      "structure_file": "hailperin-osm.structure.json",
+      "structure_sha256": "37004ad369d0215488c89f1c2a3d7d428aa674651d27b32eaf931e213bf893d8",
+      "sections_file": "hailperin-osm.sections.json",
+      "sections_sha256": "7825a62cca547fda76cdcacde2899508ef15e97c21a4dde7a44f5affd7a0f898"
+    }
+  ]
+}

@@ -1,0 +1,2082 @@
+{
+  "source_id": "riscv-privileged",
+  "source_sha256": "d0228bbecc76943aaa5685e381e0263a8c750d18b1b0c452b086b0ddd15a4955",
+  "extractor": {
+    "code_sha256": "64b1cb65c71bb047b037bb7746d61a3442e909b4ad64af08dd26e6ba12f97636",
+    "structure_code_sha256": "dff50269b69426b3df1c9295aa2e4737a76bdb921ccdc3f22fcb4f3bf4e780f3",
+    "packages": {
+      "PyMuPDF": "1.28.2",
+      "pymupdf4llm": "1.28.2",
+      "pymupdf-layout": "1.28.2"
+    },
+    "method": "sova.extract.extract_pdf",
+    "section_parser": "sova.extract.parse_sections"
+  },
+  "markdown": "riscv-privileged.md",
+  "markdown_sha256": "21ac66efca333435cf4190a7db1772d405f6fd8926d782f56943bf7438c53a60",
+  "lines": 7226,
+  "characters": 606812,
+  "section_count": 294,
+  "sections": [
+    {
+      "title": "Table of Contents",
+      "level": 1,
+      "start_line": 12,
+      "end_line": 291,
+      "path": "Table of Contents"
+    },
+    {
+      "title": "Preamble",
+      "level": 1,
+      "start_line": 292,
+      "end_line": 299,
+      "path": "Preamble"
+    },
+    {
+      "title": "Preface",
+      "level": 1,
+      "start_line": 300,
+      "end_line": 301,
+      "path": "Preface"
+    },
+    {
+      "title": "_Preface to Version 20250508_",
+      "level": 3,
+      "start_line": 302,
+      "end_line": 349,
+      "path": "Preface > _Preface to Version 20250508_"
+    },
+    {
+      "title": "_Preface to Version 20241101_",
+      "level": 3,
+      "start_line": 350,
+      "end_line": 355,
+      "path": "Preface > _Preface to Version 20241101_"
+    },
+    {
+      "title": "expected to change before ratification.",
+      "level": 4,
+      "start_line": 356,
+      "end_line": 385,
+      "path": "Preface > _Preface to Version 20241101_ > expected to change before ratification."
+    },
+    {
+      "title": "_Preface to Version 20241017_",
+      "level": 3,
+      "start_line": 386,
+      "end_line": 472,
+      "path": "Preface > _Preface to Version 20241017_"
+    },
+    {
+      "title": "_Preface to Version 20211203_",
+      "level": 3,
+      "start_line": 473,
+      "end_line": 551,
+      "path": "Preface > _Preface to Version 20211203_"
+    },
+    {
+      "title": "_Preface to Version 1.11_",
+      "level": 3,
+      "start_line": 552,
+      "end_line": 611,
+      "path": "Preface > _Preface to Version 1.11_"
+    },
+    {
+      "title": "_Preface to Version 1.10_",
+      "level": 3,
+      "start_line": 612,
+      "end_line": 661,
+      "path": "Preface > _Preface to Version 1.10_"
+    },
+    {
+      "title": "_Preface to Version 1.9.1_",
+      "level": 3,
+      "start_line": 662,
+      "end_line": 677,
+      "path": "Preface > _Preface to Version 1.9.1_"
+    },
+    {
+      "title": "Chapter 1. Introduction",
+      "level": 1,
+      "start_line": 678,
+      "end_line": 687,
+      "path": "Chapter 1. Introduction"
+    },
+    {
+      "title": "1.1. RISC-V Privileged Software Stack Terminology",
+      "level": 2,
+      "start_line": 688,
+      "end_line": 714,
+      "path": "Chapter 1. Introduction > 1.1. RISC-V Privileged Software Stack Terminology"
+    },
+    {
+      "title": "1.2. Privilege Levels",
+      "level": 2,
+      "start_line": 715,
+      "end_line": 759,
+      "path": "Chapter 1. Introduction > 1.2. Privilege Levels"
+    },
+    {
+      "title": "1.3. Debug Mode",
+      "level": 2,
+      "start_line": 760,
+      "end_line": 763,
+      "path": "Chapter 1. Introduction > 1.3. Debug Mode"
+    },
+    {
+      "title": "Chapter 2. Control and Status Registers (CSRs)",
+      "level": 1,
+      "start_line": 764,
+      "end_line": 771,
+      "path": "Chapter 2. Control and Status Registers (CSRs)"
+    },
+    {
+      "title": "2.1. CSR Address Mapping Conventions",
+      "level": 2,
+      "start_line": 772,
+      "end_line": 791,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.1. CSR Address Mapping Conventions"
+    },
+    {
+      "title": "2.2. CSR Listing",
+      "level": 2,
+      "start_line": 792,
+      "end_line": 1055,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.2. CSR Listing"
+    },
+    {
+      "title": "2.3. CSR Field Specifications",
+      "level": 2,
+      "start_line": 1056,
+      "end_line": 1059,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.3. CSR Field Specifications"
+    },
+    {
+      "title": "2.3.1. Reserved Writes Preserve Values, Reads Ignore Values (WPRI)",
+      "level": 3,
+      "start_line": 1060,
+      "end_line": 1065,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.3. CSR Field Specifications > 2.3.1. Reserved Writes Preserve Values, Reads Ignore Values (WPRI)"
+    },
+    {
+      "title": "2.3.2. Write/Read Only Legal Values (WLRL)",
+      "level": 3,
+      "start_line": 1066,
+      "end_line": 1073,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.3. CSR Field Specifications > 2.3.2. Write/Read Only Legal Values (WLRL)"
+    },
+    {
+      "title": "2.3.3. Write Any Values, Reads Legal Values (WARL)",
+      "level": 3,
+      "start_line": 1074,
+      "end_line": 1079,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.3. CSR Field Specifications > 2.3.3. Write Any Values, Reads Legal Values (WARL)"
+    },
+    {
+      "title": "2.4. CSR Field Modulation",
+      "level": 2,
+      "start_line": 1080,
+      "end_line": 1089,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.4. CSR Field Modulation"
+    },
+    {
+      "title": "2.5. Implicit Reads of CSRs",
+      "level": 2,
+      "start_line": 1090,
+      "end_line": 1093,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.5. Implicit Reads of CSRs"
+    },
+    {
+      "title": "2.6. CSR Width Modulation",
+      "level": 2,
+      "start_line": 1094,
+      "end_line": 1107,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.6. CSR Width Modulation"
+    },
+    {
+      "title": "2.7. Explicit Accesses to CSRs Wider than XLEN",
+      "level": 2,
+      "start_line": 1108,
+      "end_line": 1117,
+      "path": "Chapter 2. Control and Status Registers (CSRs) > 2.7. Explicit Accesses to CSRs Wider than XLEN"
+    },
+    {
+      "title": "Chapter 3. Machine-Level ISA, Version 1.13",
+      "level": 1,
+      "start_line": 1118,
+      "end_line": 1121,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13"
+    },
+    {
+      "title": "3.1. Machine-Level CSRs",
+      "level": 2,
+      "start_line": 1122,
+      "end_line": 1125,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs"
+    },
+    {
+      "title": "3.1.1. Machine ISA (** **`misa` ) Register",
+      "level": 3,
+      "start_line": 1126,
+      "end_line": 1231,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.1. Machine ISA (** **`misa` ) Register"
+    },
+    {
+      "title": "3.1.2. Machine Vendor ID (** **`mvendorid` ) Register",
+      "level": 3,
+      "start_line": 1232,
+      "end_line": 1250,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.2. Machine Vendor ID (** **`mvendorid` ) Register"
+    },
+    {
+      "title": "3.1.3. Machine Architecture ID (** **`marchid` ) Register",
+      "level": 3,
+      "start_line": 1251,
+      "end_line": 1266,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.3. Machine Architecture ID (** **`marchid` ) Register"
+    },
+    {
+      "title": "3.1.4. Machine Implementation ID (** **`mimpid` ) Register",
+      "level": 3,
+      "start_line": 1267,
+      "end_line": 1276,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.4. Machine Implementation ID (** **`mimpid` ) Register"
+    },
+    {
+      "title": "3.1.5. Hart ID (** **`mhartid` ) Register",
+      "level": 3,
+      "start_line": 1277,
+      "end_line": 1292,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.5. Hart ID (** **`mhartid` ) Register"
+    },
+    {
+      "title": "3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers",
+      "level": 3,
+      "start_line": 1293,
+      "end_line": 1303,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers"
+    },
+    {
+      "title": "Figure 7. Machine-mode status (_ `mstatus` _) register for RV32",
+      "level": 4,
+      "start_line": 1304,
+      "end_line": 1336,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > Figure 7. Machine-mode status (_ `mstatus` _) register for RV32"
+    },
+    {
+      "title": "3.1.6.1. Privilege and Global Interrupt-Enable Stack in** **`mstatus` register",
+      "level": 4,
+      "start_line": 1337,
+      "end_line": 1364,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.1. Privilege and Global Interrupt-Enable Stack in** **`mstatus` register"
+    },
+    {
+      "title": "3.1.6.2. Double Trap Control in** **`mstatus` Register",
+      "level": 4,
+      "start_line": 1365,
+      "end_line": 1386,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.2. Double Trap Control in** **`mstatus` Register"
+    },
+    {
+      "title": "3.1.6.3. Base ISA Control in** **`mstatus` Register",
+      "level": 4,
+      "start_line": 1387,
+      "end_line": 1408,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.3. Base ISA Control in** **`mstatus` Register"
+    },
+    {
+      "title": "3.1.6.4. Memory Privilege in** **`mstatus` Register",
+      "level": 4,
+      "start_line": 1409,
+      "end_line": 1428,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.4. Memory Privilege in** **`mstatus` Register"
+    },
+    {
+      "title": "3.1.6.5. Endianness Control in** **`mstatus` and** **`mstatush` Registers",
+      "level": 4,
+      "start_line": 1429,
+      "end_line": 1458,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.5. Endianness Control in** **`mstatus` and** **`mstatush` Registers"
+    },
+    {
+      "title": "3.1.6.6. Virtualization Support in** **`mstatus` Register",
+      "level": 4,
+      "start_line": 1459,
+      "end_line": 1478,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.6. Virtualization Support in** **`mstatus` Register"
+    },
+    {
+      "title": "3.1.6.7. Extension Context Status in** **`mstatus` Register",
+      "level": 4,
+      "start_line": 1479,
+      "end_line": 1521,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.7. Extension Context Status in** **`mstatus` Register"
+    },
+    {
+      "title": "can all be initialized to the immediate value 0.",
+      "level": 5,
+      "start_line": 1522,
+      "end_line": 1599,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.7. Extension Context Status in** **`mstatus` Register > can all be initialized to the immediate value 0."
+    },
+    {
+      "title": "3.1.6.8. Previous Expected Landing Pad (ELP) State in** **`mstatus` Register",
+      "level": 4,
+      "start_line": 1600,
+      "end_line": 1607,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.6. Machine Status (** **`mstatus` and** **`mstatush` ) Registers > 3.1.6.8. Previous Expected Landing Pad (ELP) State in** **`mstatus` Register"
+    },
+    {
+      "title": "3.1.7. Machine Trap-Vector Base-Address (** **`mtvec` ) Register",
+      "level": 3,
+      "start_line": 1608,
+      "end_line": 1617,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.7. Machine Trap-Vector Base-Address (** **`mtvec` ) Register"
+    },
+    {
+      "title": "Figure 10. Encoding of mtvec MODE field.",
+      "level": 4,
+      "start_line": 1618,
+      "end_line": 1643,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.7. Machine Trap-Vector Base-Address (** **`mtvec` ) Register > Figure 10. Encoding of mtvec MODE field."
+    },
+    {
+      "title": "3.1.8. Machine Trap Delegation (** **`medeleg` and** **`mideleg` ) Registers",
+      "level": 3,
+      "start_line": 1644,
+      "end_line": 1688,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.8. Machine Trap Delegation (** **`medeleg` and** **`mideleg` ) Registers"
+    },
+    {
+      "title": "3.1.9. Machine Interrupt (** **`mip` and** **`mie` ) Registers",
+      "level": 3,
+      "start_line": 1689,
+      "end_line": 1694,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.9. Machine Interrupt (** **`mip` and** **`mie` ) Registers"
+    },
+    {
+      "title": "Figure 13. Machine Interrupt-Pending (_ `mip` _) register.",
+      "level": 4,
+      "start_line": 1695,
+      "end_line": 1707,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.9. Machine Interrupt (** **`mip` and** **`mie` ) Registers > Figure 13. Machine Interrupt-Pending (_ `mip` _) register."
+    },
+    {
+      "title": "Figure 14. Machine Interrupt-Enable (_ `mie` _) register",
+      "level": 4,
+      "start_line": 1708,
+      "end_line": 1785,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.9. Machine Interrupt (** **`mip` and** **`mie` ) Registers > Figure 14. Machine Interrupt-Enable (_ `mie` _) register"
+    },
+    {
+      "title": "3.1.10. Hardware Performance Monitor",
+      "level": 3,
+      "start_line": 1786,
+      "end_line": 1812,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.10. Hardware Performance Monitor"
+    },
+    {
+      "title": "3.1.11. Machine Counter-Enable (** **`mcounteren` ) Register",
+      "level": 3,
+      "start_line": 1813,
+      "end_line": 1840,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.11. Machine Counter-Enable (** **`mcounteren` ) Register"
+    },
+    {
+      "title": "privileged modes in M-mode software.",
+      "level": 4,
+      "start_line": 1841,
+      "end_line": 1844,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.11. Machine Counter-Enable (** **`mcounteren` ) Register > privileged modes in M-mode software."
+    },
+    {
+      "title": "3.1.12. Machine Counter-Inhibit (** **`mcountinhibit` ) Register",
+      "level": 3,
+      "start_line": 1845,
+      "end_line": 1872,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.12. Machine Counter-Inhibit (** **`mcountinhibit` ) Register"
+    },
+    {
+      "title": "3.1.13. Machine Scratch (** **`mscratch` ) Register",
+      "level": 3,
+      "start_line": 1873,
+      "end_line": 1889,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.13. Machine Scratch (** **`mscratch` ) Register"
+    },
+    {
+      "title": "3.1.14. Machine Exception Program Counter (** **`mepc` ) Register",
+      "level": 3,
+      "start_line": 1890,
+      "end_line": 1910,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.14. Machine Exception Program Counter (** **`mepc` ) Register"
+    },
+    {
+      "title": "3.1.15. Machine Cause (** **`mcause` ) Register",
+      "level": 3,
+      "start_line": 1911,
+      "end_line": 1937,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.15. Machine Cause (** **`mcause` ) Register"
+    },
+    {
+      "title": "Table 14. Machine cause (_ `mcause` _) register values after trap.",
+      "level": 4,
+      "start_line": 1938,
+      "end_line": 2020,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.15. Machine Cause (** **`mcause` ) Register > Table 14. Machine cause (_ `mcause` _) register values after trap."
+    },
+    {
+      "title": "3.1.16. Machine Trap Value (** **`mtval` ) Register",
+      "level": 3,
+      "start_line": 2021,
+      "end_line": 2040,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.16. Machine Trap Value (** **`mtval` ) Register"
+    },
+    {
+      "title": "⚫ the first MXLEN bits of the faulting instruction",
+      "level": 4,
+      "start_line": 2041,
+      "end_line": 2064,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.16. Machine Trap Value (** **`mtval` ) Register > ⚫ the first MXLEN bits of the faulting instruction"
+    },
+    {
+      "title": "3.1.17. Machine Configuration Pointer (** **`mconfigptr` ) Register",
+      "level": 3,
+      "start_line": 2065,
+      "end_line": 2082,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.17. Machine Configuration Pointer (** **`mconfigptr` ) Register"
+    },
+    {
+      "title": "3.1.18. Machine Environment Configuration (** **`menvcfg` ) Register",
+      "level": 3,
+      "start_line": 2083,
+      "end_line": 2161,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.18. Machine Environment Configuration (** **`menvcfg` ) Register"
+    },
+    {
+      "title": "3.1.19. Machine Security Configuration (** **`mseccfg` ) Register",
+      "level": 3,
+      "start_line": 2162,
+      "end_line": 2193,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.1. Machine-Level CSRs > 3.1.19. Machine Security Configuration (** **`mseccfg` ) Register"
+    },
+    {
+      "title": "3.2. Machine-Level Memory-Mapped Registers",
+      "level": 2,
+      "start_line": 2194,
+      "end_line": 2195,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.2. Machine-Level Memory-Mapped Registers"
+    },
+    {
+      "title": "3.2.1. Machine Timer (** **`mtime` and** **`mtimecmp` ) Registers",
+      "level": 3,
+      "start_line": 2196,
+      "end_line": 2239,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.2. Machine-Level Memory-Mapped Registers > 3.2.1. Machine Timer (** **`mtime` and** **`mtimecmp` ) Registers"
+    },
+    {
+      "title": "3.3. Machine-Mode Privileged Instructions",
+      "level": 2,
+      "start_line": 2240,
+      "end_line": 2241,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.3. Machine-Mode Privileged Instructions"
+    },
+    {
+      "title": "3.3.1. Environment Call and Breakpoint",
+      "level": 3,
+      "start_line": 2242,
+      "end_line": 2264,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.3. Machine-Mode Privileged Instructions > 3.3.1. Environment Call and Breakpoint"
+    },
+    {
+      "title": "3.3.2. Trap-Return Instructions",
+      "level": 3,
+      "start_line": 2265,
+      "end_line": 2281,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.3. Machine-Mode Privileged Instructions > 3.3.2. Trap-Return Instructions"
+    },
+    {
+      "title": "3.3.3. Wait for Interrupt",
+      "level": 3,
+      "start_line": 2282,
+      "end_line": 2318,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.3. Machine-Mode Privileged Instructions > 3.3.3. Wait for Interrupt"
+    },
+    {
+      "title": "3.3.4. Custom SYSTEM Instructions",
+      "level": 3,
+      "start_line": 2319,
+      "end_line": 2338,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.3. Machine-Mode Privileged Instructions > 3.3.4. Custom SYSTEM Instructions"
+    },
+    {
+      "title": "3.4. Reset",
+      "level": 2,
+      "start_line": 2339,
+      "end_line": 2350,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.4. Reset"
+    },
+    {
+      "title": "3.5. Non-Maskable Interrupts",
+      "level": 2,
+      "start_line": 2351,
+      "end_line": 2358,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.5. Non-Maskable Interrupts"
+    },
+    {
+      "title": "3.6. Physical Memory Attributes",
+      "level": 2,
+      "start_line": 2359,
+      "end_line": 2374,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes"
+    },
+    {
+      "title": "3.6.1. Main Memory versus I/O Regions",
+      "level": 3,
+      "start_line": 2375,
+      "end_line": 2380,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.1. Main Memory versus I/O Regions"
+    },
+    {
+      "title": "3.6.2. Supported Access Type PMAs",
+      "level": 3,
+      "start_line": 2381,
+      "end_line": 2398,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.2. Supported Access Type PMAs"
+    },
+    {
+      "title": "3.6.3. Atomicity PMAs",
+      "level": 3,
+      "start_line": 2399,
+      "end_line": 2404,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.3. Atomicity PMAs"
+    },
+    {
+      "title": "3.6.3.1. AMO PMA",
+      "level": 4,
+      "start_line": 2405,
+      "end_line": 2425,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.3. Atomicity PMAs > 3.6.3.1. AMO PMA"
+    },
+    {
+      "title": "3.6.3.2. Reservability PMA",
+      "level": 4,
+      "start_line": 2426,
+      "end_line": 2435,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.3. Atomicity PMAs > 3.6.3.2. Reservability PMA"
+    },
+    {
+      "title": "3.6.4. Misaligned Atomicity Granule PMA",
+      "level": 3,
+      "start_line": 2436,
+      "end_line": 2447,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.4. Misaligned Atomicity Granule PMA"
+    },
+    {
+      "title": "3.6.5. Memory-Ordering PMAs",
+      "level": 3,
+      "start_line": 2448,
+      "end_line": 2471,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.5. Memory-Ordering PMAs"
+    },
+    {
+      "title": "3.6.6. Coherence and Cacheability PMAs",
+      "level": 3,
+      "start_line": 2472,
+      "end_line": 2499,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.6. Coherence and Cacheability PMAs"
+    },
+    {
+      "title": "3.6.7. Idempotency PMAs",
+      "level": 3,
+      "start_line": 2500,
+      "end_line": 2513,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.6. Physical Memory Attributes > 3.6.7. Idempotency PMAs"
+    },
+    {
+      "title": "3.7. Physical Memory Protection",
+      "level": 2,
+      "start_line": 2514,
+      "end_line": 2525,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.7. Physical Memory Protection"
+    },
+    {
+      "title": "3.7.1. Physical Memory Protection CSRs",
+      "level": 3,
+      "start_line": 2526,
+      "end_line": 2599,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.7. Physical Memory Protection > 3.7.1. Physical Memory Protection CSRs"
+    },
+    {
+      "title": "3.7.1.1. Address Matching",
+      "level": 4,
+      "start_line": 2600,
+      "end_line": 2646,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.7. Physical Memory Protection > 3.7.1. Physical Memory Protection CSRs > 3.7.1.1. Address Matching"
+    },
+    {
+      "title": "3.7.1.2. Locking and Privilege Mode",
+      "level": 4,
+      "start_line": 2647,
+      "end_line": 2654,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.7. Physical Memory Protection > 3.7.1. Physical Memory Protection CSRs > 3.7.1.2. Locking and Privilege Mode"
+    },
+    {
+      "title": "3.7.1.3. Priority and Matching Logic",
+      "level": 4,
+      "start_line": 2655,
+      "end_line": 2668,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.7. Physical Memory Protection > 3.7.1. Physical Memory Protection CSRs > 3.7.1.3. Priority and Matching Logic"
+    },
+    {
+      "title": "3.7.2. Physical Memory Protection and Paging",
+      "level": 3,
+      "start_line": 2669,
+      "end_line": 2678,
+      "path": "Chapter 3. Machine-Level ISA, Version 1.13 > 3.7. Physical Memory Protection > 3.7.2. Physical Memory Protection and Paging"
+    },
+    {
+      "title": "Chapter 4. \"Smstateen/Ssstateen\" Extensions, Version 1.0",
+      "level": 1,
+      "start_line": 2679,
+      "end_line": 2688,
+      "path": "Chapter 4. \"Smstateen/Ssstateen\" Extensions, Version 1.0"
+    },
+    {
+      "title": "4.1. State Enable Extensions",
+      "level": 2,
+      "start_line": 2689,
+      "end_line": 2736,
+      "path": "Chapter 4. \"Smstateen/Ssstateen\" Extensions, Version 1.0 > 4.1. State Enable Extensions"
+    },
+    {
+      "title": "4.2. State Enable 0 Registers",
+      "level": 2,
+      "start_line": 2737,
+      "end_line": 2792,
+      "path": "Chapter 4. \"Smstateen/Ssstateen\" Extensions, Version 1.0 > 4.2. State Enable 0 Registers"
+    },
+    {
+      "title": "4.3. Usage",
+      "level": 2,
+      "start_line": 2793,
+      "end_line": 2834,
+      "path": "Chapter 4. \"Smstateen/Ssstateen\" Extensions, Version 1.0 > 4.3. Usage"
+    },
+    {
+      "title": "Chapter 5. \"Smcsrind/Sscsrind\" Indirect CSR Access, Version 1.0",
+      "level": 1,
+      "start_line": 2835,
+      "end_line": 2836,
+      "path": "Chapter 5. \"Smcsrind/Sscsrind\" Indirect CSR Access, Version 1.0"
+    },
+    {
+      "title": "5.1. Introduction",
+      "level": 2,
+      "start_line": 2837,
+      "end_line": 2854,
+      "path": "Chapter 5. \"Smcsrind/Sscsrind\" Indirect CSR Access, Version 1.0 > 5.1. Introduction"
+    },
+    {
+      "title": "5.2. Machine-level CSRs",
+      "level": 2,
+      "start_line": 2855,
+      "end_line": 2898,
+      "path": "Chapter 5. \"Smcsrind/Sscsrind\" Indirect CSR Access, Version 1.0 > 5.2. Machine-level CSRs"
+    },
+    {
+      "title": "5.3. Supervisor-level CSRs",
+      "level": 2,
+      "start_line": 2899,
+      "end_line": 2935,
+      "path": "Chapter 5. \"Smcsrind/Sscsrind\" Indirect CSR Access, Version 1.0 > 5.3. Supervisor-level CSRs"
+    },
+    {
+      "title": "5.4. Virtual Supervisor-level CSRs",
+      "level": 2,
+      "start_line": 2936,
+      "end_line": 2975,
+      "path": "Chapter 5. \"Smcsrind/Sscsrind\" Indirect CSR Access, Version 1.0 > 5.4. Virtual Supervisor-level CSRs"
+    },
+    {
+      "title": "5.5. Access control by the state-enable CSRs",
+      "level": 2,
+      "start_line": 2976,
+      "end_line": 2987,
+      "path": "Chapter 5. \"Smcsrind/Sscsrind\" Indirect CSR Access, Version 1.0 > 5.5. Access control by the state-enable CSRs"
+    },
+    {
+      "title": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0",
+      "level": 1,
+      "start_line": 2988,
+      "end_line": 2989,
+      "path": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0"
+    },
+    {
+      "title": "6.1. Introduction",
+      "level": 2,
+      "start_line": 2990,
+      "end_line": 3013,
+      "path": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0 > 6.1. Introduction"
+    },
+    {
+      "title": "6.1.1. Threat model",
+      "level": 3,
+      "start_line": 3014,
+      "end_line": 3021,
+      "path": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0 > 6.1. Introduction > 6.1.1. Threat model"
+    },
+    {
+      "title": "6.2. Proposal",
+      "level": 2,
+      "start_line": 3022,
+      "end_line": 3059,
+      "path": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0 > 6.2. Proposal"
+    },
+    {
+      "title": "6.2.1. Truth table when mseccfg.MML is set",
+      "level": 3,
+      "start_line": 3060,
+      "end_line": 3089,
+      "path": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0 > 6.2. Proposal > 6.2.1. Truth table when mseccfg.MML is set"
+    },
+    {
+      "title": "6.2.2. Visual representation of the proposal",
+      "level": 3,
+      "start_line": 3090,
+      "end_line": 3096,
+      "path": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0 > 6.2. Proposal > 6.2.2. Visual representation of the proposal"
+    },
+    {
+      "title": "6.3. Smepmp software discovery",
+      "level": 2,
+      "start_line": 3097,
+      "end_line": 3102,
+      "path": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0 > 6.3. Smepmp software discovery"
+    },
+    {
+      "title": "6.4. Rationale",
+      "level": 2,
+      "start_line": 3103,
+      "end_line": 3152,
+      "path": "Chapter 6. \"Smepmp\" Extension for PMP Enhancements for memory access and execution prevention in Machine mode, Version 1.0 > 6.4. Rationale"
+    },
+    {
+      "title": "Chapter 7. \"Smcntrpmf\" Cycle and Instret Privilege Mode Filtering, Version 1.0",
+      "level": 1,
+      "start_line": 3153,
+      "end_line": 3154,
+      "path": "Chapter 7. \"Smcntrpmf\" Cycle and Instret Privilege Mode Filtering, Version 1.0"
+    },
+    {
+      "title": "7.1. Introduction",
+      "level": 2,
+      "start_line": 3155,
+      "end_line": 3164,
+      "path": "Chapter 7. \"Smcntrpmf\" Cycle and Instret Privilege Mode Filtering, Version 1.0 > 7.1. Introduction"
+    },
+    {
+      "title": "7.2. CSRs",
+      "level": 2,
+      "start_line": 3165,
+      "end_line": 3166,
+      "path": "Chapter 7. \"Smcntrpmf\" Cycle and Instret Privilege Mode Filtering, Version 1.0 > 7.2. CSRs"
+    },
+    {
+      "title": "7.2.1. Machine Counter Configuration (** **`mcyclecfg` ,** **`minstretcfg` ) Registers",
+      "level": 3,
+      "start_line": 3167,
+      "end_line": 3198,
+      "path": "Chapter 7. \"Smcntrpmf\" Cycle and Instret Privilege Mode Filtering, Version 1.0 > 7.2. CSRs > 7.2.1. Machine Counter Configuration (** **`mcyclecfg` ,** **`minstretcfg` ) Registers"
+    },
+    {
+      "title": "7.3. Counter Behavior",
+      "level": 2,
+      "start_line": 3199,
+      "end_line": 3216,
+      "path": "Chapter 7. \"Smcntrpmf\" Cycle and Instret Privilege Mode Filtering, Version 1.0 > 7.3. Counter Behavior"
+    },
+    {
+      "title": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0",
+      "level": 1,
+      "start_line": 3217,
+      "end_line": 3222,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0"
+    },
+    {
+      "title": "8.1. RNMI Interrupt Signals",
+      "level": 2,
+      "start_line": 3223,
+      "end_line": 3226,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0 > 8.1. RNMI Interrupt Signals"
+    },
+    {
+      "title": "8.2. RNMI Handler Addresses",
+      "level": 2,
+      "start_line": 3227,
+      "end_line": 3234,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0 > 8.2. RNMI Handler Addresses"
+    },
+    {
+      "title": "8.3. RNMI CSRs",
+      "level": 2,
+      "start_line": 3235,
+      "end_line": 3244,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0 > 8.3. RNMI CSRs"
+    },
+    {
+      "title": "_Figure 38. Resumable NMI scratch register_ `mnscratch`",
+      "level": 4,
+      "start_line": 3245,
+      "end_line": 3255,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0 > 8.3. RNMI CSRs > _Figure 38. Resumable NMI scratch register_ `mnscratch`"
+    },
+    {
+      "title": "Figure 39. Resumable NMI program counter_ `mnepc` _.",
+      "level": 4,
+      "start_line": 3256,
+      "end_line": 3274,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0 > 8.3. RNMI CSRs > Figure 39. Resumable NMI program counter_ `mnepc` _."
+    },
+    {
+      "title": "Figure 40. Resumable NMI cause_ `mncause` _.",
+      "level": 4,
+      "start_line": 3275,
+      "end_line": 3315,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0 > 8.3. RNMI CSRs > Figure 40. Resumable NMI cause_ `mncause` _."
+    },
+    {
+      "title": "8.4. MNRET Instruction",
+      "level": 2,
+      "start_line": 3316,
+      "end_line": 3319,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0 > 8.4. MNRET Instruction"
+    },
+    {
+      "title": "8.5. RNMI Operation",
+      "level": 2,
+      "start_line": 3320,
+      "end_line": 3331,
+      "path": "Chapter 8. \"Smrnmi\" Extension for Resumable Non-Maskable Interrupts, Version 1.0 > 8.5. RNMI Operation"
+    },
+    {
+      "title": "Chapter 9. \"Smcdeleg\" Counter Delegation Extension, Version 1.0",
+      "level": 1,
+      "start_line": 3332,
+      "end_line": 3343,
+      "path": "Chapter 9. \"Smcdeleg\" Counter Delegation Extension, Version 1.0"
+    },
+    {
+      "title": "9.1. Counter Delegation",
+      "level": 2,
+      "start_line": 3344,
+      "end_line": 3398,
+      "path": "Chapter 9. \"Smcdeleg\" Counter Delegation Extension, Version 1.0 > 9.1. Counter Delegation"
+    },
+    {
+      "title": "9.2. Supervisor Counter Inhibit (** **`scountinhibit` ) Register",
+      "level": 2,
+      "start_line": 3399,
+      "end_line": 3404,
+      "path": "Chapter 9. \"Smcdeleg\" Counter Delegation Extension, Version 1.0 > 9.2. Supervisor Counter Inhibit (** **`scountinhibit` ) Register"
+    },
+    {
+      "title": "9.3. Virtualizing** **`scountovf`",
+      "level": 2,
+      "start_line": 3405,
+      "end_line": 3408,
+      "path": "Chapter 9. \"Smcdeleg\" Counter Delegation Extension, Version 1.0 > 9.3. Virtualizing** **`scountovf`"
+    },
+    {
+      "title": "9.4. Virtualizing Local-Counter-Overflow Interrupts",
+      "level": 2,
+      "start_line": 3409,
+      "end_line": 3422,
+      "path": "Chapter 9. \"Smcdeleg\" Counter Delegation Extension, Version 1.0 > 9.4. Virtualizing Local-Counter-Overflow Interrupts"
+    },
+    {
+      "title": "Chapter 10. \"Smdbltrp\" Double Trap Extension, Version 1.0",
+      "level": 1,
+      "start_line": 3423,
+      "end_line": 3430,
+      "path": "Chapter 10. \"Smdbltrp\" Double Trap Extension, Version 1.0"
+    },
+    {
+      "title": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0",
+      "level": 1,
+      "start_line": 3431,
+      "end_line": 3448,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0"
+    },
+    {
+      "title": "11.1. CSRs",
+      "level": 2,
+      "start_line": 3449,
+      "end_line": 3450,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.1. CSRs"
+    },
+    {
+      "title": "11.1.1. Machine Control Transfer Records Control Register (** **`mctrctl` )",
+      "level": 3,
+      "start_line": 3451,
+      "end_line": 3509,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.1. CSRs > 11.1.1. Machine Control Transfer Records Control Register (** **`mctrctl` )"
+    },
+    {
+      "title": "11.1.2. Supervisor Control Transfer Records Control Register (** **`sctrctl` )",
+      "level": 3,
+      "start_line": 3510,
+      "end_line": 3515,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.1. CSRs > 11.1.2. Supervisor Control Transfer Records Control Register (** **`sctrctl` )"
+    },
+    {
+      "title": "11.1.3. Virtual Supervisor Control Transfer Records Control Register (** **`vsctrctl` )",
+      "level": 3,
+      "start_line": 3516,
+      "end_line": 3555,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.1. CSRs > 11.1.3. Virtual Supervisor Control Transfer Records Control Register (** **`vsctrctl` )"
+    },
+    {
+      "title": "11.1.4. Supervisor Control Transfer Records Depth Register (** **`sctrdepth` )",
+      "level": 3,
+      "start_line": 3556,
+      "end_line": 3583,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.1. CSRs > 11.1.4. Supervisor Control Transfer Records Depth Register (** **`sctrdepth` )"
+    },
+    {
+      "title": "11.1.5. Supervisor Control Transfer Records Status Register (** **`sctrstatus` )",
+      "level": 3,
+      "start_line": 3584,
+      "end_line": 3628,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.1. CSRs > 11.1.5. Supervisor Control Transfer Records Status Register (** **`sctrstatus` )"
+    },
+    {
+      "title": "11.2. Entry Registers",
+      "level": 2,
+      "start_line": 3629,
+      "end_line": 3636,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.2. Entry Registers"
+    },
+    {
+      "title": "11.2.1. Control Transfer Record Source Register (** **`ctrsource` )",
+      "level": 3,
+      "start_line": 3637,
+      "end_line": 3656,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.2. Entry Registers > 11.2.1. Control Transfer Record Source Register (** **`ctrsource` )"
+    },
+    {
+      "title": "11.2.2. Control Transfer Record Target Register (** **`ctrtarget` )",
+      "level": 3,
+      "start_line": 3657,
+      "end_line": 3672,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.2. Entry Registers > 11.2.2. Control Transfer Record Target Register (** **`ctrtarget` )"
+    },
+    {
+      "title": "11.2.3. Control Transfer Record Metadata Register (** **`ctrdata` )",
+      "level": 3,
+      "start_line": 3673,
+      "end_line": 3702,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.2. Entry Registers > 11.2.3. Control Transfer Record Metadata Register (** **`ctrdata` )"
+    },
+    {
+      "title": "11.3. Instructions",
+      "level": 2,
+      "start_line": 3703,
+      "end_line": 3704,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.3. Instructions"
+    },
+    {
+      "title": "11.3.1. Supervisor CTR Clear Instruction",
+      "level": 3,
+      "start_line": 3705,
+      "end_line": 3723,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.3. Instructions > 11.3.1. Supervisor CTR Clear Instruction"
+    },
+    {
+      "title": "11.4. State Enable Access Control",
+      "level": 2,
+      "start_line": 3724,
+      "end_line": 3747,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.4. State Enable Access Control"
+    },
+    {
+      "title": "11.5. Behavior",
+      "level": 2,
+      "start_line": 3748,
+      "end_line": 3765,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.5. Behavior"
+    },
+    {
+      "title": "11.5.1. Privilege Mode Transitions",
+      "level": 3,
+      "start_line": 3766,
+      "end_line": 3791,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.5. Behavior > 11.5.1. Privilege Mode Transitions"
+    },
+    {
+      "title": "11.5.1.1. Virtualization Mode Transitions",
+      "level": 4,
+      "start_line": 3792,
+      "end_line": 3805,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.5. Behavior > 11.5.1. Privilege Mode Transitions > 11.5.1.1. Virtualization Mode Transitions"
+    },
+    {
+      "title": "11.5.1.2. External Traps",
+      "level": 4,
+      "start_line": 3806,
+      "end_line": 3846,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.5. Behavior > 11.5.1. Privilege Mode Transitions > 11.5.1.2. External Traps"
+    },
+    {
+      "title": "11.5.2. Transfer Type Filtering",
+      "level": 3,
+      "start_line": 3847,
+      "end_line": 3906,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.5. Behavior > 11.5.2. Transfer Type Filtering"
+    },
+    {
+      "title": "11.5.3. Cycle Counting",
+      "level": 3,
+      "start_line": 3907,
+      "end_line": 3948,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.5. Behavior > 11.5.3. Cycle Counting"
+    },
+    {
+      "title": "11.5.4. RAS (Return Address Stack) Emulation Mode",
+      "level": 3,
+      "start_line": 3949,
+      "end_line": 3974,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.5. Behavior > 11.5.4. RAS (Return Address Stack) Emulation Mode"
+    },
+    {
+      "title": "11.5.5. Freeze",
+      "level": 3,
+      "start_line": 3975,
+      "end_line": 3994,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.5. Behavior > 11.5.5. Freeze"
+    },
+    {
+      "title": "11.6. Custom Extensions",
+      "level": 2,
+      "start_line": 3995,
+      "end_line": 3998,
+      "path": "Chapter 11. \"Smctr\" Control Transfer Records Extension, Version 1.0 > 11.6. Custom Extensions"
+    },
+    {
+      "title": "Chapter 12. Supervisor-Level ISA, Version 1.13",
+      "level": 1,
+      "start_line": 3999,
+      "end_line": 4006,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13"
+    },
+    {
+      "title": "12.1. Supervisor CSRs",
+      "level": 2,
+      "start_line": 4007,
+      "end_line": 4016,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs"
+    },
+    {
+      "title": "12.1.1. Supervisor Status (** **`sstatus` ) Register",
+      "level": 3,
+      "start_line": 4017,
+      "end_line": 4059,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.1. Supervisor Status (** **`sstatus` ) Register"
+    },
+    {
+      "title": "12.1.1.1. Base ISA Control in** **`sstatus` Register",
+      "level": 4,
+      "start_line": 4060,
+      "end_line": 4073,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.1. Supervisor Status (** **`sstatus` ) Register > 12.1.1.1. Base ISA Control in** **`sstatus` Register"
+    },
+    {
+      "title": "12.1.1.2. Memory Privilege in** **`sstatus` Register",
+      "level": 4,
+      "start_line": 4074,
+      "end_line": 4087,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.1. Supervisor Status (** **`sstatus` ) Register > 12.1.1.2. Memory Privilege in** **`sstatus` Register"
+    },
+    {
+      "title": "12.1.1.3. Endianness Control in** **`sstatus` Register",
+      "level": 4,
+      "start_line": 4088,
+      "end_line": 4099,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.1. Supervisor Status (** **`sstatus` ) Register > 12.1.1.3. Endianness Control in** **`sstatus` Register"
+    },
+    {
+      "title": "12.1.1.4. Previous Expected Landing Pad (ELP) State in** **`sstatus` Register",
+      "level": 4,
+      "start_line": 4100,
+      "end_line": 4103,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.1. Supervisor Status (** **`sstatus` ) Register > 12.1.1.4. Previous Expected Landing Pad (ELP) State in** **`sstatus` Register"
+    },
+    {
+      "title": "12.1.1.5. Double Trap Control in** **`sstatus` Register",
+      "level": 4,
+      "start_line": 4104,
+      "end_line": 4125,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.1. Supervisor Status (** **`sstatus` ) Register > 12.1.1.5. Double Trap Control in** **`sstatus` Register"
+    },
+    {
+      "title": "12.1.2. Supervisor Trap Vector Base Address (** **`stvec` ) Register",
+      "level": 3,
+      "start_line": 4126,
+      "end_line": 4134,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.2. Supervisor Trap Vector Base Address (** **`stvec` ) Register"
+    },
+    {
+      "title": "Figure 51. Supervisor trap vector base address (_ `stvec` _) register.",
+      "level": 4,
+      "start_line": 4135,
+      "end_line": 4150,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.2. Supervisor Trap Vector Base Address (** **`stvec` ) Register > Figure 51. Supervisor trap vector base address (_ `stvec` _) register."
+    },
+    {
+      "title": "12.1.3. Supervisor Interrupt (** **`sip` and** **`sie` ) Registers",
+      "level": 3,
+      "start_line": 4151,
+      "end_line": 4220,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.3. Supervisor Interrupt (** **`sip` and** **`sie` ) Registers"
+    },
+    {
+      "title": "12.1.4. Supervisor Timers and Performance Counters",
+      "level": 3,
+      "start_line": 4221,
+      "end_line": 4226,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.4. Supervisor Timers and Performance Counters"
+    },
+    {
+      "title": "12.1.5. Counter-Enable (** **`scounteren` ) Register",
+      "level": 3,
+      "start_line": 4227,
+      "end_line": 4245,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.5. Counter-Enable (** **`scounteren` ) Register"
+    },
+    {
+      "title": "12.1.6. Supervisor Scratch (** **`sscratch` ) Register",
+      "level": 3,
+      "start_line": 4246,
+      "end_line": 4255,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.6. Supervisor Scratch (** **`sscratch` ) Register"
+    },
+    {
+      "title": "12.1.7. Supervisor Exception Program Counter (** **`sepc` ) Register",
+      "level": 3,
+      "start_line": 4256,
+      "end_line": 4274,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.7. Supervisor Exception Program Counter (** **`sepc` ) Register"
+    },
+    {
+      "title": "12.1.8. Supervisor Cause (** **`scause` ) Register",
+      "level": 3,
+      "start_line": 4275,
+      "end_line": 4329,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.8. Supervisor Cause (** **`scause` ) Register"
+    },
+    {
+      "title": "12.1.9. Supervisor Trap Value (** **`stval` ) Register",
+      "level": 3,
+      "start_line": 4330,
+      "end_line": 4365,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.9. Supervisor Trap Value (** **`stval` ) Register"
+    },
+    {
+      "title": "12.1.10. Supervisor Environment Configuration (** **`senvcfg` ) Register",
+      "level": 3,
+      "start_line": 4366,
+      "end_line": 4440,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.10. Supervisor Environment Configuration (** **`senvcfg` ) Register"
+    },
+    {
+      "title": "12.1.11. Supervisor Address Translation and Protection (** **`satp` ) Register",
+      "level": 3,
+      "start_line": 4441,
+      "end_line": 4484,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.11. Supervisor Address Translation and Protection (** **`satp` ) Register"
+    },
+    {
+      "title": "Table 34. Encoding of_ `satp` _MODE field.",
+      "level": 4,
+      "start_line": 4485,
+      "end_line": 4486,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.11. Supervisor Address Translation and Protection (** **`satp` ) Register > Table 34. Encoding of_ `satp` _MODE field."
+    },
+    {
+      "title": "SXLEN=32",
+      "level": 4,
+      "start_line": 4487,
+      "end_line": 4517,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.1. Supervisor CSRs > 12.1.11. Supervisor Address Translation and Protection (** **`satp` ) Register > SXLEN=32"
+    },
+    {
+      "title": "12.2. Supervisor Instructions",
+      "level": 2,
+      "start_line": 4518,
+      "end_line": 4521,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.2. Supervisor Instructions"
+    },
+    {
+      "title": "12.2.1. Supervisor Memory-Management Fence Instruction",
+      "level": 3,
+      "start_line": 4522,
+      "end_line": 4546,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.2. Supervisor Instructions > 12.2.1. Supervisor Memory-Management Fence Instruction"
+    },
+    {
+      "title": "address in _rs1_ , for all address spaces.",
+      "level": 4,
+      "start_line": 4547,
+      "end_line": 4594,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.2. Supervisor Instructions > 12.2.1. Supervisor Memory-Management Fence Instruction > address in _rs1_ , for all address spaces."
+    },
+    {
+      "title": "12.3. Sv32: Page-Based 32-bit Virtual-Memory Systems",
+      "level": 2,
+      "start_line": 4595,
+      "end_line": 4604,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.3. Sv32: Page-Based 32-bit Virtual-Memory Systems"
+    },
+    {
+      "title": "12.3.1. Addressing and Memory Protection",
+      "level": 3,
+      "start_line": 4605,
+      "end_line": 4712,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.3. Sv32: Page-Based 32-bit Virtual-Memory Systems > 12.3.1. Addressing and Memory Protection"
+    },
+    {
+      "title": "12.3.2. Virtual Address Translation Process",
+      "level": 3,
+      "start_line": 4713,
+      "end_line": 4786,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.3. Sv32: Page-Based 32-bit Virtual-Memory Systems > 12.3.2. Virtual Address Translation Process"
+    },
+    {
+      "title": "12.4. Sv39: Page-Based 39-bit Virtual-Memory System",
+      "level": 2,
+      "start_line": 4787,
+      "end_line": 4794,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.4. Sv39: Page-Based 39-bit Virtual-Memory System"
+    },
+    {
+      "title": "12.4.1. Addressing and Memory Protection",
+      "level": 3,
+      "start_line": 4795,
+      "end_line": 4831,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.4. Sv39: Page-Based 39-bit Virtual-Memory System > 12.4.1. Addressing and Memory Protection"
+    },
+    {
+      "title": "12.5. Sv48: Page-Based 48-bit Virtual-Memory System",
+      "level": 2,
+      "start_line": 4832,
+      "end_line": 4839,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.5. Sv48: Page-Based 48-bit Virtual-Memory System"
+    },
+    {
+      "title": "12.5.1. Addressing and Memory Protection",
+      "level": 3,
+      "start_line": 4840,
+      "end_line": 4862,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.5. Sv48: Page-Based 48-bit Virtual-Memory System > 12.5.1. Addressing and Memory Protection"
+    },
+    {
+      "title": "12.6. Sv57: Page-Based 57-bit Virtual-Memory System",
+      "level": 2,
+      "start_line": 4863,
+      "end_line": 4870,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.6. Sv57: Page-Based 57-bit Virtual-Memory System"
+    },
+    {
+      "title": "12.6.1. Addressing and Memory Protection",
+      "level": 3,
+      "start_line": 4871,
+      "end_line": 4874,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.6. Sv57: Page-Based 57-bit Virtual-Memory System > 12.6.1. Addressing and Memory Protection"
+    },
+    {
+      "title": "12.6. Sv57: Page-Based 57-bit Virtual-Memory System | Page 142",
+      "level": 2,
+      "start_line": 4875,
+      "end_line": 4902,
+      "path": "Chapter 12. Supervisor-Level ISA, Version 1.13 > 12.6. Sv57: Page-Based 57-bit Virtual-Memory System | Page 142"
+    },
+    {
+      "title": "Chapter 13. \"Svnapot\" Extension for NAPOT Translation Contiguity, Version 1.0",
+      "level": 1,
+      "start_line": 4903,
+      "end_line": 4963,
+      "path": "Chapter 13. \"Svnapot\" Extension for NAPOT Translation Contiguity, Version 1.0"
+    },
+    {
+      "title": "Chapter 14. \"Svpbmt\" Extension for Page-Based Memory Types, Version 1.0",
+      "level": 1,
+      "start_line": 4964,
+      "end_line": 5018,
+      "path": "Chapter 14. \"Svpbmt\" Extension for Page-Based Memory Types, Version 1.0"
+    },
+    {
+      "title": "Chapter 15. \"Svinval\" Extension for Fine-Grained AddressTranslation Cache Invalidation, Version 1.0",
+      "level": 1,
+      "start_line": 5019,
+      "end_line": 5087,
+      "path": "Chapter 15. \"Svinval\" Extension for Fine-Grained AddressTranslation Cache Invalidation, Version 1.0"
+    },
+    {
+      "title": "Chapter 16. \"Svadu\" Extension for Hardware Updating of A/D Bits, Version 1.0",
+      "level": 1,
+      "start_line": 5088,
+      "end_line": 5095,
+      "path": "Chapter 16. \"Svadu\" Extension for Hardware Updating of A/D Bits, Version 1.0"
+    },
+    {
+      "title": "Chapter 17. \"Svvptc\" Extension for Obviating MemoryManagement Instructions after Marking PTEs Valid, Version 1.0",
+      "level": 1,
+      "start_line": 5096,
+      "end_line": 5105,
+      "path": "Chapter 17. \"Svvptc\" Extension for Obviating MemoryManagement Instructions after Marking PTEs Valid, Version 1.0"
+    },
+    {
+      "title": "Chapter 18. \"Ssqosid\" Extension for Quality-of-Service (QoS) Identifiers, Version 1.0",
+      "level": 1,
+      "start_line": 5106,
+      "end_line": 5121,
+      "path": "Chapter 18. \"Ssqosid\" Extension for Quality-of-Service (QoS) Identifiers, Version 1.0"
+    },
+    {
+      "title": "18.1. Supervisor Resource Management Configuration (** **`srmcfg` ) register",
+      "level": 2,
+      "start_line": 5122,
+      "end_line": 5151,
+      "path": "Chapter 18. \"Ssqosid\" Extension for Quality-of-Service (QoS) Identifiers, Version 1.0 > 18.1. Supervisor Resource Management Configuration (** **`srmcfg` ) register"
+    },
+    {
+      "title": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0",
+      "level": 1,
+      "start_line": 5152,
+      "end_line": 5159,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0"
+    },
+    {
+      "title": "19.1. Machine and Supervisor Level Additions",
+      "level": 2,
+      "start_line": 5160,
+      "end_line": 5161,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.1. Machine and Supervisor Level Additions"
+    },
+    {
+      "title": "19.1.1. Supervisor Timer (** **`stimecmp` ) Register",
+      "level": 3,
+      "start_line": 5162,
+      "end_line": 5177,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.1. Machine and Supervisor Level Additions > 19.1.1. Supervisor Timer (** **`stimecmp` ) Register"
+    },
+    {
+      "title": "19.1.2. Machine Interrupt (** **`mip` and** **`mie` ) Registers",
+      "level": 3,
+      "start_line": 5178,
+      "end_line": 5183,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.1. Machine and Supervisor Level Additions > 19.1.2. Machine Interrupt (** **`mip` and** **`mie` ) Registers"
+    },
+    {
+      "title": "19.1.3. Supervisor Interrupt (** **`sip` and** **`sie` ) Registers",
+      "level": 3,
+      "start_line": 5184,
+      "end_line": 5189,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.1. Machine and Supervisor Level Additions > 19.1.3. Supervisor Interrupt (** **`sip` and** **`sie` ) Registers"
+    },
+    {
+      "title": "19.1.4. Machine Counter-Enable (** **`mcounteren` ) Register",
+      "level": 3,
+      "start_line": 5190,
+      "end_line": 5195,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.1. Machine and Supervisor Level Additions > 19.1.4. Machine Counter-Enable (** **`mcounteren` ) Register"
+    },
+    {
+      "title": "19.2. Hypervisor Extension Additions",
+      "level": 2,
+      "start_line": 5196,
+      "end_line": 5197,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.2. Hypervisor Extension Additions"
+    },
+    {
+      "title": "19.2.1. Virtual Supervisor Timer (** **`vstimecmp` ) Register",
+      "level": 3,
+      "start_line": 5198,
+      "end_line": 5209,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.2. Hypervisor Extension Additions > 19.2.1. Virtual Supervisor Timer (** **`vstimecmp` ) Register"
+    },
+    {
+      "title": "19.2.2. Hypervisor Interrupt (** **`hvip` ,** **`hip` , and** **`hie` ) Registers",
+      "level": 3,
+      "start_line": 5210,
+      "end_line": 5215,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.2. Hypervisor Extension Additions > 19.2.2. Hypervisor Interrupt (** **`hvip` ,** **`hip` , and** **`hie` ) Registers"
+    },
+    {
+      "title": "19.2.3. Hypervisor Counter-Enable (** **`hcounteren` ) Register",
+      "level": 3,
+      "start_line": 5216,
+      "end_line": 5221,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.2. Hypervisor Extension Additions > 19.2.3. Hypervisor Counter-Enable (** **`hcounteren` ) Register"
+    },
+    {
+      "title": "19.3. Environment Config (** **`menvcfg` and** **`henvcfg` ) Support",
+      "level": 2,
+      "start_line": 5222,
+      "end_line": 5231,
+      "path": "Chapter 19. \"Sstc\" Extension for Supervisor-mode Timer Interrupts, Version 1.0 > 19.3. Environment Config (** **`menvcfg` and** **`henvcfg` ) Support"
+    },
+    {
+      "title": "Chapter 20. \"Sscofpmf\" Extension for Count Overflow and Mode-Based Filtering, Version 1.0",
+      "level": 1,
+      "start_line": 5232,
+      "end_line": 5243,
+      "path": "Chapter 20. \"Sscofpmf\" Extension for Count Overflow and Mode-Based Filtering, Version 1.0"
+    },
+    {
+      "title": "20.1. Count Overflow Control",
+      "level": 2,
+      "start_line": 5244,
+      "end_line": 5284,
+      "path": "Chapter 20. \"Sscofpmf\" Extension for Count Overflow and Mode-Based Filtering, Version 1.0 > 20.1. Count Overflow Control"
+    },
+    {
+      "title": "20.2. Supervisor Count Overflow (** **`scountovf` ) Register",
+      "level": 2,
+      "start_line": 5285,
+      "end_line": 5292,
+      "path": "Chapter 20. \"Sscofpmf\" Extension for Count Overflow and Mode-Based Filtering, Version 1.0 > 20.2. Supervisor Count Overflow (** **`scountovf` ) Register"
+    },
+    {
+      "title": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0",
+      "level": 1,
+      "start_line": 5293,
+      "end_line": 5308,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0"
+    },
+    {
+      "title": "21.1. Privilege Modes",
+      "level": 2,
+      "start_line": 5309,
+      "end_line": 5330,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.1. Privilege Modes"
+    },
+    {
+      "title": "21.2. Hypervisor and Virtual Supervisor CSRs",
+      "level": 2,
+      "start_line": 5331,
+      "end_line": 5348,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs"
+    },
+    {
+      "title": "21.2.1. Hypervisor Status (** **`hstatus` ) Register",
+      "level": 3,
+      "start_line": 5349,
+      "end_line": 5397,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.1. Hypervisor Status (** **`hstatus` ) Register"
+    },
+    {
+      "title": "use of VGEIN is covered further in Section 21.2.3.",
+      "level": 4,
+      "start_line": 5398,
+      "end_line": 5415,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.1. Hypervisor Status (** **`hstatus` ) Register > use of VGEIN is covered further in Section 21.2.3."
+    },
+    {
+      "title": "21.2.2. Hypervisor Trap Delegation (** **`hedeleg` and** **`hideleg` ) Registers",
+      "level": 3,
+      "start_line": 5416,
+      "end_line": 5428,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.2. Hypervisor Trap Delegation (** **`hedeleg` and** **`hideleg` ) Registers"
+    },
+    {
+      "title": "Figure 82. Hypervisor exception delegation register (_ `hideleg` _).",
+      "level": 4,
+      "start_line": 5429,
+      "end_line": 5442,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.2. Hypervisor Trap Delegation (** **`hedeleg` and** **`hideleg` ) Registers > Figure 82. Hypervisor exception delegation register (_ `hideleg` _)."
+    },
+    {
+      "title": "Bit Attribute Corresponding Exception",
+      "level": 4,
+      "start_line": 5443,
+      "end_line": 5470,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.2. Hypervisor Trap Delegation (** **`hedeleg` and** **`hideleg` ) Registers > Bit Attribute Corresponding Exception"
+    },
+    {
+      "title": "21.2.3. Hypervisor Interrupt (** **`hvip` ,** **`hip` , and** **`hie` ) Registers",
+      "level": 3,
+      "start_line": 5471,
+      "end_line": 5487,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.3. Hypervisor Interrupt (** **`hvip` ,** **`hip` , and** **`hie` ) Registers"
+    },
+    {
+      "title": "Figure 83. Hypervisor virtual-interrupt-pending register(_ `hvip` _).",
+      "level": 4,
+      "start_line": 5488,
+      "end_line": 5498,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.3. Hypervisor Interrupt (** **`hvip` ,** **`hip` , and** **`hie` ) Registers > Figure 83. Hypervisor virtual-interrupt-pending register(_ `hvip` _)."
+    },
+    {
+      "title": "Figure 84. Standard portion (bits 15:0) of_ `hvip` _.",
+      "level": 4,
+      "start_line": 5499,
+      "end_line": 5515,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.3. Hypervisor Interrupt (** **`hvip` ,** **`hip` , and** **`hie` ) Registers > Figure 84. Standard portion (bits 15:0) of_ `hvip` _."
+    },
+    {
+      "title": "Figure 86. Hypervisor interrupt-enable register (_ `hie` _).",
+      "level": 4,
+      "start_line": 5516,
+      "end_line": 5559,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.3. Hypervisor Interrupt (** **`hvip` ,** **`hip` , and** **`hie` ) Registers > Figure 86. Hypervisor interrupt-enable register (_ `hie` _)."
+    },
+    {
+      "title": "21.2.4. Hypervisor Guest External Interrupt Registers (** **`hgeip` and** **`hgeie` )",
+      "level": 3,
+      "start_line": 5560,
+      "end_line": 5570,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.4. Hypervisor Guest External Interrupt Registers (** **`hgeip` and** **`hgeie` )"
+    },
+    {
+      "title": "Figure 89. Hypervisor guest external interrupt-pending register (_ `hgeip` _).",
+      "level": 4,
+      "start_line": 5571,
+      "end_line": 5579,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.4. Hypervisor Guest External Interrupt Registers (** **`hgeip` and** **`hgeie` ) > Figure 89. Hypervisor guest external interrupt-pending register (_ `hgeip` _)."
+    },
+    {
+      "title": "Figure 90. Hypervisor guest external interrupt-enable register (_ `hgeie` _).",
+      "level": 4,
+      "start_line": 5580,
+      "end_line": 5595,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.4. Hypervisor Guest External Interrupt Registers (** **`hgeip` and** **`hgeie` ) > Figure 90. Hypervisor guest external interrupt-enable register (_ `hgeie` _)."
+    },
+    {
+      "title": "21.2.5. Hypervisor Environment Configuration Register (** **`henvcfg` )",
+      "level": 3,
+      "start_line": 5596,
+      "end_line": 5664,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.5. Hypervisor Environment Configuration Register (** **`henvcfg` )"
+    },
+    {
+      "title": "21.2.6. Hypervisor Counter-Enable (** **`hcounteren` ) Register",
+      "level": 3,
+      "start_line": 5665,
+      "end_line": 5683,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.6. Hypervisor Counter-Enable (** **`hcounteren` ) Register"
+    },
+    {
+      "title": "21.2.7. Hypervisor Time Delta (** **`htimedelta` ) Register",
+      "level": 3,
+      "start_line": 5684,
+      "end_line": 5693,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.7. Hypervisor Time Delta (** **`htimedelta` ) Register"
+    },
+    {
+      "title": "Figure 93. Hypervisor time delta register.",
+      "level": 4,
+      "start_line": 5694,
+      "end_line": 5699,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.7. Hypervisor Time Delta (** **`htimedelta` ) Register > Figure 93. Hypervisor time delta register."
+    },
+    {
+      "title": "21.2.8. Hypervisor Trap Value (** **`htval` ) Register",
+      "level": 3,
+      "start_line": 5700,
+      "end_line": 5707,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.8. Hypervisor Trap Value (** **`htval` ) Register"
+    },
+    {
+      "title": "Figure 94. Hypervisor trap value register (_ `htval` _).",
+      "level": 4,
+      "start_line": 5708,
+      "end_line": 5725,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.8. Hypervisor Trap Value (** **`htval` ) Register > Figure 94. Hypervisor trap value register (_ `htval` _)."
+    },
+    {
+      "title": "21.2.9. Hypervisor Trap Instruction (** **`htinst` ) Register",
+      "level": 3,
+      "start_line": 5726,
+      "end_line": 5736,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.9. Hypervisor Trap Instruction (** **`htinst` ) Register"
+    },
+    {
+      "title": "Figure 95. Hypervisor trap instruction (_ `htinst` _) register.",
+      "level": 4,
+      "start_line": 5737,
+      "end_line": 5740,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.9. Hypervisor Trap Instruction (** **`htinst` ) Register > Figure 95. Hypervisor trap instruction (_ `htinst` _) register."
+    },
+    {
+      "title": "21.2.10. Hypervisor Guest Address Translation and Protection (** **`hgatp` ) Register",
+      "level": 3,
+      "start_line": 5741,
+      "end_line": 5802,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.10. Hypervisor Guest Address Translation and Protection (** **`hgatp` ) Register"
+    },
+    {
+      "title": "21.2.11. Virtual Supervisor Status (** **`vsstatus` ) Register",
+      "level": 3,
+      "start_line": 5803,
+      "end_line": 5860,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.11. Virtual Supervisor Status (** **`vsstatus` ) Register"
+    },
+    {
+      "title": "21.2.12. Virtual Supervisor Interrupt (** **`vsip` and** **`vsie` ) Registers",
+      "level": 3,
+      "start_line": 5861,
+      "end_line": 5868,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.12. Virtual Supervisor Interrupt (** **`vsip` and** **`vsie` ) Registers"
+    },
+    {
+      "title": "Figure 100. Virtual supervisor interrupt-pending register (_ `vsip` _).",
+      "level": 4,
+      "start_line": 5869,
+      "end_line": 5877,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.12. Virtual Supervisor Interrupt (** **`vsip` and** **`vsie` ) Registers > Figure 100. Virtual supervisor interrupt-pending register (_ `vsip` _)."
+    },
+    {
+      "title": "Figure 101. Virtual supervisor interrupt-enable register (_ `vsie` _).",
+      "level": 4,
+      "start_line": 5878,
+      "end_line": 5907,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.12. Virtual Supervisor Interrupt (** **`vsip` and** **`vsie` ) Registers > Figure 101. Virtual supervisor interrupt-enable register (_ `vsie` _)."
+    },
+    {
+      "title": "21.2.13. Virtual Supervisor Trap Vector Base Address (** **`vstvec` ) Register",
+      "level": 3,
+      "start_line": 5908,
+      "end_line": 5920,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.13. Virtual Supervisor Trap Vector Base Address (** **`vstvec` ) Register"
+    },
+    {
+      "title": "21.2.14. Virtual Supervisor Scratch (** **`vsscratch` ) Register",
+      "level": 3,
+      "start_line": 5921,
+      "end_line": 5933,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.14. Virtual Supervisor Scratch (** **`vsscratch` ) Register"
+    },
+    {
+      "title": "21.2.15. Virtual Supervisor Exception Program Counter (** **`vsepc` ) Register",
+      "level": 3,
+      "start_line": 5934,
+      "end_line": 5948,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.15. Virtual Supervisor Exception Program Counter (** **`vsepc` ) Register"
+    },
+    {
+      "title": "21.2.16. Virtual Supervisor Cause (** **`vscause` ) Register",
+      "level": 3,
+      "start_line": 5949,
+      "end_line": 5961,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.16. Virtual Supervisor Cause (** **`vscause` ) Register"
+    },
+    {
+      "title": "Figure 107. Virtual supervisor cause register (_ `vscause` _).",
+      "level": 4,
+      "start_line": 5962,
+      "end_line": 5963,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.16. Virtual Supervisor Cause (** **`vscause` ) Register > Figure 107. Virtual supervisor cause register (_ `vscause` _)."
+    },
+    {
+      "title": "21.2.17. Virtual Supervisor Trap Value (** **`vstval` ) Register",
+      "level": 3,
+      "start_line": 5964,
+      "end_line": 5978,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.17. Virtual Supervisor Trap Value (** **`vstval` ) Register"
+    },
+    {
+      "title": "21.2.18. Virtual Supervisor Address Translation and Protection (** **`vsatp` ) Register",
+      "level": 3,
+      "start_line": 5979,
+      "end_line": 6008,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.2. Hypervisor and Virtual Supervisor CSRs > 21.2.18. Virtual Supervisor Address Translation and Protection (** **`vsatp` ) Register"
+    },
+    {
+      "title": "21.3. Hypervisor Instructions",
+      "level": 2,
+      "start_line": 6009,
+      "end_line": 6012,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.3. Hypervisor Instructions"
+    },
+    {
+      "title": "21.3.1. Hypervisor Virtual-Machine Load and Store Instructions",
+      "level": 3,
+      "start_line": 6013,
+      "end_line": 6028,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.3. Hypervisor Instructions > 21.3.1. Hypervisor Virtual-Machine Load and Store Instructions"
+    },
+    {
+      "title": "HSV.D are not valid for RV32, of course.",
+      "level": 4,
+      "start_line": 6029,
+      "end_line": 6042,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.3. Hypervisor Instructions > 21.3.1. Hypervisor Virtual-Machine Load and Store Instructions > HSV.D are not valid for RV32, of course."
+    },
+    {
+      "title": "21.3.2. Hypervisor Memory-Management Fence Instructions",
+      "level": 3,
+      "start_line": 6043,
+      "end_line": 6065,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.3. Hypervisor Instructions > 21.3.2. Hypervisor Memory-Management Fence Instructions"
+    },
+    {
+      "title": "the setting of_ `hgatp` _.VMID when HFENCE.VVMA executes.",
+      "level": 4,
+      "start_line": 6066,
+      "end_line": 6093,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.3. Hypervisor Instructions > 21.3.2. Hypervisor Memory-Management Fence Instructions > the setting of_ `hgatp` _.VMID when HFENCE.VVMA executes."
+    },
+    {
+      "title": "21.4. Machine-Level CSRs",
+      "level": 2,
+      "start_line": 6094,
+      "end_line": 6097,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.4. Machine-Level CSRs"
+    },
+    {
+      "title": "21.4.1. Machine Status (** **`mstatus` and** **`mstatush` ) Registers",
+      "level": 3,
+      "start_line": 6098,
+      "end_line": 6160,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.4. Machine-Level CSRs > 21.4.1. Machine Status (** **`mstatus` and** **`mstatush` ) Registers"
+    },
+    {
+      "title": "21.4.2. Machine Interrupt Delegation (** **`mideleg` ) Register",
+      "level": 3,
+      "start_line": 6161,
+      "end_line": 6166,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.4. Machine-Level CSRs > 21.4.2. Machine Interrupt Delegation (** **`mideleg` ) Register"
+    },
+    {
+      "title": "21.4.3. Machine Interrupt (** **`mip` and** **`mie` ) Registers",
+      "level": 3,
+      "start_line": 6167,
+      "end_line": 6184,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.4. Machine-Level CSRs > 21.4.3. Machine Interrupt (** **`mip` and** **`mie` ) Registers"
+    },
+    {
+      "title": "21.4.4. Machine Second Trap Value (** **`mtval2` ) Register",
+      "level": 3,
+      "start_line": 6185,
+      "end_line": 6211,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.4. Machine-Level CSRs > 21.4.4. Machine Second Trap Value (** **`mtval2` ) Register"
+    },
+    {
+      "title": "21.4.5. Machine Trap Instruction (** **`mtinst` ) Register",
+      "level": 3,
+      "start_line": 6212,
+      "end_line": 6225,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.4. Machine-Level CSRs > 21.4.5. Machine Trap Instruction (** **`mtinst` ) Register"
+    },
+    {
+      "title": "21.5. Two-Stage Address Translation",
+      "level": 2,
+      "start_line": 6226,
+      "end_line": 6235,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.5. Two-Stage Address Translation"
+    },
+    {
+      "title": "21.5.1. Guest Physical Address Translation",
+      "level": 3,
+      "start_line": 6236,
+      "end_line": 6276,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.5. Two-Stage Address Translation > 21.5.1. Guest Physical Address Translation"
+    },
+    {
+      "title": "Figure 119. Sv48x4 virtual address (guest physical address).",
+      "level": 4,
+      "start_line": 6277,
+      "end_line": 6309,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.5. Two-Stage Address Translation > 21.5.1. Guest Physical Address Translation > Figure 119. Sv48x4 virtual address (guest physical address)."
+    },
+    {
+      "title": "21.5.2. Guest-Page Faults",
+      "level": 3,
+      "start_line": 6310,
+      "end_line": 6313,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.5. Two-Stage Address Translation > 21.5.2. Guest-Page Faults"
+    },
+    {
+      "title": "21.6.3.",
+      "level": 2,
+      "start_line": 6314,
+      "end_line": 6319,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.6.3."
+    },
+    {
+      "title": "21.5.3. Memory-Management Fences",
+      "level": 3,
+      "start_line": 6320,
+      "end_line": 6337,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.6.3. > 21.5.3. Memory-Management Fences"
+    },
+    {
+      "title": "21.6. Traps",
+      "level": 2,
+      "start_line": 6338,
+      "end_line": 6339,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.6. Traps"
+    },
+    {
+      "title": "21.6.1. Trap Cause Codes",
+      "level": 3,
+      "start_line": 6340,
+      "end_line": 6448,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.6. Traps > 21.6.1. Trap Cause Codes"
+    },
+    {
+      "title": "Table 44. Synchronous exception priority when the hypervisor extension is implemented.",
+      "level": 4,
+      "start_line": 6449,
+      "end_line": 6465,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.6. Traps > 21.6.1. Trap Cause Codes > Table 44. Synchronous exception priority when the hypervisor extension is implemented."
+    },
+    {
+      "title": "21.6.2. Trap Entry",
+      "level": 3,
+      "start_line": 6466,
+      "end_line": 6509,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.6. Traps > 21.6.2. Trap Entry"
+    },
+    {
+      "title": "21.6.3. Transformed Instruction or Pseudoinstruction for** **`mtinst` or** **`htinst`",
+      "level": 3,
+      "start_line": 6510,
+      "end_line": 6675,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.6. Traps > 21.6.3. Transformed Instruction or Pseudoinstruction for** **`mtinst` or** **`htinst`"
+    },
+    {
+      "title": "21.6.4. Trap Return",
+      "level": 3,
+      "start_line": 6676,
+      "end_line": 6689,
+      "path": "Chapter 21. \"H\" Extension for Hypervisor Support, Version 1.0 > 21.6. Traps > 21.6.4. Trap Return"
+    },
+    {
+      "title": "Chapter 22. Control-flow Integrity (CFI)",
+      "level": 1,
+      "start_line": 6690,
+      "end_line": 6693,
+      "path": "Chapter 22. Control-flow Integrity (CFI)"
+    },
+    {
+      "title": "22.1. Landing Pad (Zicfilp)",
+      "level": 2,
+      "start_line": 6694,
+      "end_line": 6697,
+      "path": "Chapter 22. Control-flow Integrity (CFI) > 22.1. Landing Pad (Zicfilp)"
+    },
+    {
+      "title": "22.1.1. Landing-Pad-Enabled (LPE) State",
+      "level": 3,
+      "start_line": 6698,
+      "end_line": 6729,
+      "path": "Chapter 22. Control-flow Integrity (CFI) > 22.1. Landing Pad (Zicfilp) > 22.1.1. Landing-Pad-Enabled (LPE) State"
+    },
+    {
+      "title": "22.1.2. Preserving Expected Landing Pad State on Traps",
+      "level": 3,
+      "start_line": 6730,
+      "end_line": 6755,
+      "path": "Chapter 22. Control-flow Integrity (CFI) > 22.1. Landing Pad (Zicfilp) > 22.1.2. Preserving Expected Landing Pad State on Traps"
+    },
+    {
+      "title": "22.2. Shadow Stack (Zicfiss)",
+      "level": 2,
+      "start_line": 6756,
+      "end_line": 6759,
+      "path": "Chapter 22. Control-flow Integrity (CFI) > 22.2. Shadow Stack (Zicfiss)"
+    },
+    {
+      "title": "22.2.1. Shadow Stack Pointer (** **`ssp` ) CSR access control",
+      "level": 3,
+      "start_line": 6760,
+      "end_line": 6773,
+      "path": "Chapter 22. Control-flow Integrity (CFI) > 22.2. Shadow Stack (Zicfiss) > 22.2.1. Shadow Stack Pointer (** **`ssp` ) CSR access control"
+    },
+    {
+      "title": "22.2.2. Shadow-Stack-Enabled (SSE) State",
+      "level": 3,
+      "start_line": 6774,
+      "end_line": 6800,
+      "path": "Chapter 22. Control-flow Integrity (CFI) > 22.2. Shadow Stack (Zicfiss) > 22.2.2. Shadow-Stack-Enabled (SSE) State"
+    },
+    {
+      "title": "Zimop/Zcmop-defined behavior.",
+      "level": 4,
+      "start_line": 6801,
+      "end_line": 6810,
+      "path": "Chapter 22. Control-flow Integrity (CFI) > 22.2. Shadow Stack (Zicfiss) > 22.2.2. Shadow-Stack-Enabled (SSE) State > Zimop/Zcmop-defined behavior."
+    },
+    {
+      "title": "22.2.3. Shadow Stack Memory Protection",
+      "level": 3,
+      "start_line": 6811,
+      "end_line": 6866,
+      "path": "Chapter 22. Control-flow Integrity (CFI) > 22.2. Shadow Stack (Zicfiss) > 22.2.3. Shadow Stack Memory Protection"
+    },
+    {
+      "title": "Chapter 23. \"Ssdbltrp\" Double Trap Extension, Version 1.0",
+      "level": 1,
+      "start_line": 6867,
+      "end_line": 6874,
+      "path": "Chapter 23. \"Ssdbltrp\" Double Trap Extension, Version 1.0"
+    },
+    {
+      "title": "Chapter 24. Pointer Masking Extensions, Version 1.0.0",
+      "level": 1,
+      "start_line": 6875,
+      "end_line": 6876,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0"
+    },
+    {
+      "title": "24.1. Introduction",
+      "level": 2,
+      "start_line": 6877,
+      "end_line": 6888,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.1. Introduction"
+    },
+    {
+      "title": "24.2. Background",
+      "level": 2,
+      "start_line": 6889,
+      "end_line": 6890,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background"
+    },
+    {
+      "title": "24.2.1. Definitions",
+      "level": 3,
+      "start_line": 6891,
+      "end_line": 6908,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background > 24.2.1. Definitions"
+    },
+    {
+      "title": "24.2.2. The “Ignore” Transformation",
+      "level": 3,
+      "start_line": 6909,
+      "end_line": 6932,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background > 24.2.2. The “Ignore” Transformation"
+    },
+    {
+      "title": "(PMP).",
+      "level": 4,
+      "start_line": 6933,
+      "end_line": 6944,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background > 24.2.2. The “Ignore” Transformation > (PMP)."
+    },
+    {
+      "title": "24.2.3. Example",
+      "level": 3,
+      "start_line": 6945,
+      "end_line": 6962,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background > 24.2.3. Example"
+    },
+    {
+      "title": "24.2.4. Determining the Value of PMLEN",
+      "level": 3,
+      "start_line": 6963,
+      "end_line": 6970,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background > 24.2.4. Determining the Value of PMLEN"
+    },
+    {
+      "title": "24.2.5. Pointer Masking and Privilege Modes",
+      "level": 3,
+      "start_line": 6971,
+      "end_line": 6980,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background > 24.2.5. Pointer Masking and Privilege Modes"
+    },
+    {
+      "title": "24.2.6. Memory Accesses Subject to Pointer Masking",
+      "level": 3,
+      "start_line": 6981,
+      "end_line": 7036,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background > 24.2.6. Memory Accesses Subject to Pointer Masking"
+    },
+    {
+      "title": "24.2.7. Pointer Masking Extensions",
+      "level": 3,
+      "start_line": 7037,
+      "end_line": 7062,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.2. Background > 24.2.7. Pointer Masking Extensions"
+    },
+    {
+      "title": "24.3. ISA Extensions",
+      "level": 2,
+      "start_line": 7063,
+      "end_line": 7083,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.3. ISA Extensions"
+    },
+    {
+      "title": "24.3.1. Ssnpm",
+      "level": 3,
+      "start_line": 7084,
+      "end_line": 7095,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.3. ISA Extensions > 24.3.1. Ssnpm"
+    },
+    {
+      "title": "24.3.2. Smnpm",
+      "level": 3,
+      "start_line": 7096,
+      "end_line": 7101,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.3. ISA Extensions > 24.3.2. Smnpm"
+    },
+    {
+      "title": "24.3.3. Smmpm",
+      "level": 3,
+      "start_line": 7102,
+      "end_line": 7105,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.3. ISA Extensions > 24.3.3. Smmpm"
+    },
+    {
+      "title": "24.3.4. Interaction with SFENCE.VMA",
+      "level": 3,
+      "start_line": 7106,
+      "end_line": 7109,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.3. ISA Extensions > 24.3.4. Interaction with SFENCE.VMA"
+    },
+    {
+      "title": "24.3.5. Interaction with Two-Stage Address Translation",
+      "level": 3,
+      "start_line": 7110,
+      "end_line": 7129,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.3. ISA Extensions > 24.3.5. Interaction with Two-Stage Address Translation"
+    },
+    {
+      "title": "24.3.6. Number of Masked Bits",
+      "level": 3,
+      "start_line": 7130,
+      "end_line": 7135,
+      "path": "Chapter 24. Pointer Masking Extensions, Version 1.0.0 > 24.3. ISA Extensions > 24.3.6. Number of Masked Bits"
+    },
+    {
+      "title": "Chapter 25. RISC-V Privileged Instruction Set Listings",
+      "level": 1,
+      "start_line": 7136,
+      "end_line": 7202,
+      "path": "Chapter 25. RISC-V Privileged Instruction Set Listings"
+    },
+    {
+      "title": "Chapter 26. History",
+      "level": 1,
+      "start_line": 7203,
+      "end_line": 7204,
+      "path": "Chapter 26. History"
+    },
+    {
+      "title": "26.1. Research Funding at UC Berkeley",
+      "level": 2,
+      "start_line": 7205,
+      "end_line": 7216,
+      "path": "Chapter 26. History > 26.1. Research Funding at UC Berkeley"
+    },
+    {
+      "title": "Bibliography",
+      "level": 1,
+      "start_line": 7217,
+      "end_line": 7226,
+      "path": "Bibliography"
+    }
+  ],
+  "structure_file": "riscv-privileged.structure.json",
+  "structure_sha256": "9b8c6843bb45a2ab0b6811300d290a459d3ed1b817910296dff47a9f08734aa7"
+}
