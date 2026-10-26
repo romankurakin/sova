@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Production search with default settings: vector and full-text retrieval, RRF fusion, exact-match bonuses, an index-page penalty and diversity selection.",
+  "description": "Sova's default hybrid search combines vector and full-text retrieval with standard ranking and diversity settings.",
   "method": "hybrid",
   "output_k": 10,
   "depth": null,
