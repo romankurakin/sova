@@ -67,6 +67,10 @@ class PrivateEmbedder:
             "--pooling": self.embedder.pooling,
             "--flash-attn": "off",
             "--ctx-size": str(self.embedder.context_size),
+            # Bidirectional embedders such as EmbeddingGemma must see a whole
+            # input in one micro-batch; llama-server defaults to 512 tokens.
+            "--batch-size": str(self.embedder.context_size),
+            "--ubatch-size": str(self.embedder.context_size),
             "--parallel": "1",
         }
 
@@ -75,7 +79,9 @@ class PrivateEmbedder:
         args = [executable, "-hf", self.embedder.repository]
         args += ["-hff", self.embedder.file, "--host", "127.0.0.1", "--port", port]
         args += ["--embedding", *(x for pair in self.settings().items() for x in pair)]
-        return args + ["--cache-ram", "0"]
+        # Experiments embed text only. Without this flag, -hf also downloads and
+        # loads a vision projector from multimodal repos such as EmbeddingGemma 2.
+        return args + ["--no-mmproj", "--cache-ram", "0"]
 
     def _launch(self) -> None:
         executable = shutil.which("llama-server")

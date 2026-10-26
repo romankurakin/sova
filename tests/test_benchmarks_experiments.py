@@ -69,8 +69,10 @@ def test_private_embedder_uses_recorded_contexts_and_its_templates(
         "model-Q8_0.gguf",
     ]
     assert "--embedding" in command
+    assert "--no-mmproj" in command
     assert command[command.index("--pooling") + 1] == "mean"
     assert command[command.index("--ctx-size") + 1] == "2048"
+    assert command[command.index("--ubatch-size") + 1] == "2048"
     sent = []
 
     def embed(texts, timeout):

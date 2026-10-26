@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "description": "Sova's default hybrid search with the text-only EmbeddingGemma 2 embedder instead of Qwen3-Embedding-4B.",
+  "method": "hybrid",
+  "output_k": 10,
+  "depth": null,
+  "ranking": {},
+  "embedder": {
+    "repository": "ggml-org/embeddinggemma-2-GGUF",
+    "file": "embeddinggemma-2-BF16.gguf",
+    "dimensions": 768,
+    "pooling": "mean",
+    "context_size": 4096,
+    "query_template": "task: search result | query: {query}",
+    "document_template": "title: none | text: {text}"
+  },
+  "cache_modes": ["warm", "cached", "cold"],
+  "passes": 3
+}
