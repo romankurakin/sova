@@ -2,6 +2,7 @@
 
 import bisect
 import importlib
+import importlib.metadata
 import re
 import sys
 import warnings
@@ -61,6 +62,91 @@ def extract_pdf(pdf_path: Path) -> str:
     return extract_pdf_document(pdf_path).markdown
 
 
+class _IndraOCR:
+    """Indra OCR behind pymupdf4llm's OCR hook.
+
+    The page is rendered without its legible text and Indra reads the rest.
+    Its lines become an invisible text layer before layout analysis, as with
+    pymupdf4llm's Tesseract backend, so headings, tables and block offsets
+    still come from pymupdf-layout. Visible glyphs made layout repeat nearby
+    real text as picture text. The engine loads on the first page that needs it.
+    """
+
+    def __init__(self) -> None:
+        self.engine = None
+        self.pages: set[int] = set()
+
+    def __call__(self, page, dpi=150, pixmap=None, language=None, keep_ocr_text=False):
+        import numpy as np
+        import pymupdf
+        from pymupdf4llm.ocr.exec_ocr_interface import (
+            FONT,
+            FONTNAME,
+            REPLACEMENT_UNICODE,
+            adjust_width,
+            ocr_text,
+        )
+        from pymupdf4llm.ocr.get_culled_pixmap import get_pixmap
+
+        self.pages.add(page.number + 1)
+        displaylist = page.get_displaylist()
+        textpage = pymupdf.TextPage(
+            displaylist.get_textpage(flags=pymupdf.TEXT_ACCURATE_BBOXES)
+        )
+        legible, stale = [], []
+        for block in textpage.extractDICT()["blocks"]:
+            for line in block["lines"]:
+                for span in line["spans"]:
+                    unreadable = ocr_text(span) or REPLACEMENT_UNICODE in span["text"]
+                    (stale if unreadable else legible).append(span["bbox"])
+        image, empty = get_pixmap(displaylist, dpi=dpi, rects=legible)
+        if empty:
+            return
+        lines = self.lines(
+            np.frombuffer(image.samples, np.uint8).reshape(image.height, image.width, 3)
+        )
+        if not lines:
+            return
+        # Earlier OCR text and unreadable glyphs give way to the new reading.
+        for bbox in stale:
+            page.add_redact_annot(bbox)
+        if stale:
+            page.apply_redactions(
+                images=pymupdf.mupdf.PDF_REDACT_IMAGE_NONE,
+                graphics=pymupdf.mupdf.PDF_REDACT_LINE_ART_NONE,
+                text=pymupdf.mupdf.PDF_REDACT_TEXT_REMOVE,
+            )
+        page.insert_font(fontname=FONTNAME, fontbuffer=FONT.buffer)
+        to_page = pymupdf.Rect(image.irect).torect(page.rect)
+        for box, text in lines:
+            rect = pymupdf.Rect(box) * to_page
+            if not text.strip():
+                continue
+            size = rect.height
+            page.insert_text(
+                rect.bl + (0, -0.2 * size),
+                text,
+                fontsize=size,
+                fontname=FONTNAME,
+                morph=(rect.bl, adjust_width(text, size, rect)),
+                render_mode=3,
+            )
+
+    def lines(self, image) -> list[tuple[list[float], str]]:
+        import cv2
+        import indra_ocr
+
+        if self.engine is None:
+            self.engine = indra_ocr.OrtOCR(indra_ocr.model_dir())
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        page = self.engine(gray)
+        # A quarter-turned page comes back with boxes in the turned frame, but
+        # pymupdf places text in image coordinates. Read such a page as it is.
+        if page.rotation:
+            page = self.engine(gray, turn=False)
+        return [(line.box, line.text) for line in page.lines]
+
+
 def extract_pdf_document(pdf_path: Path) -> ExtractedDocument:
     """Use layout blocks, outline and table spans from the installed extractor."""
     import pymupdf
@@ -77,11 +163,52 @@ def extract_pdf_document(pdf_path: Path) -> ExtractedDocument:
         importlib.import_module("pymupdf.layout")
         import pymupdf4llm
 
+        ocr = _IndraOCR()
+        options = {
+            "header": False,
+            "footer": False,
+            "page_chunks": True,
+            "table_output": "html",
+            "ocr_function": ocr,
+        }
         with pymupdf.open(pdf_path) as pdf:
-            pages = pymupdf4llm.to_markdown(
-                pdf, header=False, footer=False, page_chunks=True, table_output="html"
+            # Images without a text layer are scans. Record them before OCR
+            # writes its text into the pages.
+            scans = {
+                page.number + 1
+                for page in pdf
+                if page.get_images() and not page.get_text().strip()
+            }
+
+            def unread() -> list[int]:
+                return [
+                    chunk["metadata"]["page_number"]
+                    for chunk in pages
+                    if chunk["metadata"]["page_number"] in scans
+                    and not chunk["text"].strip()
+                ]
+
+            pages = pymupdf4llm.to_markdown(pdf, **options)
+            # pymupdf4llm's OCR classifier can pass over a scan, which then
+            # yields no text at all. Read such pages again with OCR forced.
+            forced = [number for number in unread() if number not in ocr.pages]
+            if forced:
+                retried = pymupdf4llm.to_markdown(
+                    pdf, pages=[n - 1 for n in forced], force_ocr=True, **options
+                )
+                by_page = {c["metadata"]["page_number"]: c for c in retried}
+                pages = [by_page.get(c["metadata"]["page_number"], c) for c in pages]
+            textless = unread()
+            return adapt_pages(
+                pages,
+                pdf,
+                ocr={
+                    "engine": f"indra-ocr {importlib.metadata.version('indra-ocr')}",
+                    "pages": sorted(ocr.pages),
+                    "forced": forced,
+                    "textless": textless,
+                },
             )
-            return adapt_pages(pages, pdf)
 
     return call_external(
         "PDF extraction",

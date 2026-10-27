@@ -20,7 +20,7 @@ def _extractor_signature() -> dict:
         "structure_code_sha256": _digest(Path(pdf_structure.__file__).read_bytes()),
         "packages": {
             name: importlib.metadata.version(name)
-            for name in ("PyMuPDF", "pymupdf4llm", "pymupdf-layout")
+            for name in ("PyMuPDF", "pymupdf4llm", "pymupdf-layout", "indra-ocr")
         },
         "method": "sova.extract.extract_pdf",
         "section_parser": "sova.extract.parse_sections",

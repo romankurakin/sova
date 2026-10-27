@@ -135,8 +135,12 @@ def _title_key(text: str) -> str:
     return re.sub(r"[\s*_`]+", "", text).casefold()
 
 
-def adapt_pages(pages: list[dict], pdf) -> ExtractedDocument:
-    """Keep page/block provenance and use PDF outline levels where unambiguous."""
+def adapt_pages(pages: list[dict], pdf, ocr: dict | None = None) -> ExtractedDocument:
+    """Keep page/block provenance and use PDF outline levels where unambiguous.
+
+    ``ocr`` lists 1-based pages that were OCRed, re-read with OCR forced after
+    the extractor skipped them, and still without text despite showing images.
+    """
     toc = pdf.get_toc(simple=True)
     output = []
     blocks = []
@@ -144,8 +148,16 @@ def adapt_pages(pages: list[dict], pdf) -> ExtractedDocument:
     diagnostics = []
     outline_owner = None
     previous_page = None
+    forced = set(ocr["forced"]) if ocr else set()
+    textless = set(ocr["textless"]) if ocr else set()
     for page in pages:
         page_number = page["metadata"]["page_number"]
+        # Recovered pages carry OCR text the extractor did not plan to read;
+        # pages still without text are missing from the index entirely.
+        if page_number in forced:
+            diagnostics.append({"page": page_number, "kind": "ocr_forced"})
+        if page_number in textless:
+            diagnostics.append({"page": page_number, "kind": "page_without_text"})
         if previous_page is not None and page_number != previous_page + 1:
             outline_owner = None
         previous_page = page_number
@@ -246,6 +258,7 @@ def adapt_pages(pages: list[dict], pdf) -> ExtractedDocument:
             "markdown_sha256": hashlib.sha256(markdown.encode()).hexdigest(),
             "coordinates": "0-based half-open Unicode characters in Markdown; PDF pages are 1-based",
             "toc": toc,
+            "ocr": ocr,
             "blocks": blocks,
             "diagnostics": diagnostics,
         },

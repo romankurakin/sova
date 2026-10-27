@@ -32,6 +32,7 @@ PYI_ARGS=(
   --collect-all pymupdf
   --collect-all pymupdf.layout
   --collect-all pymupdf4llm
+  --collect-all indra_ocr
   sova/__main__.py
 )
 

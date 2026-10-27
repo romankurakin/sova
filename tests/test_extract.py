@@ -535,3 +535,198 @@ def test_empty_table_headers_and_optional_outer_pipes_remain_structural():
         assert [
             value for c in chunks for value in re.findall(r"\br\d+\b", c["text"])
         ] == [f"r{i}" for i in range(10)]
+
+
+_PYMUPDF_SWIG_WARNING = pytest.mark.filterwarnings(
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning"
+)
+
+
+def _chunk(page: int, text: str) -> dict:
+    boxes = [{"class": "text", "pos": [0, len(text)], "bbox": [0, 0, 10, 10]}]
+    return {
+        "text": text,
+        "metadata": {"page_number": page},
+        "page_boxes": boxes if text else [],
+    }
+
+
+def _pdf(path: Path, pages: list[str]) -> Path:
+    """Write pages that hold text, a dark image like a scan, or nothing."""
+    import pymupdf
+
+    with pymupdf.open() as pdf:
+        for kind in pages:
+            page = pdf.new_page(width=200, height=100)
+            if kind == "text":
+                page.insert_text((10, 50), "Digital text")
+            elif kind == "scan":
+                pix = pymupdf.Pixmap(pymupdf.csGRAY, pymupdf.IRect(0, 0, 40, 20), 0)
+                pix.clear_with(255)
+                pix.set_rect(pymupdf.IRect(5, 5, 35, 15), (0,))
+                page.insert_image(page.rect, pixmap=pix)
+        pdf.save(path)
+    return path
+
+
+class _FakeIndra:
+    def __init__(self, rotations=(0,)):
+        self.rotations = list(rotations)
+        self.calls: list[tuple] = []
+
+    def __call__(self, gray, turn=True):
+        self.calls.append((gray.ndim, str(gray.dtype), turn))
+        rotation = self.rotations.pop(0) if turn and self.rotations else 0
+        line = types.SimpleNamespace(
+            box=[10, 10, 150, 40], text="Scanned words", conf=0.9
+        )
+        return types.SimpleNamespace(rotation=rotation, lines=[line])
+
+
+def _use_fake_indra(monkeypatch, engine) -> list:
+    loads = []
+    monkeypatch.setattr("indra_ocr.model_dir", lambda: "/models")
+    monkeypatch.setattr("indra_ocr.OrtOCR", lambda path: loads.append(path) or engine)
+    return loads
+
+
+def _use_fake_extractor(monkeypatch, to_markdown) -> None:
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "pymupdf4llm",
+        types.SimpleNamespace(to_markdown=to_markdown),
+    )
+    monkeypatch.setattr("sova.extract.importlib.import_module", lambda _name: None)
+
+
+@_PYMUPDF_SWIG_WARNING
+def test_indra_lines_become_an_invisible_text_layer(monkeypatch, tmp_path):
+    import pymupdf
+    from pymupdf4llm.ocr.exec_ocr_interface import ocr_text
+
+    from sova.extract import _IndraOCR
+
+    engine = _FakeIndra()
+    loads = _use_fake_indra(monkeypatch, engine)
+    ocr = _IndraOCR()
+    with pymupdf.open(_pdf(tmp_path / "scan.pdf", ["scan"])) as pdf:
+        ocr(pdf[0], dpi=72, language="eng", keep_ocr_text=False)
+        spans = [
+            span
+            for block in pdf[0].get_text("dict")["blocks"]
+            for line in block.get("lines", [])
+            for span in line["spans"]
+        ]
+    # Layout must see OCR text the way it sees Tesseract's: as an OCR layer.
+    assert [span["text"] for span in spans] == ["Scanned words"]
+    assert all(ocr_text(span) for span in spans)
+    assert loads == ["/models"]
+    assert engine.calls == [(2, "uint8", True)]
+    assert ocr.pages == {1}
+
+
+def test_quarter_turned_page_is_reread_in_image_coordinates(monkeypatch):
+    import numpy as np
+
+    from sova.extract import _IndraOCR
+
+    engine = _FakeIndra(rotations=[90])
+    _use_fake_indra(monkeypatch, engine)
+    lines = _IndraOCR().lines(np.zeros((50, 200, 3), dtype=np.uint8))
+    assert [call[2] for call in engine.calls] == [True, False]
+    assert lines == [([10, 10, 150, 40], "Scanned words")]
+
+
+@_PYMUPDF_SWIG_WARNING
+def test_indra_loads_only_when_a_page_needs_ocr(monkeypatch, tmp_path):
+    from sova.extract import extract_pdf_document
+
+    seen = {}
+
+    def to_markdown(_pdf, **kwargs):
+        seen.update(kwargs)
+        return [_chunk(1, "# Digital")]
+
+    monkeypatch.setattr("indra_ocr.OrtOCR", lambda _path: pytest.fail("loaded"))
+    _use_fake_extractor(monkeypatch, to_markdown)
+    document = extract_pdf_document(_pdf(tmp_path / "digital.pdf", ["text"]))
+    assert callable(seen["ocr_function"])
+    assert document.markdown == "# Digital"
+    assert document.structure["ocr"]["pages"] == []
+    assert document.structure["diagnostics"] == []
+
+
+@_PYMUPDF_SWIG_WARNING
+def test_scan_skipped_by_the_ocr_classifier_is_reread_with_ocr_forced(
+    monkeypatch, tmp_path
+):
+    from sova.extract import extract_pdf_document
+
+    calls = []
+
+    def to_markdown(_pdf, **kwargs):
+        calls.append((kwargs.get("pages"), kwargs.get("force_ocr")))
+        if kwargs.get("force_ocr"):
+            return [_chunk(2, "Recovered scan")]
+        return [_chunk(1, "# Digital\n\n"), _chunk(2, "")]
+
+    _use_fake_extractor(monkeypatch, to_markdown)
+    document = extract_pdf_document(_pdf(tmp_path / "mixed.pdf", ["text", "scan"]))
+    assert calls == [(None, None), ([1], True)]
+    assert document.markdown == "# Digital\n\nRecovered scan"
+    assert document.structure["ocr"]["forced"] == [2]
+    assert document.structure["ocr"]["textless"] == []
+    assert document.structure["diagnostics"] == [{"page": 2, "kind": "ocr_forced"}]
+
+
+@_PYMUPDF_SWIG_WARNING
+def test_unreadable_scan_is_reported_and_blank_pages_are_left_alone(
+    monkeypatch, tmp_path
+):
+    from sova.extract import extract_pdf_document
+
+    calls = []
+
+    def to_markdown(_pdf, **kwargs):
+        calls.append((kwargs.get("pages"), kwargs.get("force_ocr")))
+        if kwargs.get("force_ocr"):
+            return [_chunk(2, "")]
+        return [_chunk(1, "# Digital\n\n"), _chunk(2, ""), _chunk(3, "")]
+
+    _use_fake_extractor(monkeypatch, to_markdown)
+    document = extract_pdf_document(
+        _pdf(tmp_path / "mixed.pdf", ["text", "scan", "blank"])
+    )
+    assert calls == [(None, None), ([1], True)]
+    assert document.structure["ocr"]["textless"] == [2]
+    assert document.structure["diagnostics"] == [
+        {"page": 2, "kind": "ocr_forced"},
+        {"page": 2, "kind": "page_without_text"},
+    ]
+
+
+@_PYMUPDF_SWIG_WARNING
+def test_ocr_text_lost_by_layout_is_reported_without_a_second_read(
+    monkeypatch, tmp_path
+):
+    import pymupdf4llm.ocr.exec_ocr_interface  # noqa: F401  (real OCR hook)
+
+    from sova.extract import extract_pdf_document
+
+    _use_fake_indra(monkeypatch, _FakeIndra())
+    calls = []
+
+    def to_markdown(pdf, **kwargs):
+        calls.append(kwargs.get("force_ocr"))
+        # OCR writes its lines into the page, but layout keeps none of them.
+        kwargs["ocr_function"](pdf[0], dpi=72)
+        assert "Scanned words" in pdf[0].get_text()
+        return [_chunk(1, "")]
+
+    _use_fake_extractor(monkeypatch, to_markdown)
+    document = extract_pdf_document(_pdf(tmp_path / "scan.pdf", ["scan"]))
+    assert calls == [None]
+    assert document.structure["ocr"]["pages"] == [1]
+    assert document.structure["diagnostics"] == [
+        {"page": 1, "kind": "page_without_text"}
+    ]

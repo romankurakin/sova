@@ -384,7 +384,7 @@ def _prepare_source(
             Path(pdf_structure.__file__).read_text(),
             *[
                 importlib.metadata.version(name)
-                for name in ("PyMuPDF", "pymupdf4llm", "pymupdf-layout")
+                for name in ("PyMuPDF", "pymupdf4llm", "pymupdf-layout", "indra-ocr")
             ],
         ]
     )
@@ -425,6 +425,24 @@ def _prepare_source(
                 phase="prepare",
                 item=name,
             )
+            textless = [
+                d["page"]
+                for d in document.structure.get("diagnostics", [])
+                if d["kind"] == "page_without_text"
+            ]
+            if textless:
+                shown = ", ".join(map(str, textless[:10]))
+                if len(textless) > 10:
+                    shown += f" and {len(textless) - 10} more"
+                emit(
+                    "extract_diagnostic",
+                    f"No text extracted from page{'s' if len(textless) > 1 else ''} "
+                    f"{shown}",
+                    level="warning",
+                    phase="prepare",
+                    item=name,
+                    data={"kind": "page_without_text", "pages": textless},
+                )
         except (OSError, RuntimeError, ValueError) as e:
             _report_error_block(
                 "extract failed",

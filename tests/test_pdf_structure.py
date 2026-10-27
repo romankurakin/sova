@@ -108,3 +108,27 @@ def test_outline_and_relative_font_levels_share_one_hierarchy():
     pages[1]["metadata"]["page_number"] = 4
     result = adapt_pages(pages, PDF())
     assert "\n# Included in\n" in result.markdown
+
+
+def test_ocr_recoveries_and_textless_pages_are_reported_in_page_order():
+    class PDF:
+        def get_toc(self, simple=True):
+            return []
+
+    pages = [
+        {"metadata": {"page_number": n}, "text": text, "page_boxes": []}
+        for n, text in [(1, "a\n"), (2, ""), (3, "")]
+    ]
+    ocr = {
+        "engine": "indra-ocr 1.1.2",
+        "pages": [2, 3],
+        "forced": [3],
+        "textless": [2, 3],
+    }
+    result = adapt_pages(pages, PDF(), ocr=ocr)
+    assert result.structure["ocr"] == ocr
+    assert result.structure["diagnostics"] == [
+        {"page": 2, "kind": "page_without_text"},
+        {"page": 3, "kind": "ocr_forced"},
+        {"page": 3, "kind": "page_without_text"},
+    ]

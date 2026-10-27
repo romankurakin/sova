@@ -906,6 +906,61 @@ def test_prepare_source_reuses_extraction_checkpoint_before_tokenization(
     conn.close()
 
 
+def test_prepare_source_warns_about_pages_without_text(monkeypatch, tmp_path):
+    from sova import cli
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE documents (id INTEGER PRIMARY KEY, name TEXT UNIQUE);
+        CREATE TABLE index_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
+    pdf = tmp_path / "scan.pdf"
+    pdf.write_bytes(b"scanned pdf bytes")
+    monkeypatch.setattr(cli.config, "get_data_dir", lambda: tmp_path / "data")
+    markdown = "# Extracted\n"
+    monkeypatch.setattr(
+        cli,
+        "extract_pdf_document",
+        lambda _path: cli.pdf_structure.ExtractedDocument(
+            markdown,
+            {
+                "schema_version": 1,
+                "markdown_sha256": cli.hashlib.sha256(markdown.encode()).hexdigest(),
+                "diagnostics": [
+                    {"page": 3, "kind": "ocr_forced"},
+                    {"page": 3, "kind": "page_without_text"},
+                    {"page": 5, "kind": "page_without_text"},
+                ],
+            },
+        ),
+    )
+    monkeypatch.setattr(cli, "status", lambda *_args, **_kwargs: None)
+    events = []
+    monkeypatch.setattr(
+        cli, "emit", lambda *args, **kwargs: events.append((args, kwargs))
+    )
+
+    assert cli._prepare_source("scan", pdf, None, conn) is not None
+    assert events == [
+        (
+            ("extract_diagnostic", "No text extracted from pages 3, 5"),
+            {
+                "level": "warning",
+                "phase": "prepare",
+                "item": "scan",
+                "data": {"kind": "page_without_text", "pages": [3, 5]},
+            },
+        )
+    ]
+    conn.close()
+
+
 def test_current_tokenized_doc_requires_complete_matching_checkpoint(tmp_path):
     from sova import cli
 

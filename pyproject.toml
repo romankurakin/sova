@@ -13,6 +13,7 @@ dependencies = [
     "rich>=15.0.0",
     "sqliteai-vector>=1.1.2",
     "typer>=0.27.3",
+    "indra-ocr>=1.1.2",
 ]
 
 [project.scripts]

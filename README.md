@@ -62,7 +62,7 @@ flowchart LR
     C --> F["FTS index"]
 ```
 
-Sova converts PDFs to Markdown and splits documents into chunks using the embedding model's tokenizer, targeting 768 tokens per chunk. Headings through level five start new chunks, and each chunk keeps its full heading path. Code fences and code-like `#` comments are not treated as headings. Source lines stay intact, so a long table row can exceed the target.
+Sova converts PDFs to Markdown and splits documents into chunks using the embedding model's tokenizer, targeting 768 tokens per chunk. Scanned pages and image regions are read on the CPU with [Indra OCR](https://huggingface.co/datalab-to/indra-ocr) [4], which downloads about 75 MB of weights from Hugging Face on first use. A scanned page that the OCR classifier skips is read again with OCR forced; pages that still yield no text are reported as warnings. Headings through level five start new chunks, and each chunk keeps its full heading path. Code fences and code-like `#` comments are not treated as headings. Source lines stay intact, so a long table row can exceed the target.
 
 At index time, `qwen3.8-27b` (Unsloth `UD-Q4_K_XL`) generates a one-sentence context for each chunk within its document and heading path [1]. Both search indexes use the document name, heading path, generated context, and source text. The stored source text stays unchanged.
 
@@ -107,6 +107,8 @@ uv run sova-remove --purge-data # Also delete ~/.sova without confirmation
 
 [3] G. V. Cormack, C. L. A. Clarke, and S. Büttcher, "[Reciprocal rank fusion outperforms condorcet and individual rank learning methods](https://doi.org/10.1145/1571941.1572114)," SIGIR, 2009.
 
+[4] Datalab, "[Indra OCR](https://github.com/datalab-to/indra)," 2026.
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Indra OCR model weights are licensed separately under a modified OpenRAIL-M license.
