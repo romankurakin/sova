@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from benchmarks import cli, passages, reading, tokenizer
@@ -316,7 +317,7 @@ def test_prepare_cli_runs_stages_automatically(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert calls == ["sources", "reading", "passages", "index", "pool"]
     assert "Queries: 207 (187 en, 10 ru, 10 zh)" in result.output
-    help_text = CliRunner().invoke(cli.app, ["prepare", "--help"]).output
+    help_text = unstyle(CliRunner().invoke(cli.app, ["prepare", "--help"]).output)
     assert "--extract" not in help_text
     assert "--chunk" not in help_text
 
